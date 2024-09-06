@@ -1,0 +1,20 @@
+{
+    "app_language":"EN",
+
+    "app_tittle":"3D Printing Molecules",
+    "make_model_tittle":"Make Model",
+    "tutorials_tittle":"Tutorials",
+    "examples_tittle":"Examples",
+    "about_tittle":"About",
+
+    "search_field":"Search...",
+    "upload_file_button":"Upload File",
+    "fetch_data_button":"Fetch Data",
+    "name_table_header":"Name",
+    "id_table_header":"ID",
+    "description_table_header":"Description",
+    "image_table_description":"Image",
+    "quality_slider":"Quality:",
+    "hydrogens_checbox":"Hydrogens",
+    "generate_model_button":"Generate Model"
+}

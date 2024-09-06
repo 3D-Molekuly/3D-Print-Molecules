@@ -1,0 +1,20 @@
+{
+    "app_language":"CS",
+
+    "app_tittle": "3D Tisk Molekul",
+    "make_model_tittle": "Vytvořit Model",
+    "tutorials_tittle": "Tutoriály",
+    "examples_tittle": "Příklady",
+    "about_tittle": "O Nás",
+
+    "search_field": "Hledat...",
+    "upload_file_button": "Nahrát Soubor",
+    "fetch_data_button": "Načíst Data",
+    "name_table_header": "Název",
+    "id_table_header": "ID",
+    "description_table_header": "Popis",
+    "image_table_description": "Obrázek",
+    "quality_slider": "Kvalita:",
+    "hydrogens_checbox": "Vodíky",
+    "generate_model_button": "Generovat Model"
+}

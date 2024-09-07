@@ -73,7 +73,7 @@
       }
 
     let quality = 50;
-    let showHydrogens = false;
+    let showHydrogens = true;
 
     import { onMount } from 'svelte';
     import * as THREE from "three";

@@ -1,9 +1,28 @@
 <script lang="ts">
   import logo from '$lib/images/icon_v1.jpg';
+  import { _, locale } from 'svelte-i18n';
+  import { writable } from 'svelte/store';
 
-  import { _, locale } from 'svelte-i18n'
-  function switchLocale(newLocale: string) {
+  // Create a writable store to track the current locale
+  let storedLocale = 'en';
+  if (typeof window !== 'undefined') {
+    storedLocale = sessionStorage.getItem('language') || 'en'; // Only run on the client side
+  }
+  const currentLocale = writable(storedLocale);
+
+  function switchLocale(newLocale: string, event: Event) {
+    event.preventDefault(); // Prevent the default link behavior
     locale.set(newLocale);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem("language", newLocale); // Only run on the client side
+    }
+    currentLocale.set(newLocale); // Update the locale in the store
+  }
+
+  // Utility to build localized paths reactively
+  $: localizedPath = (path: string) => {
+    let localeValue = $currentLocale; // Get the current locale from the store
+    return `/${localeValue}${path}`;
   }
 </script>
 
@@ -18,9 +37,9 @@
       <div class="d-flex align-items-center">
         <ul class="nav mb-2 justify-content-center mb-md-0 me-3">
           <li><a href="/" class="nav-link px-2 fs-4 text-grey">{$_('make_model_tittle')}</a></li>
-          <li><a href="/" class="nav-link px-2 fs-4 text-grey">{$_('tutorials_tittle')}</a></li>
-          <li><a href="/" class="nav-link px-2 fs-4 text-grey">{$_('examples_tittle')}</a></li>
-          <li><a href="/about" class="nav-link px-2 fs-4 text-grey">{$_('about_tittle')}</a></li>
+          <li><a href={localizedPath('/tutorials')} class="nav-link px-2 fs-4 text-grey">{$_('tutorials_tittle')}</a></li>
+          <li><a href={localizedPath('/examples')} class="nav-link px-2 fs-4 text-grey">{$_('examples_tittle')}</a></li>
+          <li><a href={localizedPath('/about')} class="nav-link px-2 fs-4 text-grey">{$_('about_tittle')}</a></li>
         </ul>
 
         <div class="dropdown">
@@ -28,8 +47,8 @@
             {$_('app_language')}
           </button>
           <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="dropdownMenuButton">
-            <li><a class="dropdown-item" href="/" on:click={() => switchLocale('cs')}>CS</a></li>
-            <li><a class="dropdown-item" href="/" on:click={() => switchLocale('en')}>EN</a></li>
+            <li><a class="dropdown-item" href="/" on:click={(event) => switchLocale('cs', event)}>CS</a></li>
+            <li><a class="dropdown-item" href="/" on:click={(event) => switchLocale('en', event)}>EN</a></li>
           </ul>
         </div>
       </div>
@@ -38,13 +57,13 @@
 </header>
 
 <style>
-.font-tittle {
-  font-family: "Handjet";
-  font-weight: 700;
-}
+  .font-tittle {
+    font-family: "Handjet";
+    font-weight: 700;
+  }
 
-ul, .dropdown {
-  font-family: "Handjet";
-  font-weight: 400;
-}
+  ul, .dropdown {
+    font-family: "Handjet";
+    font-weight: 400;
+  }
 </style>

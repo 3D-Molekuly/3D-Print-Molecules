@@ -2,6 +2,7 @@
   import logo from '$lib/images/icon_v1.jpg';
   import { _, locale } from 'svelte-i18n';
   import { writable } from 'svelte/store';
+  import { goto } from '$app/navigation'; // Import goto for navigation
 
   // Create a writable store to track the current locale
   let storedLocale = 'en';
@@ -12,11 +13,16 @@
 
   function switchLocale(newLocale: string, event: Event) {
     event.preventDefault(); // Prevent the default link behavior
-    locale.set(newLocale);
+
     if (typeof window !== 'undefined') {
+      const path = window.location.pathname; // Get the current path
+      const newPath = path.replace(/^\/[a-z]{2}/, `/${newLocale}`); // Replace the locale in the path
+      locale.set(newLocale);
       sessionStorage.setItem("language", newLocale); // Only run on the client side
+      currentLocale.set(newLocale); // Update the locale in the store
+
+      goto(newPath); // Navigate to the new path with the updated locale
     }
-    currentLocale.set(newLocale); // Update the locale in the store
   }
 
   // Utility to build localized paths reactively
@@ -29,7 +35,7 @@
 <header class="p-3 mb-1 border-bottom">
   <div class="container">
     <div class="d-flex flex-wrap align-items-center justify-content-between">
-      <a href="/" class="d-flex align-items-center mb-2 mb-lg-0 text-decoration-none">
+      <a href="/" class="d-flex align-items-center mb-2 mb-sm-0 text-decoration-none">
         <img src={logo} alt="Logo" width="40" height="40" class="me-2">
         <span class="fs-3 text-black font-tittle">{$_('app_tittle')}</span>
       </a>

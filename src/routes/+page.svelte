@@ -43,9 +43,6 @@
 
       function animate() {
           requestAnimationFrame(animate);
-          oxygenSphere.rotation.y += 0.01;
-          hydrogenSphere1.rotation.y += 0.01;
-          hydrogenSphere2.rotation.y += 0.01;
           controls.update();
           renderer.render(scene, camera);
       }
@@ -95,19 +92,25 @@
   });
 </script>
 
-<div class="container mt-4 main-panel">
+<div class="container mt-4 main-panel main-content">
   <div class="row">
-    <!-- Levá strana s formulářem -->
+    <!-- Left side with form -->
     <div class="col-md-8 left-panel">
-      <!-- Vyhledávací pole a tlačítka -->
-    <div class="d-flex mb-3 align-items-center">
-		<input type="text" class="form-control form-control-lg me-2" placeholder={$_('search_field')} aria-label="Search">
-		<label for="fileInput" class="btn btn-primary me-2">{$_('upload_file_button')}</label>
-		<input type="file" id="fileInput" class="d-none">
-		<button class="btn btn-primary">{$_('fetch_data_button')}</button>
-	</div>
+      <!-- Search field and buttons -->
+      <div class="d-flex mb-3 align-items-center">
+        <input type="text" class="form-control form-control-lg me-2 custom-input-height" placeholder={$_('search_field')} aria-label="Search">
+        <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center">
+          <span class="material-symbols-outlined">upload_file</span>
+          {$_('upload_file_button')}
+        </label>
+        <input type="file" id="fileInput" class="d-none">
+        <button class="btn btn-primary button-with-icon d-flex align-items-center">
+          <span class="material-symbols-outlined">downloading</span>
+          {$_('fetch_data_button')}
+        </button>
+      </div>
 
-      <!-- Tabulka s daty -->
+      <!-- Table with data -->
       <table class="table table-borderless">
         <thead>
           <tr>
@@ -123,7 +126,7 @@
             <td>12345</td>
             <td>Sample description</td>
             <td rowspan="2">
-				<img src="https://via.placeholder.com/150" alt="Sample" class="img-fluid">
+              <img src="https://via.placeholder.com/200" alt="Sample" class="img-fluid">
             </td>
           </tr>
           <tr>
@@ -143,11 +146,14 @@
         </tbody>
       </table>
 
-      <!-- Tlačítko pro generování modelu -->
-      <button class="btn btn-success btn-lg w-100">{$_('generate_model_button')}</button>
+      <!-- Button to generate model -->
+      <button class="btn btn-success btn-lg w-100">
+        <span class="material-symbols-outlined">deployed_code_update</span>
+        {$_('generate_model_button')}
+      </button>
     </div>
 
-    <!-- Pravá strana s canvasem -->
+    <!-- Right side with canvas -->
     <div class="col-md-4">
       <canvas id="threeCanvas" class="border rounded"></canvas>
     </div>
@@ -155,6 +161,14 @@
 </div>
 
 <style>
+.main-content {
+  margin-bottom: 5rem;
+}
+
+.custom-input-height {
+  height: 65px; /* Adjust this value to match the button height */
+}
+
 .container {
   display: flex;
   flex-direction: column;

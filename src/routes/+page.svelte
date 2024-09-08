@@ -1,7 +1,104 @@
-<div class="container mt-4">
+<script lang="ts">
+  import { _ } from 'svelte-i18n';
+  import { onMount } from 'svelte';
+  import * as THREE from "three";
+  import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+  let quality = 50;
+  let showHydrogens = true;
+
+  onMount(() => {
+      const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+
+      if (!canvas) {
+          console.error('Canvas, form element, or header element not found');
+          return;
+      }
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ canvas });
+
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      renderer.setClearColor(0xffffff);
+
+      camera.position.z = 5;
+
+      // Create spheres for the water molecule
+      const material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+      const oxygenSphere = new THREE.Mesh(new THREE.SphereGeometry(1.25, 32, 32), material);
+      scene.add(oxygenSphere);
+
+      const hydrogenMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const hydrogenGeometry = new THREE.SphereGeometry(0.75, 32, 32);
+      const hydrogenSphere1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+      const hydrogenSphere2 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
+      hydrogenSphere1.position.set(1.5, 1, 0);
+      hydrogenSphere2.position.set(-1.5, 1, 0);
+
+      scene.add(hydrogenSphere1);
+      scene.add(hydrogenSphere2);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+
+      function animate() {
+          requestAnimationFrame(animate);
+          oxygenSphere.rotation.y += 0.01;
+          hydrogenSphere1.rotation.y += 0.01;
+          hydrogenSphere2.rotation.y += 0.01;
+          controls.update();
+          renderer.render(scene, camera);
+      }
+
+      function updateCanvasSize() {
+          const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+          const formElement = document.querySelector('.left-panel') as HTMLElement;
+          const containerElement = document.querySelector('.main-panel') as HTMLElement;
+
+          if (!canvas || !formElement) {
+              console.error('Canvas or form element not found');
+              return;
+          }
+
+          const isMobile = window.innerWidth < 768;
+
+          if (isMobile) {
+              // Mobilní režim - canvas má stejnou šířku jako prvek nad ním
+              canvas.style.width = `${formElement.clientWidth-25}px`;
+              canvas.style.height = 'auto';
+          } else {
+              // Horizontální režim - canvas má stejnou výšku jako formulář vlevo
+              canvas.style.height = `${formElement.clientHeight}px`;
+
+              // Získání pozice canvasu a kontejneru
+              const canvasLeftOffset = canvas.getBoundingClientRect().left;
+              const containerRightOffset = containerElement.getBoundingClientRect().right;
+
+              // Výpočet nové šířky canvasu, aby byl zarovnaný s koncem kontejneru
+              const newCanvasWidth = containerRightOffset - canvasLeftOffset;
+              canvas.style.width = `${newCanvasWidth}px`;
+
+          }
+
+          // Aktualizace aspektu kamery
+          const width = canvas.clientWidth;
+          const height = canvas.clientHeight;
+          renderer.setSize(width, height);
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+      }
+
+      window.addEventListener('resize', updateCanvasSize);
+      updateCanvasSize(); // Nastavit počáteční velikost canvasu
+
+      animate();
+  });
+</script>
+
+<div class="container mt-4 main-panel">
   <div class="row">
     <!-- Levá strana s formulářem -->
-    <div class="col-md-8">
+    <div class="col-md-8 left-panel">
       <!-- Vyhledávací pole a tlačítka -->
     <div class="d-flex mb-3 align-items-center">
 		<input type="text" class="form-control form-control-lg me-2" placeholder={$_('search_field')} aria-label="Search">
@@ -52,77 +149,40 @@
 
     <!-- Pravá strana s canvasem -->
     <div class="col-md-4">
-      <canvas id="threeCanvas" class="border" width="400" height="400"></canvas>
+      <canvas id="threeCanvas" class="border rounded"></canvas>
     </div>
   </div>
 </div>
 
 <style>
-
-.form-control {
-    padding: 0.375rem 0.75rem; /* Bootstrap's default padding for inputs */
-    min-height: 61.23px; /* Set a minimum height */
+.container {
+  display: flex;
+  flex-direction: column;
 }
 
+@media (min-width: 768px) {
+  .row {
+      display: flex;
+      flex-direction: row;
+  }
+
+  .col-md-4 {
+      display: flex;
+      align-items: center;
+  }
+}
+
+@media (max-width: 767px) {
+  .row {
+      display: flex;
+      flex-direction: column;
+  }
+
+  .col-md-4 {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 40px;
+  }
+}
 </style>
-
-<script lang="ts">
-    import { _, locale } from 'svelte-i18n'
-      function switchLocale(newLocale: string) {
-        locale.set(newLocale);
-      }
-
-    let quality = 50;
-    let showHydrogens = true;
-
-    import { onMount } from 'svelte';
-    import * as THREE from "three";
-    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';  // Import OrbitControls
-
-    onMount(() => {
-        const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-        if (!canvas) {
-            console.error('Canvas element not found');
-            return;
-        }
-
-        // Set up scene, camera, and renderer
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, canvas.width / canvas.height, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ canvas });
-
-        renderer.setSize(canvas.width, canvas.height);
-        renderer.setClearColor(0xffffff); // Set background color to white
-
-        camera.position.z = 5;
-
-        // Create the spheres for the water molecule
-        const material = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // Blue color for oxygen
-        const oxygenSphere = new THREE.Mesh(new THREE.SphereGeometry(1.25, 32, 32), material);
-        scene.add(oxygenSphere);
-
-        const hydrogenMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-        const hydrogenGeometry = new THREE.SphereGeometry(0.75, 32, 32);
-        const hydrogenSphere1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
-        const hydrogenSphere2 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
-        hydrogenSphere1.position.set(1.5, 1, 0);
-        hydrogenSphere2.position.set(-1.5, 1, 0);
-
-        scene.add(hydrogenSphere1);
-        scene.add(hydrogenSphere2);
-
-        // Add OrbitControls
-        const controls = new OrbitControls(camera, renderer.domElement);
-
-        function animate() {
-            requestAnimationFrame(animate);
-            oxygenSphere.rotation.y += 0.01;
-            hydrogenSphere1.rotation.y += 0.01;
-            hydrogenSphere2.rotation.y += 0.01;
-            controls.update(); // Update controls
-            renderer.render(scene, camera);
-        }
-
-        animate();
-    });
-</script>

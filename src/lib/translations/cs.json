@@ -4,11 +4,11 @@
 
     "app_tittle": "3D Tisk Molekul",
     "make_model_tittle": "Vytvořit Model",
-    "tutorials_tittle": "Tutoriály",
+    "tutorials_tittle": "Návody",
     "examples_tittle": "Příklady",
     "about_tittle": "O Nás",
 
-    "search_field": "Hledat...",
+    "search_field": "Hledej na PubChem, PDB, CAS...",
     "upload_file_button": "Nahrát Soubor",
     "fetch_data_button": "Načíst Data",
     "name_table_header": "Název",

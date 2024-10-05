@@ -1,5 +1,5 @@
 <script lang="ts">
-  import logo from '$lib/images/icon_v1.jpg';
+  import logo from '$lib/images/logo_v2.svg';
   import { _, locale } from 'svelte-i18n';
   import { writable } from 'svelte/store';
   import { goto } from '$app/navigation'; // Import goto for navigation

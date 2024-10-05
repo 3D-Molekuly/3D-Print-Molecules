@@ -17,6 +17,7 @@
     "id_table_header":"ID",
     "description_table_header":"Description",
     "image_table_description":"Image",
+    "no_image_available": "No Image Available",
     "quality_slider":"Quality:",
     "hydrogens_checbox":"Hydrogens",
     "generate_model_button":"Generate Model"

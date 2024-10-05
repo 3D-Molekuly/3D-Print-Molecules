@@ -1,95 +1,101 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
-  import * as THREE from "three";
-  import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+  import { setupThreeJS } from '$lib/threejsFc/threejsSetup';
+  import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
 
   let quality = 50;
   let showHydrogens = true;
 
+  let resizeCanvas: (() => void) | undefined;
+
   onMount(() => {
-      const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+    const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
 
-      if (!canvas) {
-          console.error('Canvas, form element, or header element not found');
-          return;
-      }
+    if (!canvas) {
+        console.error('Canvas not found');
+        return;
+    }
 
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ canvas });
+    const { animate, updateCanvasSize } = setupThreeJS(canvas);
+    resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize); // Capture the resize function
 
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-      renderer.setClearColor(0xffffff);
+    animate(); // Start rendering loop
+});
 
-      camera.position.z = 5;
+  import { determineInputType, fetchPubChemData, fetchPDBData, fetchFileData } from '$lib/molecule_data/molecule_data';
 
-      // Create spheres for the water molecule
-      const material = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-      const oxygenSphere = new THREE.Mesh(new THREE.SphereGeometry(1.25, 32, 32), material);
-      scene.add(oxygenSphere);
+  // Input value
+  let inputStr = '';
 
-      const hydrogenMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const hydrogenGeometry = new THREE.SphereGeometry(0.75, 32, 32);
-      const hydrogenSphere1 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
-      const hydrogenSphere2 = new THREE.Mesh(hydrogenGeometry, hydrogenMaterial);
-      hydrogenSphere1.position.set(1.5, 1, 0);
-      hydrogenSphere2.position.set(-1.5, 1, 0);
+  // Table information
+  let tableInfo = {
+    firstItem: "",
+    secondItem: "",
+    thirdItem: ""
+  };
 
-      scene.add(hydrogenSphere1);
-      scene.add(hydrogenSphere2);
+  // Image URL
+  let imageUrl = '';
 
-      const controls = new OrbitControls(camera, renderer.domElement);
+  // Function to update the table information
+  function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
+    tableInfo = { firstItem, secondItem, thirdItem };
+  }
 
-      function animate() {
-          requestAnimationFrame(animate);
-          controls.update();
-          renderer.render(scene, camera);
-      }
+  // Function to update the image URL
+  function setImage(url: string) {
+    imageUrl = url;
+  }
 
-      function updateCanvasSize() {
-          const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-          const formElement = document.querySelector('.left-panel') as HTMLElement;
-          const containerElement = document.querySelector('.main-panel') as HTMLElement;
+  // Function to handle form submission
+  async function handleSubmit() {
+    const inputType = determineInputType(inputStr);
 
-          if (!canvas || !formElement) {
-              console.error('Canvas or form element not found');
-              return;
-          }
+    if (inputType === "CID") {
+      await fetchPubChemData(inputStr, setTableInfo, setImage);
+    } else if (inputType === "PDB") {
+      await fetchPDBData(inputStr, setTableInfo, setImage);
+    } else {
+      console.error("Unsupported input type.");
+    }
 
-          const isMobile = window.innerWidth < 768;
+    if (typeof resizeCanvas === "function") {
+        resizeCanvas(); // Resize the canvas after fetching the data
+    }
+  }
 
-          if (isMobile) {
-              // Mobilní režim - canvas má stejnou šířku jako prvek nad ním
-              canvas.style.width = `${formElement.clientWidth-25}px`;
-              canvas.style.height = 'auto';
-          } else {
-              // Horizontální režim - canvas má stejnou výšku jako formulář vlevo
-              canvas.style.height = `${formElement.clientHeight}px`;
+  // Listen for the "Enter" key press
+  function handleKeyPress(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      event.preventDefault();  // Prevent the form from submitting normally
+      handleSubmit();          // Trigger the data fetch
+    }
+  }
 
-              // Získání pozice canvasu a kontejneru
-              const canvasLeftOffset = canvas.getBoundingClientRect().left;
-              const containerRightOffset = containerElement.getBoundingClientRect().right;
+  // Function to handle file upload
+  function handleFileUpload(event: Event) {
+    const target = event.target as HTMLInputElement;
 
-              // Výpočet nové šířky canvasu, aby byl zarovnaný s koncem kontejneru
-              const newCanvasWidth = containerRightOffset - canvasLeftOffset;
-              canvas.style.width = `${newCanvasWidth}px`;
+    if (target.files && target.files.length > 0) {
+      const file = target.files[0];
 
-          }
+      // Update table with file name
+      setTableInfo(file.name, "", "");
 
-          // Aktualizace aspektu kamery
-          const width = canvas.clientWidth;
-          const height = canvas.clientHeight;
-          renderer.setSize(width, height);
-          camera.aspect = width / height;
-          camera.updateProjectionMatrix();
-      }
+      // Set a placeholder image URL for the document icon
+      setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
 
-      window.addEventListener('resize', updateCanvasSize);
-      updateCanvasSize(); // Nastavit počáteční velikost canvasu
+      // Optionally, you can also read the file and extract more information if needed
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result;
+        console.log('File content:', content); // Handle the file content as needed
+      };
+      reader.readAsText(file); // Adjust the read method based on your file type
+    }
+  }
 
-      animate();
-  });
 </script>
 
 <div class="container mt-4 main-panel main-content">
@@ -98,13 +104,15 @@
     <div class="col-md-8 left-panel">
       <!-- Search field and buttons -->
       <div class="d-flex mb-3 align-items-center">
-        <input type="text" class="form-control form-control-lg me-2 custom-input-height" placeholder={$_('search_field')} aria-label="Search">
+        <input type="text" bind:value={inputStr} on:keydown={handleKeyPress} class="form-control form-control-lg me-2 custom-input-height" placeholder={$_('search_field')} aria-label="Search">
+
         <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center">
           <span class="material-symbols-outlined">upload_file</span>
           {$_('upload_file_button')}
         </label>
-        <input type="file" id="fileInput" class="d-none">
-        <button class="btn btn-primary button-with-icon d-flex align-items-center">
+        <input on:change={handleFileUpload} type="file" id="fileInput" class="d-none">
+
+        <button on:click={handleSubmit} class="btn btn-primary button-with-icon d-flex align-items-center">
           <span class="material-symbols-outlined">downloading</span>
           {$_('fetch_data_button')}
         </button>
@@ -122,11 +130,17 @@
         </thead>
         <tbody>
           <tr>
-            <td>Sample Name</td>
-            <td>12345</td>
-            <td>Sample description</td>
-            <td rowspan="2">
-              <img src="https://via.placeholder.com/200" alt="Sample" class="img-fluid">
+            <td style="width: 40%;">{tableInfo.firstItem}</td>
+            <td>{tableInfo.secondItem}</td>
+            <td>{tableInfo.thirdItem}</td>
+            <td rowspan="2" style="width: 200px;">
+              {#if imageUrl}
+                <img src={imageUrl} alt="representation of the molecule" class="img-fluid">
+              {:else}
+                <div class="image-placeholder">
+                  <span>{$_('no_image_available')}</span>
+                </div>
+              {/if}
             </td>
           </tr>
           <tr>
@@ -173,6 +187,22 @@
   display: flex;
   flex-direction: column;
 }
+
+img {
+    object-fit: cover;  /* Ensures the image maintains its aspect ratio */
+  }
+
+.image-placeholder {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 200px;
+    height: 200px;
+    background-color: #f0f0f0;  /* Light gray background */
+    color: #777;                /* Gray text color */
+    font-size: 14px;
+    text-align: center;
+  }
 
 @media (min-width: 768px) {
   .row {

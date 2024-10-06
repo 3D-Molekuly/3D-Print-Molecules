@@ -3,52 +3,36 @@
   import { onMount } from 'svelte';
   import { setupThreeJS } from '$lib/threejsFc/threejsSetup';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
+  import { parsePDB } from '$lib/molecules/pdbParser';
+  import type { AtomCoordinate } from '$lib/molecules/pdbParser';
 
   let quality = 50;
   let showHydrogens = true;
-
+  let inputStr = '';
   let resizeCanvas: (() => void) | undefined;
+  let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
+  let imageUrl = '';
+  let atomCoordinates: AtomCoordinate[] = [];
 
   onMount(() => {
     const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-
-    if (!canvas) {
-        console.error('Canvas not found');
-        return;
-    }
+    if (!canvas) return console.error('Canvas not found');
 
     const { animate, updateCanvasSize } = setupThreeJS(canvas);
-    resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize); // Capture the resize function
+    resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+    animate();
+  });
 
-    animate(); // Start rendering loop
-});
+  import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
 
-  import { determineInputType, fetchPubChemData, fetchPDBData, fetchFileData } from '$lib/molecule_data/molecule_data';
-
-  // Input value
-  let inputStr = '';
-
-  // Table information
-  let tableInfo = {
-    firstItem: "",
-    secondItem: "",
-    thirdItem: ""
-  };
-
-  // Image URL
-  let imageUrl = '';
-
-  // Function to update the table information
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
     tableInfo = { firstItem, secondItem, thirdItem };
   }
 
-  // Function to update the image URL
   function setImage(url: string) {
     imageUrl = url;
   }
 
-  // Function to handle form submission
   async function handleSubmit() {
     const inputType = determineInputType(inputStr);
 
@@ -60,42 +44,52 @@
       console.error("Unsupported input type.");
     }
 
-    if (typeof resizeCanvas === "function") {
-        resizeCanvas(); // Resize the canvas after fetching the data
-    }
+    if (typeof resizeCanvas === "function") resizeCanvas();
   }
 
-  // Listen for the "Enter" key press
   function handleKeyPress(event: KeyboardEvent) {
     if (event.key === "Enter") {
-      event.preventDefault();  // Prevent the form from submitting normally
-      handleSubmit();          // Trigger the data fetch
+      event.preventDefault();
+      handleSubmit();
     }
   }
 
-  // Function to handle file upload
-  function handleFileUpload(event: Event) {
+  async function handleFileUpload(event: Event) {
     const target = event.target as HTMLInputElement;
-
     if (target.files && target.files.length > 0) {
       const file = target.files[0];
-
-      // Update table with file name
       setTableInfo(file.name, "", "");
-
-      // Set a placeholder image URL for the document icon
       setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
 
-      // Optionally, you can also read the file and extract more information if needed
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result;
-        console.log('File content:', content); // Handle the file content as needed
+      reader.onload = async (e) => {
+        const content = e.target?.result as string;
+        atomCoordinates = await parsePDB(content); // Await the async parser function
+        console.log("Parsed atom coordinates from file:", atomCoordinates);
       };
-      reader.readAsText(file); // Adjust the read method based on your file type
+      reader.readAsText(file);
+      }
     }
-  }
 
+  async function generateModel() {
+  if (inputStr) {
+    const inputType = determineInputType(inputStr);
+
+    if (inputType === "CID") {
+      const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.thirdItem}/record/SDF`;
+      const response = await fetch(url);
+      const content = await response.text();
+      atomCoordinates = await parsePDB(content);  // Await the async parser function
+    } else if (inputType === "PDB") {
+      const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
+      const response = await fetch(url);
+      const content = await response.text();
+      atomCoordinates = await parsePDB(content);  // Await the async parser function
+    }
+
+    console.log("Atom coordinates:", atomCoordinates); // Log the parsed coordinates
+  }
+}
 </script>
 
 <div class="container mt-4 main-panel main-content">
@@ -161,7 +155,7 @@
       </table>
 
       <!-- Button to generate model -->
-      <button class="btn btn-success btn-lg w-100">
+      <button on:click={generateModel} class="btn btn-success btn-lg w-100">
         <span class="material-symbols-outlined">deployed_code_update</span>
         {$_('generate_model_button')}
       </button>

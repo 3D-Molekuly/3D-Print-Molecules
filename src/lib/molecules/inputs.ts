@@ -1,4 +1,4 @@
-// Function to determine input type
+// src/lib/molecule_data.ts
 export function determineInputType(inputStr: string): string {
   const casPattern = /^\d{2,7}-\d{2}-\d$/;
   if (/^\d+$/.test(inputStr) || /^[a-zA-Z]+$/.test(inputStr) || casPattern.test(inputStr)) {
@@ -12,8 +12,11 @@ export function determineInputType(inputStr: string): string {
   }
 }
 
-// Function to fetch PubChem data
-export async function fetchPubChemData(inputStr: string, setTableInfo: Function, setImage: Function) {
+export async function fetchPubChemData(
+  inputStr: string,
+  setTableInfo: (first: string, second: string, third: string) => void,
+  setImage: (url: string) => void
+) {
   let cid: string | null = null;
 
   const allDigits = /^\d+$/.test(inputStr);
@@ -38,11 +41,11 @@ export async function fetchPubChemData(inputStr: string, setTableInfo: Function,
   }
 
   const pubchemPropertyUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/IUPACName,MolecularFormula/JSON`;
-  const response = await fetch(pubchemPropertyUrl);
+  const propertyResponse = await fetch(pubchemPropertyUrl);
 
-  if (response.ok) {
-    const data = await response.json();
-    const properties = data.PropertyTable.Properties[0];
+  if (propertyResponse.ok) {
+    const propertyData = await propertyResponse.json();
+    const properties = propertyData.PropertyTable.Properties[0];
     const iupacName = properties.IUPACName;
     const molecularFormula = properties.MolecularFormula;
 
@@ -53,8 +56,11 @@ export async function fetchPubChemData(inputStr: string, setTableInfo: Function,
   }
 }
 
-// Function to fetch PDB data
-export async function fetchPDBData(pdbCode: string, setTableInfo: Function, setImage: Function) {
+export async function fetchPDBData(
+  pdbCode: string,
+  setTableInfo: (first: string, second: string, third: string) => void,
+  setImage: (url: string) => void
+) {
   const graphqlUrl = "https://data.rcsb.org/graphql";
   const query = `
     query ($id: String!) {
@@ -86,17 +92,4 @@ export async function fetchPDBData(pdbCode: string, setTableInfo: Function, setI
   } else {
     console.error("Error fetching PDB data");
   }
-}
-
-// Function to handle file input (adjust as needed)
-export function fetchFileData(file: File, setTableInfo: Function) {
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const fileContent = event.target?.result;
-    if (fileContent) {
-      console.log("File content:", fileContent);
-      // Further processing of file content
-    }
-  };
-  reader.readAsText(file);
 }

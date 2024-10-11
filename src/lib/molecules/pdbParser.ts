@@ -54,8 +54,9 @@ export async function parsePDB(data: string | string[]): Promise<AtomCoordinate[
           // Create a promise to fetch element data for the current atom type
           const fetchElementDataPromise = extractElementData(result.atomType).then((elementData) => {
               if (elementData) {
-                  result.AtomicRadius = elementData.AtomicRadius;
-                  result.CPKHexColor = elementData.CPKHexColor;
+                  result.AtomicRadius = (parseFloat(elementData.AtomicRadius) / 150).toString()
+                  result.CPKHexColor = `#${elementData.CPKHexColor.replace(/^#/, '')}`;
+
               }
           });
 
@@ -105,3 +106,4 @@ async function extractElementData(symbol: string): Promise<ElementInfo | null> {
     return null;
   }
 }
+

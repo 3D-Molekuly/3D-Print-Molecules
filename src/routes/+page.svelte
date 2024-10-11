@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
-  import { setupThreeJS } from '$lib/threejsFc/threejsSetup';
+  import { setupThreeJS } from '$lib/threejsFc/threejsMolecules';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB } from '$lib/molecules/pdbParser';
   import type { AtomCoordinate } from '$lib/molecules/pdbParser';
@@ -12,16 +12,43 @@
   let resizeCanvas: (() => void) | undefined;
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
   let imageUrl = '';
-  let atomCoordinates: AtomCoordinate[] = [];
+  let atomCoordinates: AtomCoordinate[] = []
+  let createAtomSpheres: ((coordinates: AtomCoordinate[]) => void) | undefined;
+
+  let atomCoordinates1: AtomCoordinate[] = [
+    {atomType: 'H', x: 3.0739, y: 0.155, z: 0, AtomicRadius: '1.2', CPKHexColor: "0xFFFFFF"},
+    {atomType: 'H', x: 2, y: 0.155, z: 0, AtomicRadius: '1.2', CPKHexColor: "#FFFFFF"},
+    {atomType: 'O', x: 2.5369, y: -0.155, z: 0, AtomicRadius: '1.52', CPKHexColor: "#FF0D0D"}
+  ];
+
+  let canvas: HTMLCanvasElement | null = null; // Declare the canvas variable
 
   onMount(() => {
-    const canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-    if (!canvas) return console.error('Canvas not found');
+  canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+  if (!canvas) return console.error('Canvas not found');
 
-    const { animate, updateCanvasSize } = setupThreeJS(canvas);
-    resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
-    animate();
-  });
+  // Retrieve atom coordinates from session storage if they exist
+  const storedCoordinates = sessionStorage.getItem('atomCoordinates');
+  if (storedCoordinates) {
+    atomCoordinates = JSON.parse(storedCoordinates);  // Parse the stored coordinates
+  } else {
+    console.log('No atom coordinates in session storage');
+  }
+
+  // Set up Three.js scene with stored coordinates
+  const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = setupThreeJS(canvas, atomCoordinates);
+
+  // Check if spheresCreator is defined before assigning it
+  if (typeof spheresCreator === "function") {
+    createAtomSpheres = spheresCreator;  // Store the function to update spheres later
+  } else {
+    console.error("Failed to initialize createAtomSpheres function");
+  }
+
+  resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+  animate();
+});
+
 
   import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
 
@@ -36,16 +63,36 @@
   async function handleSubmit() {
     const inputType = determineInputType(inputStr);
 
+    // Fetch data and set table info and image
     if (inputType === "CID") {
       await fetchPubChemData(inputStr, setTableInfo, setImage);
     } else if (inputType === "PDB") {
       await fetchPDBData(inputStr, setTableInfo, setImage);
     } else {
       console.error("Unsupported input type.");
+      return;  // Exit if unsupported input type
     }
 
+    // Fetch and parse the molecule data
+    if (inputType === "CID") {
+        const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF`;
+        const response = await fetch(url);
+        const content = await response.text();
+        atomCoordinates = await parsePDB(content);  // Await the async parser function
+    } else if (inputType === "PDB") {
+        const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
+        const response = await fetch(url);
+        const content = await response.text();
+        atomCoordinates = await parsePDB(content);  // Await the async parser function
+    }
+
+    // Optionally, redraw the model with the new atom coordinates
+    redrawModel(atomCoordinates);
+
+    // Update canvas size if applicable
     if (typeof resizeCanvas === "function") resizeCanvas();
   }
+
 
   function handleKeyPress(event: KeyboardEvent) {
     if (event.key === "Enter") {
@@ -65,31 +112,27 @@
       reader.onload = async (e) => {
         const content = e.target?.result as string;
         atomCoordinates = await parsePDB(content); // Await the async parser function
-        console.log("Parsed atom coordinates from file:", atomCoordinates);
+        redrawModel(atomCoordinates);
       };
       reader.readAsText(file);
       }
     }
 
-  async function generateModel() {
-  if (inputStr) {
-    const inputType = determineInputType(inputStr);
-
-    if (inputType === "CID") {
-      const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.thirdItem}/record/SDF`;
-      const response = await fetch(url);
-      const content = await response.text();
-      atomCoordinates = await parsePDB(content);  // Await the async parser function
-    } else if (inputType === "PDB") {
-      const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
-      const response = await fetch(url);
-      const content = await response.text();
-      atomCoordinates = await parsePDB(content);  // Await the async parser function
+    async function generateModel() {
+      console.log("Generating something else after model is created...");
     }
 
-    console.log("Atom coordinates:", atomCoordinates); // Log the parsed coordinates
+    function redrawModel(atomCoordinates: AtomCoordinate[]) {
+    // Store the atom coordinates in session storage for persistence
+    sessionStorage.setItem('atomCoordinates', JSON.stringify(atomCoordinates));
+    console.log(atomCoordinates); // Log the parsed coordinates
+    // Safely redraw the spheres with the updated coordinates
+    if (typeof createAtomSpheres === "function") {
+      createAtomSpheres(atomCoordinates);  // Update the spheres in the scene
+    } else {
+      console.error("createAtomSpheres function not initialized");
+    }
   }
-}
 </script>
 
 <div class="container mt-4 main-panel main-content">

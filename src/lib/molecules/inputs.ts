@@ -49,7 +49,7 @@ export async function fetchPubChemData(
     const iupacName = properties.IUPACName;
     const molecularFormula = properties.MolecularFormula;
 
-    setTableInfo(iupacName, molecularFormula, cid);
+    setTableInfo(iupacName, cid, molecularFormula);
     setImage(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/PNG`);
   } else {
     console.error("Error fetching PubChem properties.");

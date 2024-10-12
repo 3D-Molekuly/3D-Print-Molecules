@@ -13,42 +13,34 @@
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
   let imageUrl = '';
   let atomCoordinates: AtomCoordinate[] = []
-  let createAtomSpheres: ((coordinates: AtomCoordinate[]) => void) | undefined;
-
-  let atomCoordinates1: AtomCoordinate[] = [
-    {atomType: 'H', x: 3.0739, y: 0.155, z: 0, AtomicRadius: '1.2', CPKHexColor: "0xFFFFFF"},
-    {atomType: 'H', x: 2, y: 0.155, z: 0, AtomicRadius: '1.2', CPKHexColor: "#FFFFFF"},
-    {atomType: 'O', x: 2.5369, y: -0.155, z: 0, AtomicRadius: '1.52', CPKHexColor: "#FF0D0D"}
-  ];
-
+  let createAtomSpheres: ((coordinates: AtomCoordinate[], quality: number) => void) | undefined;
   let canvas: HTMLCanvasElement | null = null; // Declare the canvas variable
 
-  onMount(() => {
-  canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-  if (!canvas) return console.error('Canvas not found');
+  onMount(async () => {
+    canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+    if (!canvas) {
+      console.error('Canvas not found');
+      return;
+    }
 
-  // Retrieve atom coordinates from session storage if they exist
-  const storedCoordinates = sessionStorage.getItem('atomCoordinates');
-  if (storedCoordinates) {
-    atomCoordinates = JSON.parse(storedCoordinates);  // Parse the stored coordinates
-  } else {
-    console.log('No atom coordinates in session storage');
-  }
+    try {
+      const storedCoordinates = sessionStorage.getItem('atomCoordinates');
+      atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
 
-  // Set up Three.js scene with stored coordinates
-  const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = setupThreeJS(canvas, atomCoordinates);
+      const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = setupThreeJS(canvas, atomCoordinates);
 
-  // Check if spheresCreator is defined before assigning it
-  if (typeof spheresCreator === "function") {
-    createAtomSpheres = spheresCreator;  // Store the function to update spheres later
-  } else {
-    console.error("Failed to initialize createAtomSpheres function");
-  }
+      if (typeof spheresCreator === "function") {
+        createAtomSpheres = spheresCreator;
+      } else {
+        throw new Error("Failed to initialize createAtomSpheres function");
+      }
 
-  resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
-  animate();
-});
-
+      resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+      animate();
+    } catch (error) {
+      console.error("Error during onMount initialization:", error);
+    }
+  });
 
   import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
 
@@ -75,10 +67,23 @@
 
     // Fetch and parse the molecule data
     if (inputType === "CID") {
-        const url = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF`;
-        const response = await fetch(url);
+        const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF?record_type=3d&response_type=display`;
+        const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF`;
+
+        let response;
+        try {
+            response = await fetch(primaryUrl);
+            if (!response.ok) throw new Error("Primary URL failed");
+        } catch (error) {
+            console.error("Failed to fetch from primary URL, trying fallback:", error);
+            response = await fetch(fallbackUrl);
+            if (!response.ok) {
+                throw new Error("Fallback URL also failed");
+            }
+        }
         const content = await response.text();
         atomCoordinates = await parsePDB(content);  // Await the async parser function
+
     } else if (inputType === "PDB") {
         const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
         const response = await fetch(url);
@@ -128,7 +133,7 @@
     console.log(atomCoordinates); // Log the parsed coordinates
     // Safely redraw the spheres with the updated coordinates
     if (typeof createAtomSpheres === "function") {
-      createAtomSpheres(atomCoordinates);  // Update the spheres in the scene
+      createAtomSpheres(atomCoordinates, quality);  // Update the spheres in the scene
     } else {
       console.error("createAtomSpheres function not initialized");
     }

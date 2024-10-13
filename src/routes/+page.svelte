@@ -185,22 +185,36 @@
               {/if}
             </td>
           </tr>
+        </tbody>
+      </table>
+      <table>
+        <thead>
           <tr>
-            <td colspan="3">
-              <div>
-                <label for="qualityRange">{$_('quality_slider')} {quality}</label>
+            <th>{$_('model_settings')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <label for="qualityRange">{$_('quality_slider')} {quality}</label>
+            </td>
+            <td>
+              <div class="quality-container">
                 <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
               </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
-                <label class="form-check-label" for="hydrogensCheckbox">
-                  {$_('hydrogens_checbox')}
-                </label>
-              </div>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
+            </td>
+            <td class="form-check">
+              <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
             </td>
           </tr>
         </tbody>
       </table>
+      <br>
 
       <!-- Button to generate model -->
       <button on:click={generateModel} class="btn btn-success btn-lg w-100">
@@ -245,6 +259,15 @@ img {
     font-size: 14px;
     text-align: center;
   }
+
+.quality-container {
+  display: flex;
+  align-items: center;
+}
+
+.form-range {
+  width: 150px; /* Adjust this value to control the slider width */
+}
 
 @media (min-width: 768px) {
   .row {

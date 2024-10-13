@@ -18,6 +18,8 @@
     "description_table_header": "Popis",
     "image_table_description": "Obrázek",
     "no_image_available": "Obrázek není k dispozici",
+
+    "model_settings":"Nastavení Modelu",
     "quality_slider": "Kvalita:",
     "hydrogens_checbox": "Vodíky",
     "generate_model_button": "Generovat Model"

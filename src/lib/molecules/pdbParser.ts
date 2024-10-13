@@ -76,8 +76,8 @@ type ElementInfo = {
   CPKHexColor: string;
 };
 
-async function extractElementData(symbol: string): Promise<ElementInfo | null> {
-  const url = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/JSON'; // Moved URL here
+export async function extractElementData(symbol: string): Promise<ElementInfo | null> {
+  const url = '/periodic_table.json'; //From: https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/JSON
 
   try {
     const response = await fetch(url);
@@ -106,4 +106,3 @@ async function extractElementData(symbol: string): Promise<ElementInfo | null> {
     return null;
   }
 }
-

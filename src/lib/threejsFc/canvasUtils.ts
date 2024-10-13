@@ -6,8 +6,14 @@ export function setupCanvasResizing(canvas: HTMLCanvasElement, updateCanvasSize:
         const isMobile = window.innerWidth < 768;
 
         if (isMobile) {
-            canvas.style.width = `${formElement.clientWidth - 25}px`;
-            canvas.style.height = 'auto';
+            canvas.style.width = `${formElement.clientWidth}px`;
+            canvas.style.height = `auto`; // Set height to auto first
+
+            // Measure the computed height
+            const computedHeight = canvas.scrollHeight; // or use canvas.getBoundingClientRect().height
+
+            // Set height to max of formElement.clientWidth or computedHeight
+            canvas.style.height = `${Math.min(computedHeight, formElement.clientWidth)}px`;
         } else {
             canvas.style.height = `${formElement.clientHeight}px`;
 
@@ -21,8 +27,11 @@ export function setupCanvasResizing(canvas: HTMLCanvasElement, updateCanvasSize:
         updateCanvasSize();
     }
 
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas(); // Initial call to set canvas size
+    // Call resizeCanvas on initial load
+    resizeCanvas();
 
-    return resizeCanvas; // Return the resizeCanvas function
+    // Add resize listener
+    window.addEventListener('resize', resizeCanvas);
+
+    return resizeCanvas;
 }

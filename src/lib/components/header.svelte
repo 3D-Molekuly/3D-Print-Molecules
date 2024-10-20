@@ -44,7 +44,7 @@
         <ul class="nav mb-2 justify-content-center mb-md-0 me-3">
           <li><a href="/" class="nav-link px-2 fs-4 text-grey">{$_('make_model_tittle')}</a></li>
           <li><a href={localizedPath('/tutorials')} class="nav-link px-2 fs-4 text-grey">{$_('tutorials_tittle')}</a></li>
-          <li><a href={localizedPath('/examples')} class="nav-link px-2 fs-4 text-grey">{$_('examples_tittle')}</a></li>
+          <li><a href={localizedPath('/demonstrations')} class="nav-link px-2 fs-4 text-grey">{$_('examples_tittle')}</a></li>
           <li><a href={localizedPath('/about')} class="nav-link px-2 fs-4 text-grey">{$_('about_tittle')}</a></li>
         </ul>
 

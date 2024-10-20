@@ -1,6 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import { setupThreeJS } from '$lib/threejsFc/threejsMolecules';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB } from '$lib/molecules/pdbParser';
@@ -9,36 +10,40 @@
   let quality = 50;
   let showHydrogens = true;
   let inputStr = '';
+  let searchHistory: string[] = [];
   let resizeCanvas: (() => void) | undefined;
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
   let imageUrl = '';
   let atomCoordinates: AtomCoordinate[] = []
   let createAtomSpheres: ((coordinates: AtomCoordinate[], quality: number) => void) | undefined;
-  let canvas: HTMLCanvasElement | null = null; // Declare the canvas variable
+  let canvas: HTMLCanvasElement | null = null;
 
   onMount(async () => {
-    canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-    if (!canvas) {
-      console.error('Canvas not found');
-      return;
-    }
-
-    try {
-      const storedCoordinates = sessionStorage.getItem('atomCoordinates');
-      atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
-
-      const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = setupThreeJS(canvas, atomCoordinates);
-
-      if (typeof spheresCreator === "function") {
-        createAtomSpheres = spheresCreator;
-      } else {
-        throw new Error("Failed to initialize createAtomSpheres function");
+    if (browser) {
+      searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+      canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+      if (!canvas) {
+        console.error('Canvas not found');
+        return;
       }
 
-      resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
-      animate();
-    } catch (error) {
-      console.error("Error during onMount initialization:", error);
+      try {
+        const storedCoordinates = sessionStorage.getItem('atomCoordinates');
+        atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
+
+        const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = setupThreeJS(canvas, atomCoordinates);
+
+        if (typeof spheresCreator === "function") {
+          createAtomSpheres = spheresCreator;
+        } else {
+          throw new Error("Failed to initialize createAtomSpheres function");
+        }
+
+        resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+        animate();
+      } catch (error) {
+        console.error("Error during onMount initialization:", error);
+      }
     }
   });
 
@@ -53,6 +58,7 @@
   }
 
   async function handleSubmit() {
+    saveSearch();
     const inputType = determineInputType(inputStr);
 
     // Fetch data and set table info and image
@@ -98,7 +104,6 @@
     if (typeof resizeCanvas === "function") resizeCanvas();
   }
 
-
   function handleKeyPress(event: KeyboardEvent) {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -138,6 +143,25 @@
       console.error("createAtomSpheres function not initialized");
     }
   }
+
+  // Save inputStr to search history (max 5 items)
+  function isClient() {
+    return typeof window !== 'undefined';
+  }
+
+  function saveSearch() {
+    if (browser && inputStr.trim() !== '' && !searchHistory.includes(inputStr)) {
+      searchHistory = [inputStr, ...searchHistory.slice(0, 4)];
+      localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+    }
+  }
+
+  // Handle search item click from history
+  function handleHistoryClick(item: string) {
+    inputStr = item;
+    saveSearch();  // Update history
+    handleSubmit();  // Trigger the search action
+  }
 </script>
 
 <div class="container mt-4 main-panel main-content">
@@ -146,15 +170,35 @@
     <div class="col-md-8 left-panel">
       <!-- Search field and buttons -->
       <div class="d-flex mb-3 align-items-center">
-        <input type="text" bind:value={inputStr} on:keydown={handleKeyPress} class="form-control form-control-lg me-2 custom-input-height" placeholder={$_('search_field')} aria-label="Search">
-
-        <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center">
+        <input
+          type="text"
+          bind:value={inputStr}
+          on:keydown={handleKeyPress}
+          class="form-control form-control-lg me-2 main-search-line dropdown-toggle"
+          id="dropdownMenuButton"
+          data-bs-toggle="dropdown"
+          placeholder={$_('search_field')}
+          aria-label="Search"
+        />
+        {#if searchHistory.length > 0}
+        <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
+          <!-- Dropdown items will be injected here -->
+          {#each searchHistory as item, index}
+            <li>
+              <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
+                {item}
+              </a>
+            </li>
+          {/each}
+        </ul>
+        {/if}
+        <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
           <span class="material-symbols-outlined">upload_file</span>
           {$_('upload_file_button')}
         </label>
         <input on:change={handleFileUpload} type="file" id="fileInput" class="d-none">
 
-        <button on:click={handleSubmit} class="btn btn-primary button-with-icon d-flex align-items-center">
+        <button on:click={handleSubmit} class="btn btn-primary button-with-icon d-flex align-items-center main-search-line">
           <span class="material-symbols-outlined">downloading</span>
           {$_('fetch_data_button')}
         </button>
@@ -235,7 +279,7 @@
   margin-bottom: 5rem;
 }
 
-.custom-input-height {
+.main-search-line {
   height: 65px; /* Adjust this value to match the button height */
 }
 

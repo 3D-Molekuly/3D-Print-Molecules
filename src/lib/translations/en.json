@@ -10,6 +10,9 @@
 
     "bug_report":"Bug Report",
 
+    "error":"Error",
+    "error_occurred":"An unexpected error has occurred",
+
     "search_field":"⌕ Search on PubChem, PDB, CAS...",
     "upload_file_button":"Upload File",
     "fetch_data_button":"Fetch Data",

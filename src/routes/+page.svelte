@@ -17,36 +17,45 @@
   let atomCoordinates: AtomCoordinate[] = []
   let createAtomSpheres: ((coordinates: AtomCoordinate[], quality: number) => void) | undefined;
   let canvas: HTMLCanvasElement | null = null;
+  let dropZone: HTMLElement;
+  let fileInput: HTMLInputElement;
 
   onMount(async () => {
-    if (browser) {
-      searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
-      canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
-      if (!canvas) {
-        console.error('Canvas not found');
-        return;
-      }
-
-      try {
-        const storedCoordinates = sessionStorage.getItem('atomCoordinates');
-        atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
-
-        const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = setupThreeJS(canvas, atomCoordinates);
-
-        if (typeof spheresCreator === "function") {
-          createAtomSpheres = spheresCreator;
-        } else {
-          throw new Error("Failed to initialize createAtomSpheres function");
-        }
-
-        resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
-        animate();
-      } catch (error) {
-        console.error("Error during onMount initialization:", error);
-      }
+  if (browser) {
+    searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+    canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
+    if (!canvas) {
+      console.error('Canvas not found');
+      return;
     }
+
+    try {
+      const storedCoordinates = sessionStorage.getItem('atomCoordinates');
+      atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
+
+      const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = await setupThreeJS(canvas, atomCoordinates);
+
+      if (typeof spheresCreator === "function") {
+        createAtomSpheres = spheresCreator;
+      } else {
+        throw new Error("Failed to initialize createAtomSpheres function");
+      }
+
+      resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+      animate();
+
+      // Setup event listeners
+      dropZone = document.getElementById('dropZone') as HTMLElement;
+      fileInput = document.getElementById('fileInput') as HTMLInputElement;
+
+      // We don't need to add event listeners here anymore, as they're handled in the template
+    } catch (error) {
+      console.error("Error during onMount initialization:", error);
+    }
+  }
   });
 
+  // Molecular Search and Handeling of MOlecular Data
   import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
 
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
@@ -111,23 +120,6 @@
     }
   }
 
-  async function handleFileUpload(event: Event) {
-    const target = event.target as HTMLInputElement;
-    if (target.files && target.files.length > 0) {
-      const file = target.files[0];
-      setTableInfo(file.name, "", "");
-      setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
-
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const content = e.target?.result as string;
-        atomCoordinates = await parsePDB(content); // Await the async parser function
-        redrawModel(atomCoordinates);
-      };
-      reader.readAsText(file);
-      }
-    }
-
     async function generateModel() {
       console.log("Generating something else after model is created...");
     }
@@ -144,11 +136,7 @@
     }
   }
 
-  // Save inputStr to search history (max 5 items)
-  function isClient() {
-    return typeof window !== 'undefined';
-  }
-
+  // Search History
   function saveSearch() {
     if (browser && inputStr.trim() !== '' && !searchHistory.includes(inputStr)) {
       searchHistory = [inputStr, ...searchHistory.slice(0, 4)];
@@ -162,7 +150,81 @@
     saveSearch();  // Update history
     handleSubmit();  // Trigger the search action
   }
+
+  //File Upload feature
+  function handleFiles(files: FileList) {
+    if (files && files.length > 0) {
+      const file = files[0];
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+      if (fileExtension === 'pdb' || fileExtension === 'sdf') {
+        setTableInfo(file.name, "", "");
+        setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const content = e.target?.result as string;
+          atomCoordinates = await parsePDB(content);
+          redrawModel(atomCoordinates);
+        };
+        reader.readAsText(file);
+      } else {
+        alert($_('invalid_file_type'));
+      }
+    }
+  }
+
+  function handleFileUpload(event: Event) {
+    const target = event.target as HTMLInputElement;
+    if (target.files) {
+      handleFiles(target.files);
+    }
+  }
+
+  let isDragging = false;
+  let dragCounter = 0;
+
+  function handleDragEnter(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter++;
+    isDragging = true;
+  }
+
+  function handleDragLeave(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    dragCounter--;
+    if (dragCounter === 0) {
+      isDragging = false;
+    }
+  }
+
+  function handleDragOver(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function handleDrop(event: DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    isDragging = false;
+    dragCounter = 0;
+    if (event.dataTransfer?.files) {
+      handleFiles(event.dataTransfer.files);
+    }
+  }
 </script>
+
+<div
+  class="full-page-drop-zone"
+  class:dragging={isDragging}
+  on:dragenter={handleDragEnter}
+  on:dragleave={handleDragLeave}
+  on:dragover={handleDragOver}
+  on:drop={handleDrop}
+  role="region"
+>
 
 <div class="container mt-4 main-panel main-content">
   <div class="row">
@@ -192,11 +254,20 @@
           {/each}
         </ul>
         {/if}
-        <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
-          <span class="material-symbols-outlined">upload_file</span>
-          {$_('upload_file_button')}
-        </label>
-        <input on:change={handleFileUpload} type="file" id="fileInput" class="d-none">
+
+        <div>
+          <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
+            <span class="material-symbols-outlined">upload_file</span>
+            {$_('upload_file_button')}
+          </label>
+          <input
+            on:change={handleFileUpload}
+            type="file"
+            id="fileInput"
+            class="d-none"
+            accept=".pdb,.sdf"
+          >
+        </div>
 
         <button on:click={handleSubmit} class="btn btn-primary button-with-icon d-flex align-items-center main-search-line">
           <span class="material-symbols-outlined">downloading</span>
@@ -274,9 +345,18 @@
   </div>
 </div>
 
+{#if isDragging}
+    <div class="drag-overlay" role="status" aria-live="polite">
+      <div class="drag-message">
+        {$_('drag_and_drop_message')}
+      </div>
+    </div>
+  {/if}
+</div>
+
 <style>
 .main-content {
-  margin-bottom: 5rem;
+  margin-bottom: 2rem;
 }
 
 .main-search-line {
@@ -338,4 +418,30 @@ img {
       margin-top: 40px;
   }
 }
+
+.full-page-drop-zone {
+    width: 100%;
+    position: relative;
+  }
+
+  .drag-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .drag-message {
+    font-size: 2rem;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+  }
 </style>

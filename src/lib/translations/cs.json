@@ -15,6 +15,8 @@
 
     "search_field": "⌕ Hledej na PubChem, PDB, CAS...",
     "upload_file_button": "Nahrát Soubor",
+    "invalid_file_type":"Neplatný formát souboru. Použij .pdb nebo .sdf",
+    "drag_and_drop_message":"Drag and Drop",
     "fetch_data_button": "Načíst Data",
     "name_table_header": "Název",
     "id_table_header": "ID",

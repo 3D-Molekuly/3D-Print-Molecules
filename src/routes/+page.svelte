@@ -214,6 +214,16 @@
       handleFiles(event.dataTransfer.files);
     }
   }
+
+  let isEditing = false; // boolean to track if editing mode is active
+
+  function enableEditing() {
+    isEditing = true;
+  }
+
+  function disableEditing() {
+    isEditing = false;
+  }
 </script>
 
 <div
@@ -302,7 +312,7 @@
           </tr>
         </tbody>
       </table>
-      <table>
+      <table class="table table-borderless">
         <thead>
           <tr>
             <th>{$_('model_settings')}</th>
@@ -311,9 +321,26 @@
         <tbody>
           <tr>
             <td>
-              <label for="qualityRange">{$_('quality_slider')} {quality}</label>
-            </td>
-            <td>
+              <label for="qualityRange">
+                {$_('quality_slider')}
+                {#if isEditing}
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    bind:value={quality}
+                    on:blur={disableEditing}
+                    class=""
+                    style="width: 3em; text-align: center;">
+                {:else}
+                  <button
+                    type="button"
+                    on:click={enableEditing}
+                    class="editable-button">
+                    {quality}
+                  </button>
+                {/if}
+              </label>
               <div class="quality-container">
                 <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
               </div>
@@ -322,8 +349,6 @@
           <tr>
             <td>
               <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
-            </td>
-            <td class="form-check">
               <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
             </td>
           </tr>
@@ -443,5 +468,19 @@ img {
     background-color: rgba(0, 0, 0, 0.7);
     padding: 20px;
     border-radius: 10px;
+  }
+
+  .editable-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .editable-button:hover,
+  .editable-button:focus {
+    outline: 1px dashed #ccc;
   }
 </style>

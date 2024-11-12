@@ -19,6 +19,11 @@
   let canvas: HTMLCanvasElement | null = null;
   let dropZone: HTMLElement;
   let fileInput: HTMLInputElement;
+  let acceptFormats = '.pdb,.sdf';
+
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  }
 
   onMount(async () => {
   if (browser) {
@@ -53,6 +58,9 @@
       console.error("Error during onMount initialization:", error);
     }
   }
+  if (isIOS()) {
+      acceptFormats = ''; // Allows all file types on iOS
+    }
   });
 
   // Molecular Search and Handeling of MOlecular Data
@@ -176,10 +184,10 @@
 
   function handleFileUpload(event: Event) {
     const target = event.target as HTMLInputElement;
-    if (target.files) {
-      handleFiles(target.files);
+    if (target.files && target.files.length > 0) {
+        handleFiles(target.files);
     }
-  }
+}
 
   let isDragging = false;
   let dragCounter = 0;
@@ -223,6 +231,12 @@
 
   function disableEditing() {
     isEditing = false;
+  }
+
+  let isCollapsed = true; // boolean to callapsable menu
+
+  function toggleCollapse() {
+    isCollapsed = !isCollapsed;
   }
 </script>
 
@@ -275,7 +289,7 @@
             type="file"
             id="fileInput"
             class="d-none"
-            accept=".pdb,.sdf"
+            accept={acceptFormats}
           >
         </div>
 
@@ -312,13 +326,29 @@
           </tr>
         </tbody>
       </table>
+
+      <div>
       <table class="table table-borderless">
         <thead>
           <tr>
-            <th>{$_('model_settings')}</th>
+            <th>
+              {$_('model_settings')}
+
+              <button
+                type="button"
+                on:click={toggleCollapse}
+                aria-expanded={!isCollapsed}
+                aria-controls="collapseOne"
+                class="btn btn-link"
+              >
+                <span class="material-symbols-outlined" style="color: black; font-size: 36px;">
+                  {isCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
+                </span>
+              </button>
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class={isCollapsed ? 'collapse' : ''} id="collapseOne">
           <tr>
             <td>
               <label for="qualityRange">
@@ -354,6 +384,7 @@
           </tr>
         </tbody>
       </table>
+      </div>
       <br>
 
       <!-- Button to generate model -->

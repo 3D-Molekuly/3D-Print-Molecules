@@ -10,12 +10,16 @@ export interface AtomCoordinate {
 const pattern1 = /^HETATM\s+(\d+)\s+([A-Za-z0-9]+(?:-[A-Za-z0-9]+)?)\s+([A-Za-z0-9]+)\s*([A-Za-z]?)\s*(\d*)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s*([A-Za-z]*)\s*$/;
 const pattern2 = /^HETATM\s+(\d+)\s+(\S+)\s+(\w+)\s+(\w+)\s+(\d+)\s+([-+]?\d*\.\d+)\s+([-+]?\d*\.\d+)\s+([-+]?\d*\.\d+)\s+([-+]?\d*\.\d+)\s+([-+]?\d*\.\d+)\s+(\S+)/;
 const pattern3 = /\s*([-+]?\d*\.\d+)\s+([-+]?\d*\.\d+)\s+([-+]?\d*\.\d+)\s+(\w+)\s*/;
+const pattern4 = /HETATM\s+\d+\s+\w+\s+\w+\s+\w+\s+\d+\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+(-?\d+\.\d+)\s+\d+\.\d+\s+\d+\.\d+\s+([A-Z]).*$/;
+
+const cleanElement = (element: string): string => {
+  // Removes numbers and special characters from the element
+  return element.replace(/[^A-Z]/g, '');
+};
 
 export async function parsePDB(data: string | string[]): Promise<AtomCoordinate[]> {
   const lines = typeof data === 'string' ? data.split('\n') : data;
   const atomCoordinates: AtomCoordinate[] = [];
-
-  // Create an array to store promises for element data fetching
   const fetchPromises: Promise<void>[] = [];
 
   for (const line of lines) {
@@ -28,7 +32,12 @@ export async function parsePDB(data: string | string[]): Promise<AtomCoordinate[
           const x = parseFloat(match[6]);
           const y = parseFloat(match[7]);
           const z = parseFloat(match[8]);
-          result = { atomType, x, y, z };
+
+          if (!isNaN(x) && !isNaN(y) && !isNaN(z) && typeof atomType === 'string' && atomType) {
+              result = { atomType, x, y, z };
+          } else {
+              console.warn(`Invalid data at line: ${line}`);
+          }
       } else {
           match = line.match(pattern2);
           if (match) {
@@ -37,37 +46,59 @@ export async function parsePDB(data: string | string[]): Promise<AtomCoordinate[
               const x = parseFloat(match[6]);
               const y = parseFloat(match[7]);
               const z = parseFloat(match[8]);
-              result = { atomType, x, y, z };
+
+              if (!isNaN(x) && !isNaN(y) && !isNaN(z) && typeof atomType === 'string' && atomType) {
+                  result = { atomType, x, y, z };
+              } else {
+                  console.warn(`Invalid data at line: ${line}`);
+              }
           } else {
+            match = line.match(pattern4);
+            if (match) {
+                const atomType = cleanElement(match[4]);
+                const x = parseFloat(match[1]);
+                const y = parseFloat(match[2]);
+                const z = parseFloat(match[3]);
+
+                if (!isNaN(x) && !isNaN(y) && !isNaN(z) && typeof atomType === 'string' && atomType) {
+                    result = { atomType, x, y, z };
+                } else {
+                    console.warn(`Invalid data at line: ${line}`);
+                }
+            } else {
               match = line.match(pattern3);
               if (match) {
                   const atomType = match[4];
                   const x = parseFloat(match[1]);
                   const y = parseFloat(match[2]);
                   const z = parseFloat(match[3]);
-                  result = { atomType, x, y, z };
+
+                  if (!isNaN(x) && !isNaN(y) && !isNaN(z) && typeof atomType === 'string' && atomType) {
+                      result = { atomType, x, y, z };
+                  } else {
+                      console.warn(`Invalid data at line: ${line}`);
+                  }
               }
+            }
           }
       }
 
       if (result) {
-          // Create a promise to fetch element data for the current atom type
+        // Create a promise to fetch element data for the current atom type
           const fetchElementDataPromise = extractElementData(result.atomType).then((elementData) => {
               if (elementData) {
-                  result.AtomicRadius = (parseFloat(elementData.AtomicRadius) / 150).toString()
-                  result.CPKHexColor = `#${elementData.CPKHexColor.replace(/^#/, '')}`;
-
+                  result!.AtomicRadius = (parseFloat(elementData.AtomicRadius) / 150).toString();
+                  result!.CPKHexColor = `#${elementData.CPKHexColor.replace(/^#/, '')}`;
               }
           });
 
-          fetchPromises.push(fetchElementDataPromise); // Add the promise to the array
-          atomCoordinates.push(result); // Add the atom coordinate object
+          fetchPromises.push(fetchElementDataPromise);
+          atomCoordinates.push(result);
       }
   }
 
   // Wait for all element data to be fetched
   await Promise.all(fetchPromises);
-
   return atomCoordinates;
 }
 

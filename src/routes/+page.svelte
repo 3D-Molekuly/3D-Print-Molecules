@@ -260,6 +260,7 @@
     <div class="col-md-8 left-panel">
       <!-- Search field and buttons -->
       <div class="d-flex mb-3 align-items-center">
+          <div class="input-group">
           <input
             type="text"
             bind:value={inputStr}
@@ -305,6 +306,7 @@
           </li>
         </ul>
         {/if}
+      </div>
 
         <div>
           <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">

@@ -159,6 +159,10 @@
     handleSubmit();  // Trigger the search action
   }
 
+  function clearHistory() {
+    searchHistory = [];
+  }
+
   //File Upload feature
   function handleFiles(files: FileList) {
     if (files && files.length > 0) {
@@ -256,19 +260,32 @@
     <div class="col-md-8 left-panel">
       <!-- Search field and buttons -->
       <div class="d-flex mb-3 align-items-center">
-        <input
-          type="text"
-          bind:value={inputStr}
-          on:keydown={handleKeyPress}
-          class="form-control form-control-lg me-2 main-search-line dropdown-toggle"
-          id="dropdownMenuButton"
-          data-bs-toggle="dropdown"
-          placeholder={$_('search_field')}
-          aria-label="Search"
-        />
+        <div class="input-group">
+          <input
+            type="text"
+            bind:value={inputStr}
+            on:keydown={handleKeyPress}
+            class="form-control form-control-lg me-2 main-search-line dropdown-toggle"
+            id="dropdownMenuButton"
+            data-bs-toggle="dropdown"
+            placeholder={$_('search_field')}
+            aria-label="Search"
+          />
+          <!-- "X" button to clear search -->
+          {#if inputStr}
+            <button
+              type="button"
+              class="btn-close"
+              aria-label="Clear"
+              on:click={() => (inputStr = '')}
+              style="position: absolute; right: 25px; top: 50%; transform: translateY(-50%);"
+            ></button>
+          {/if}
+        </div>
+
         {#if searchHistory.length > 0}
         <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
-          <!-- Dropdown items will be injected here -->
+          <!-- Search history items -->
           {#each searchHistory as item, index}
             <li>
               <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
@@ -276,6 +293,18 @@
               </a>
             </li>
           {/each}
+
+          <!-- Red "Delete history" button -->
+          <li>
+            <button
+              type="button"
+              class="dropdown-item"
+              style="font-weight: bold; cursor: pointer;"
+              on:click={clearHistory}
+            >
+            {$_('delete_history')}
+            </button>
+          </li>
         </ul>
         {/if}
 

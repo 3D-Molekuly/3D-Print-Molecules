@@ -14,6 +14,7 @@
     "error_occurred":"Nastala neočekávaná chyba",
 
     "search_field": "⌕ Hledej na PubChem, PDB, CAS...",
+    "delete_history": "Vymazat historii",
     "upload_file_button": "Nahrát Soubor",
     "invalid_file_type":"Neplatný formát souboru. Použij .pdb nebo .sdf",
     "drag_and_drop_message":"Drag and Drop",

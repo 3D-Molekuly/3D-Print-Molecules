@@ -260,7 +260,6 @@
     <div class="col-md-8 left-panel">
       <!-- Search field and buttons -->
       <div class="d-flex mb-3 align-items-center">
-        <div class="input-group">
           <input
             type="text"
             bind:value={inputStr}
@@ -281,7 +280,6 @@
               style="position: absolute; right: 25px; top: 50%; transform: translateY(-50%);"
             ></button>
           {/if}
-        </div>
 
         {#if searchHistory.length > 0}
         <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
@@ -299,10 +297,10 @@
             <button
               type="button"
               class="dropdown-item"
-              style="font-weight: bold; cursor: pointer;"
+              style="font-weight: bold; cursor: pointer; color: red; font-size: 10px;"
               on:click={clearHistory}
             >
-            {$_('delete_history')}
+            ⨉ {$_('delete_history')}
             </button>
           </li>
         </ul>

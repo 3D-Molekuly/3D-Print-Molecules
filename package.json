@@ -24,6 +24,7 @@
 	"type": "module",
 	"dependencies": {
 		"@popperjs/core": "^2.11.8",
+		"@vercel/analytics": "^1.4.0",
 		"bootstrap": "^5.3.3",
 		"svelte-i18n": "^4.0.0",
 		"three": "^0.168.0"

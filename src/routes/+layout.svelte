@@ -1,4 +1,7 @@
 <script>
+	import { inject } from '@vercel/analytics';
+	inject();
+
 	import { _ } from 'svelte-i18n';
 	import 'bootstrap/dist/css/bootstrap.min.css';
 	import '../app.css';

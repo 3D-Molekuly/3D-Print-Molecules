@@ -27,6 +27,7 @@
 
     "model_settings":"Nastavení Modelu",
     "quality_slider": "Kvalita:",
+    "select_model_type":"Vyber typ zobrazení",
     "hydrogens_checbox": "Vodíky",
     "generate_model_button": "Generovat Model"
 }

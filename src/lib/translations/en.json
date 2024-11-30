@@ -27,6 +27,7 @@
 
     "model_settings":"Model Settings",
     "quality_slider":"Quality:",
+    "select_model_type":"Select Model Type",
     "hydrogens_checbox":"Hydrogens",
     "generate_model_button":"Generate Model"
 }

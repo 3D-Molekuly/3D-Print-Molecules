@@ -27,7 +27,8 @@
 		"@vercel/analytics": "^1.4.0",
 		"bootstrap": "^5.3.3",
 		"svelte-i18n": "^4.0.0",
-		"three": "^0.168.0"
+		"three": "^0.168.0",
+		"vercel": "^39.1.2"
 	},
 	"description": "Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).",
 	"main": "svelte.config.js",

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { AtomCoordinate } from '$lib/molecules/pdbParser'; // Make sure to import AtomCoordinate type
 
 export function setupThreeJS(canvas: HTMLCanvasElement, atomCoordinates: AtomCoordinate[]) {
+    console.log("setupThreeJS loaded");
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
     const renderer = new THREE.WebGLRenderer({ canvas });
@@ -66,7 +67,8 @@ export function setupThreeJS(canvas: HTMLCanvasElement, atomCoordinates: AtomCoo
     };
 
     // Function to create atom spheres from coordinates
-    const createAtomSpheres = (coordinates: AtomCoordinate[], quality: number) => {
+    const createAtoms = (coordinates: AtomCoordinate[], quality: number) => {
+        console.log("createAtoms loaded");
         // First, clear the existing objects
         clearScene();
 
@@ -97,6 +99,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement, atomCoordinates: AtomCoo
                 sphere.position.set(x - avgX, y - avgY, z);
                 sphere.castShadow = true;  // Enable shadows for the spheres
                 scene.add(sphere);
+                console.log("3d object added");
             });
 
             // Position the camera
@@ -121,5 +124,5 @@ export function setupThreeJS(canvas: HTMLCanvasElement, atomCoordinates: AtomCoo
         camera.updateProjectionMatrix();
     }
 
-    return { animate, updateCanvasSize, createAtomSpheres, clearScene };  // Return clearScene for future use
+    return { animate, updateCanvasSize, createAtoms, clearScene };  // Return clearScene for future use
 }

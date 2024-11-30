@@ -2,28 +2,34 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS } from '$lib/threejsFc/threejsMolecules';
+  import { setupThreeJS, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB } from '$lib/molecules/pdbParser';
   import type { AtomCoordinate } from '$lib/molecules/pdbParser';
 
-  let quality = 50;
-  let showHydrogens = true;
   let inputStr = '';
   let searchHistory: string[] = [];
-  let resizeCanvas: (() => void) | undefined;
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
   let imageUrl = '';
-  let atomCoordinates: AtomCoordinate[] = []
-  let createAtomSpheres: ((coordinates: AtomCoordinate[], quality: number) => void) | undefined;
+
+  let resizeCanvas: (() => void) | undefined;
   let canvas: HTMLCanvasElement | null = null;
   let dropZone: HTMLElement;
   let fileInput: HTMLInputElement;
+
   let acceptFormats = '.pdb,.sdf';
 
-  function isIOS() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent);
-  }
+  let quality = 50;
+  let showHydrogens = true;
+
+  let atomCoordinates: AtomCoordinate[] = [];
+  let createAtoms: ((coordinates: AtomCoordinate[], quality: number, generator: any) => void);
+
+  const modelGenerators = [
+    { name: 'Spheres', func: createSphereMesh },
+    { name: 'Cubes', func: createCubeMesh }
+  ];
+  let selectedGenerator = modelGenerators[0].func;
 
   onMount(async () => {
   if (browser) {
@@ -38,15 +44,10 @@
       const storedCoordinates = sessionStorage.getItem('atomCoordinates');
       atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
 
-      const { animate, updateCanvasSize, createAtomSpheres: spheresCreator } = await setupThreeJS(canvas, atomCoordinates);
-
-      if (typeof spheresCreator === "function") {
-        createAtomSpheres = spheresCreator;
-      } else {
-        throw new Error("Failed to initialize createAtomSpheres function");
-      }
+      const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
 
       resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+      createAtoms = generatedCreateAtoms;
       animate();
 
       // Setup event listeners
@@ -128,19 +129,21 @@
     }
   }
 
-    async function generateModel() {
-      console.log("Generating something else after model is created...");
-    }
+  async function generateModel() {
+    console.log("Generating something else after model is created...");
+  }
 
-    function redrawModel(atomCoordinates: AtomCoordinate[]) {
+  function redrawModel(atomCoordinates: AtomCoordinate[]) {
     // Store the atom coordinates in session storage for persistence
     sessionStorage.setItem('atomCoordinates', JSON.stringify(atomCoordinates));
+    console.log("redrawModel function initiated");
     console.log(atomCoordinates); // Log the parsed coordinates
     // Safely redraw the spheres with the updated coordinates
-    if (typeof createAtomSpheres === "function") {
-      createAtomSpheres(atomCoordinates, quality);  // Update the spheres in the scene
+    if (typeof createAtoms === "function") {
+      createAtoms(atomCoordinates, quality, selectedGenerator);  // Update the spheres in the scene
     } else {
-      console.error("createAtomSpheres function not initialized");
+      console.log("createAtoms function not initialized");
+      console.error("Function not initialized");
     }
   }
 
@@ -241,6 +244,10 @@
 
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
+  }
+
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent);
   }
 </script>
 
@@ -404,6 +411,14 @@
                 <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
               </div>
             </td>
+            <td>
+              <label for="model-generator">{$_('select_model_type')}</label>
+              <select class="form-select"  id="model-generator" bind:value={selectedGenerator}>
+                {#each modelGenerators as generator}
+                  <option value={generator.func}>{generator.name}</option>
+                {/each}
+              </select>
+            </td>
           </tr>
           <tr>
             <td>
@@ -436,7 +451,7 @@
         {$_('drag_and_drop_message')}
       </div>
     </div>
-  {/if}
+{/if}
 </div>
 
 <style>

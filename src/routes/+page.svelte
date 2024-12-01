@@ -23,7 +23,7 @@
   let showHydrogens = true;
 
   let atomCoordinates: AtomCoordinate[] = [];
-  let createAtoms: ((coordinates: AtomCoordinate[], quality: number, generator: any) => void);
+  let createAtoms: ((coordinates: AtomCoordinate[], quality: number, showHydrogens: boolean, generator: any) => void);
 
   const modelGenerators = [
     { name: 'Spheres', func: createSphereMesh },
@@ -140,7 +140,7 @@
     console.log(atomCoordinates); // Log the parsed coordinates
     // Safely redraw the spheres with the updated coordinates
     if (typeof createAtoms === "function") {
-      createAtoms(atomCoordinates, quality, selectedGenerator);  // Update the spheres in the scene
+      createAtoms(atomCoordinates, quality, showHydrogens, selectedGenerator);  // Update the spheres in the scene
     } else {
       console.log("createAtoms function not initialized");
       console.error("Function not initialized");

@@ -56,9 +56,12 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     const createAtoms = (
         coordinates: AtomCoordinate[],
         quality: number,
+        showHydrogens: boolean,
         selectedGenerator: (x: number, y: number, z: number, quality: number, size: number, color: number) => THREE.Mesh
     ) => {
         clearScene();
+
+        const filteredCoordinates = showHydrogens ? coordinates : coordinates.filter(({ atomType }) => atomType !== "H");
 
         if (coordinates.length > 0) {
             const center = coordinates.reduce(
@@ -78,7 +81,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
             camera.position.set(avgX, avgY, avgZ + 10);
             camera.lookAt(avgX, avgY, avgZ);
 
-            coordinates.forEach(({ x, y, z, AtomicRadius, CPKHexColor }) => {
+            filteredCoordinates.forEach(({ x, y, z, AtomicRadius, CPKHexColor }) => {
                 const size = AtomicRadius ? parseFloat(AtomicRadius) : 0.5;
                 const color = CPKHexColor ? parseInt(CPKHexColor.replace('#', '0x')) : 0x000000;
 

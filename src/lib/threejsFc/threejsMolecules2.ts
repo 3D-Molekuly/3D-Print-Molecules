@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { AtomCoordinate } from '$lib/molecules/pdbParser'; // Import AtomCoordinate type
+import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import type { AtomCoordinate } from '$lib/molecules/pdbParser';
+
+const exporter = new STLExporter();
+
+let group: THREE.Group | null = null;
 
 export function setupThreeJS(canvas: HTMLCanvasElement) {
     const scene = new THREE.Scene();
@@ -48,6 +53,8 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     // plane.receiveShadow = true;
     // scene.add(plane);
 
+    const controls = new OrbitControls(camera, renderer.domElement);
+
     const clearScene = () => {
         const essentialObjects = [ambientLight, directionalLight, backLight, pointLight, hemisphereLight];
         scene.children = essentialObjects;
@@ -60,6 +67,9 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
         selectedGenerator: (x: number, y: number, z: number, quality: number, size: number, color: number) => THREE.Mesh
     ) => {
         clearScene();
+
+        group = new THREE.Group(); // Initialize the group to hold all meshes
+        scene.add(group);
 
         const filteredCoordinates = showHydrogens ? coordinates : coordinates.filter(({ atomType }) => atomType !== "H");
 
@@ -87,14 +97,13 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
 
                 const mesh = selectedGenerator(x - avgX, y - avgY, z - avgZ, quality, size, color);
                 mesh.castShadow = true;
-                scene.add(mesh);
+                //scene.add(mesh);
+                group!.add(mesh);
 
                 console.log("3D object added with quality:", quality);
             });
         }
     };
-
-    const controls = new OrbitControls(camera, renderer.domElement);
 
     function animate() {
         requestAnimationFrame(animate);
@@ -148,3 +157,30 @@ export const createCubeMesh = (
     cube.castShadow = true;
     return cube;
 };
+
+// Export scene or specific mesh as binary STL
+export function exportBinary() {
+    if (!group) {
+        console.warn("No mesh available for export.");
+        return;
+    }
+
+    // Export as binary
+    const result = exporter.parse(group, { binary: true }) as DataView;
+
+    // Use the underlying ArrayBuffer of the DataView
+    downloadSTL(result.buffer, "molecule.stl");
+}
+
+// Helper function to trigger download
+function downloadSTL(data: ArrayBufferLike, filename: string) {
+    const arrayBuffer = data as ArrayBuffer; // Explicit cast to ArrayBuffer
+    const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+
+    // Cleanup the URL object
+    URL.revokeObjectURL(link.href);
+}

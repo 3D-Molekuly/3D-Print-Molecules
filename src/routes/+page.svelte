@@ -2,7 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinary, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB } from '$lib/molecules/pdbParser';
   import type { AtomCoordinate } from '$lib/molecules/pdbParser';
@@ -131,6 +131,7 @@
 
   async function generateModel() {
     console.log("Generating something else after model is created...");
+    exportBinary();
   }
 
   function redrawModel(atomCoordinates: AtomCoordinate[]) {

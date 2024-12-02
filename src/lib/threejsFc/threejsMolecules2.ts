@@ -68,13 +68,14 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     ) => {
         clearScene();
 
-        group = new THREE.Group(); // Initialize the group to hold all meshes
+        group = new THREE.Group();
         scene.add(group);
 
+        const atomGroups: { [atomType: string]: THREE.Group } = {};
         const filteredCoordinates = showHydrogens ? coordinates : coordinates.filter(({ atomType }) => atomType !== "H");
 
-        if (coordinates.length > 0) {
-            const center = coordinates.reduce(
+        if (filteredCoordinates.length > 0) {
+            const center = filteredCoordinates.reduce(
                 (acc, { x, y, z }) => {
                     acc.x += x;
                     acc.y += y;
@@ -84,25 +85,33 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                 { x: 0, y: 0, z: 0 }
             );
 
-            const avgX = center.x / coordinates.length;
-            const avgY = center.y / coordinates.length;
-            const avgZ = center.z / coordinates.length;
+            const avgX = center.x / filteredCoordinates.length;
+            const avgY = center.y / filteredCoordinates.length;
+            const avgZ = center.z / filteredCoordinates.length;
 
             camera.position.set(avgX, avgY, avgZ + 10);
             camera.lookAt(avgX, avgY, avgZ);
 
-            filteredCoordinates.forEach(({ x, y, z, AtomicRadius, CPKHexColor }) => {
+            filteredCoordinates.forEach(({ atomType, x, y, z, AtomicRadius, CPKHexColor }) => {
                 const size = AtomicRadius ? parseFloat(AtomicRadius) : 0.5;
                 const color = CPKHexColor ? parseInt(CPKHexColor.replace('#', '0x')) : 0x000000;
 
                 const mesh = selectedGenerator(x - avgX, y - avgY, z - avgZ, quality, size, color);
                 mesh.castShadow = true;
-                //scene.add(mesh);
-                group!.add(mesh);
 
-                console.log("3D object added with quality:", quality);
+                // Create or retrieve group for the atom type
+                if (!atomGroups[atomType]) {
+                    const groupForType = new THREE.Group();
+                    groupForType.name = `Group_${atomType}`;
+                    atomGroups[atomType] = groupForType;
+                    group!.add(groupForType);
+                }
+
+                atomGroups[atomType].add(mesh);
             });
         }
+
+        console.log('Group created and filled:', group);
     };
 
     function animate() {
@@ -160,16 +169,29 @@ export const createCubeMesh = (
 
 // Export scene or specific mesh as binary STL
 export function exportBinary() {
-    if (!group) {
+    if (!group || group.children.length === 0) {
         console.warn("No mesh available for export.");
         return;
     }
 
-    // Export as binary
-    const result = exporter.parse(group, { binary: true }) as DataView;
+    let delay = 0;
 
-    // Use the underlying ArrayBuffer of the DataView
-    downloadSTL(result.buffer, "molecule.stl");
+    group.children.forEach((child, index) => {
+        if (child instanceof THREE.Group) {
+            const result = exporter.parse(child, { binary: true }) as DataView;
+
+            // Použijeme název skupiny nebo generujeme unikátní název
+            const groupName = child.name || `Group_${index}`;
+            console.log(`Exporting group: ${groupName}`);
+
+            // Nastavení časového odstupu pro každé stažení
+            setTimeout(() => {
+                downloadSTL(result.buffer, `${groupName}.stl`);
+            }, delay);
+
+            delay += 1000; // Zpoždění 100 ms mezi staženími
+        }
+    });
 }
 
 // Helper function to trigger download

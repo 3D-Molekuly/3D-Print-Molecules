@@ -29,5 +29,6 @@
     "quality_slider": "Kvalita:",
     "select_model_type":"Vyber typ zobrazení",
     "hydrogens_checbox": "Vodíky",
-    "generate_model_button": "Generovat Model"
+    "download_whole_model_button": "Jedno STL",
+    "download_model_button": "Stáhnout Model"
 }

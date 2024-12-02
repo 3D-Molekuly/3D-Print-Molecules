@@ -2,7 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinary, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB } from '$lib/molecules/pdbParser';
   import type { AtomCoordinate } from '$lib/molecules/pdbParser';
@@ -129,9 +129,14 @@
     }
   }
 
-  async function generateModel() {
+  async function downloadModel() {
     console.log("Generating something else after model is created...");
-    exportBinary();
+    exportBinaryAsZip();
+  }
+
+  async function downloadWholeModel() {
+    console.log("Generating something else after model is created...");
+    exportModelAsSTL();
   }
 
   function redrawModel(atomCoordinates: AtomCoordinate[]) {
@@ -426,6 +431,12 @@
               <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
               <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
             </td>
+            <td>
+              <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
+                <span class="material-symbols-outlined">deployed_code_update</span>
+                {$_('download_whole_model_button')}
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -433,9 +444,9 @@
       <br>
 
       <!-- Button to generate model -->
-      <button on:click={generateModel} class="btn btn-success btn-lg w-100">
+      <button on:click={downloadModel} class="btn btn-success btn-lg w-100">
         <span class="material-symbols-outlined">deployed_code_update</span>
-        {$_('generate_model_button')}
+        {$_('download_model_button')}
       </button>
     </div>
 

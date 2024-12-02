@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import JSZip from "jszip";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import type { AtomCoordinate } from '$lib/molecules/pdbParser';
@@ -192,6 +193,61 @@ export function exportBinary() {
             delay += 1000; // Zpoždění 100 ms mezi staženími
         }
     });
+}
+
+export function exportBinaryAsZip() {
+    if (!group || group.children.length === 0) {
+        console.warn("No mesh available for export.");
+        return;
+    }
+
+    const zip = new JSZip();
+
+    const promises: Promise<void>[] = [];
+
+    group.children.forEach((child, index) => {
+        if (child instanceof THREE.Group) {
+            const result = exporter.parse(child, { binary: true }) as DataView;
+
+            const groupName = child.name || `Group_${index}`;
+            console.log(`Adding group to ZIP: ${groupName}`);
+
+            // Převod na ArrayBuffer
+            const arrayBuffer = result.buffer instanceof ArrayBuffer ? result.buffer : new ArrayBuffer(result.buffer.byteLength);
+            if (!(result.buffer instanceof ArrayBuffer)) {
+                new Uint8Array(arrayBuffer).set(new Uint8Array(result.buffer));
+            }
+
+            // Přidáme STL data do ZIP archivu
+            zip.file(`${groupName}.stl`, new Blob([arrayBuffer], { type: "application/octet-stream" }));
+        }
+    });
+
+    // Po přidání všech souborů vytvoříme a stáhneme ZIP
+    Promise.all(promises).then(() => {
+        zip.generateAsync({ type: "blob" }).then((content) => {
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(content);
+            link.download = "molecule.zip";
+            link.click();
+
+            // Cleanup URL object
+            URL.revokeObjectURL(link.href);
+        });
+    });
+}
+
+export function exportModelAsSTL() {
+    if (!group) {
+        console.warn("No mesh available for export.");
+        return;
+    }
+
+    // Export celého modelu
+    const result = exporter.parse(group, { binary: true }) as DataView;
+
+    // Stáhneme jako jeden STL soubor
+    downloadSTL(result.buffer, "molecule.stl");
 }
 
 // Helper function to trigger download

@@ -29,5 +29,6 @@
     "quality_slider":"Quality:",
     "select_model_type":"Select Model Type",
     "hydrogens_checbox":"Hydrogens",
-    "generate_model_button":"Generate Model"
+    "download_whole_model_button": "One STL File",
+    "download_model_button":"Download Model"
 }

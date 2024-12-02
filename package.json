@@ -26,9 +26,10 @@
 		"@popperjs/core": "^2.11.8",
 		"@vercel/analytics": "^1.4.0",
 		"bootstrap": "^5.3.3",
+		"jszip": "^3.10.1",
 		"svelte-i18n": "^4.0.0",
 		"three": "^0.168.0",
-		"vercel": "^39.1.2"
+		"vercel": "^32.3.0"
 	},
 	"description": "Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).",
 	"main": "svelte.config.js",

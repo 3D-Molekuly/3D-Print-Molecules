@@ -3,6 +3,7 @@
   import { _, locale } from 'svelte-i18n';
   import { writable } from 'svelte/store';
   import { goto } from '$app/navigation'; // Import goto for navigation
+  import DarkmodeButton from '$lib/components/darkmodeButton.svelte';
 
   // Create a writable store to track the current locale
   let storedLocale = 'en';
@@ -48,7 +49,7 @@
           <li><a href={localizedPath('/about')} class="nav-link px-2 fs-4 text-grey">{$_('about_tittle')}</a></li>
         </ul>
 
-        <div class="dropdown">
+        <div class="dropdown me-2">
           <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
             {$_('app_language')}
           </button>
@@ -57,6 +58,8 @@
             <li><a class="dropdown-item" href="/" on:click={(event) => switchLocale('en', event)}>EN</a></li>
           </ul>
         </div>
+
+        <DarkmodeButton />
       </div>
     </div>
   </div>

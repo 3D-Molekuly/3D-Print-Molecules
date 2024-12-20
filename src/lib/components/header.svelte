@@ -3,7 +3,7 @@
   import { _, locale } from 'svelte-i18n';
   import { writable } from 'svelte/store';
   import { goto } from '$app/navigation'; // Import goto for navigation
-  import DarkmodeButton from './darkmodeButton.svelte';
+  import DarkmodeButton from '$lib/buttons/darkmodeButton.svelte';
 
   // Create a writable store to track the current locale
   let storedLocale = 'en';

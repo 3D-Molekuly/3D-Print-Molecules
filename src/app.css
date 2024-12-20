@@ -24,3 +24,22 @@ main {
   .button-with-icon span {
     display: block;
   }
+
+  html.dark {
+    background-color: #212529; /* Tmavé pozadí */
+    color: #ffffff; /* Světlý text */
+  }
+
+  body {
+    transition: background-color 0.3s, color 0.3s;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+  }
+
+  html.dark .font-tittle {
+    color: white !important; /* Barva textu pro tmavý režim */
+  }
+
+  html.dark .text-muted {
+    color: #666666 !important; /* Barva textu pro tmavý režim */
+  }

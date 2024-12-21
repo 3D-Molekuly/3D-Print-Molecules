@@ -7,6 +7,8 @@
   import { parsePDB } from '$lib/molecules/pdbParser';
   import type { AtomCoordinate } from '$lib/molecules/pdbParser';
 
+  import InfoButton from '$lib/buttons/infoButton.svelte';
+
   let inputStr = '';
   let searchHistory: string[] = [];
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
@@ -383,7 +385,7 @@
                 aria-controls="collapseOne"
                 class="btn btn-link"
               >
-                <span class="material-symbols-outlined" style="color: black; font-size: 36px;">
+                <span class="material-symbols-outlined google-font-darkmode" style="font-size: 36px;">
                   {isCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
                 </span>
               </button>
@@ -465,6 +467,8 @@
     </div>
 {/if}
 </div>
+
+<InfoButton />
 
 <style>
 .main-content {

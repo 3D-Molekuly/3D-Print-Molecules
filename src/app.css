@@ -14,6 +14,11 @@ main {
     'opsz' 5
   }
 
+.google-font-darkmode {
+  color: black;
+}
+
+
   .button-with-icon {
     display: flex;
     align-items: center;
@@ -42,4 +47,8 @@ main {
 
   html.dark .text-muted {
     color: #666666 !important; /* Barva textu pro tmavý režim */
+  }
+
+  html.dark .google-font-darkmode {
+    color: #ffffff;
   }

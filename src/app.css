@@ -36,7 +36,6 @@ main {
   }
 
   body {
-    transition: background-color 0.3s, color 0.3s;
     background-color: var(--bg-color);
     color: var(--text-color);
   }
@@ -51,4 +50,8 @@ main {
 
   html.dark .google-font-darkmode {
     color: #ffffff;
+  }
+
+  html.dark body {
+    color: #212529;
   }

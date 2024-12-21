@@ -248,10 +248,11 @@
     isEditing = false;
   }
 
-  let isCollapsed = true; // boolean to callapsable menu
+  let isCollapsed = typeof window !== 'undefined' && localStorage.getItem('menuCollapsed') === 'true' ? true : false;
 
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
+    localStorage.setItem('menuCollapsed', isCollapsed.toString());
   }
 
   function isIOS() {

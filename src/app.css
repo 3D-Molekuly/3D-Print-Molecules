@@ -18,7 +18,6 @@ main {
   color: black;
 }
 
-
   .button-with-icon {
     display: flex;
     align-items: center;
@@ -52,6 +51,6 @@ main {
     color: #ffffff;
   }
 
-  html.dark body {
+  html.dark .app {
     color: #212529;
   }

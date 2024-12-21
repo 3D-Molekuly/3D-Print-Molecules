@@ -34,11 +34,6 @@ main {
     color: #ffffff; /* Světlý text */
   }
 
-  body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
-  }
-
   html.dark .font-tittle {
     color: white !important; /* Barva textu pro tmavý režim */
   }
@@ -49,4 +44,9 @@ main {
 
   html.dark .google-font-darkmode {
     color: #ffffff;
+  }
+
+  html.dark body {
+    background-color: #212529;
+    color: white;
   }

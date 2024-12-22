@@ -6,6 +6,7 @@
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB } from '$lib/molecules/pdbParser';
   import type { AtomCoordinate } from '$lib/molecules/pdbParser';
+  import { buildLocalizedPath } from '$lib/functions/language';
 
   import InfoButton from '$lib/buttons/infoButton.svelte';
 
@@ -468,9 +469,19 @@
     </div>
 {/if}
 </div>
-
-<InfoButton />
-
+<InfoButton title={$_('infobox_tittle')}>
+  <div>
+    {@html $_('infobox_helptext')}
+  </div>
+  <br>
+  <div>
+    {@html $_('infobox_appusage')}
+  </div>
+  <div>
+    {@html $_('infobox_slicer_multipartobject')} <img src="/assets/multipartobject.svg" alt="warningWindowMulticolorObject">
+  </div>
+  <a href={buildLocalizedPath('/tutorials')}>{@html $_('infobox_moreinfo')}</a>
+</InfoButton>
 <style>
 .main-content {
   margin-bottom: 2rem;

@@ -1,36 +1,10 @@
 <script lang="ts">
   import logo from '$lib/images/logo_v2.svg';
-  import { _, locale } from 'svelte-i18n';
-  import { writable } from 'svelte/store';
-  import { goto } from '$app/navigation'; // Import goto for navigation
+  import { _ } from 'svelte-i18n';
   import DarkmodeButton from '$lib/buttons/darkmodeButton.svelte';
+  import { switchLocale, buildLocalizedPath } from '$lib/functions/language';
 
-  // Create a writable store to track the current locale
-  let storedLocale = 'en';
-  if (typeof window !== 'undefined') {
-    storedLocale = sessionStorage.getItem('language') || 'en'; // Only run on the client side
-  }
-  const currentLocale = writable(storedLocale);
-
-  function switchLocale(newLocale: string, event: Event) {
-    event.preventDefault(); // Prevent the default link behavior
-
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname; // Get the current path
-      const newPath = path.replace(/^\/[a-z]{2}/, `/${newLocale}`); // Replace the locale in the path
-      locale.set(newLocale);
-      sessionStorage.setItem("language", newLocale); // Only run on the client side
-      currentLocale.set(newLocale); // Update the locale in the store
-
-      goto(newPath); // Navigate to the new path with the updated locale
-    }
-  }
-
-  // Utility to build localized paths reactively
-  $: localizedPath = (path: string) => {
-    let localeValue = $currentLocale; // Get the current locale from the store
-    return `/${localeValue}${path}`;
-  }
+  $: localizedPath = buildLocalizedPath;
 </script>
 
 <header class="p-3 mb-1 border-bottom">

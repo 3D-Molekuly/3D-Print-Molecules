@@ -30,5 +30,11 @@
     "select_model_type":"Select Model Type",
     "hydrogens_checbox":"Hydrogens",
     "download_whole_model_button": "One STL File",
-    "download_model_button":"Download Model"
+    "download_model_button":"Download Model",
+
+    "infobox_tittle":"Help",
+    "infobox_helptext":"This app is designed to assist you in multicolor 3D printing of molecular structures.",
+    "infobox_appusage":"<h6>How to use this app?</h6><ul><li>Search for/Import your molecular data (.pdb/.sdf)</li><li>Fetch the data</li><li>Download the model</li></ul>",
+    "infobox_slicer_multipartobject":"<h6>How to import to slicer?</h6>For <b>multicolor</b> molecule printing, ensure the slicer shows the message ‘<i>Multi-part object detected/An object with multiple parts was detected,</i>’ then confirm by selecting ‘<b style='font-weight: 900;'>YES</b>.’",
+    "infobox_moreinfo":"More info"
 }

@@ -10,11 +10,47 @@
 	import Footer from '$lib/components/footer.svelte';
 
 	import { onMount } from 'svelte';
+	import { getCurrentUrl } from '$lib/functions/utils';
+
+	let currentUrl: string = '';
+	let jsonLd: string = '';
+
+	const localizedMeta = {
+		title: $_('og_title'),
+		description: $_('og_description'),
+		keywords: $_('meta_keywords'),
+		author: $_('meta_author'),
+		url: currentUrl,
+	};
+
+	const generateJsonLd = () => {
+		return JSON.stringify({
+		"@context": "https://schema.org",
+		"@type": "SoftwareApplication",
+		"name": localizedMeta.title || "Default App",
+		"description": localizedMeta.description || "Default description",
+		"applicationCategory": "GraphicsApplication",
+		"operatingSystem": "Cross-platform",
+		"offers": {
+			"@type": "Offer",
+			"price": "0.00",
+			"priceCurrency": ""
+		},
+		"author": {
+			"@type": "Organization",
+			"name": localizedMeta.author || "Default Author"
+		},
+		"url": localizedMeta.url || "",
+		});
+	};
 
 	onMount(() => {
-		import('bootstrap/dist/js/bootstrap.bundle.min.js');
+	  currentUrl = getCurrentUrl();
+	  localizedMeta.url = currentUrl;
+      jsonLd = generateJsonLd();
+	  import('bootstrap/dist/js/bootstrap.bundle.min.js');
 	});
-</script>
+  </script>
 
 <svelte:head>
 	<title>{$_('app_tittle')}</title>
@@ -22,6 +58,18 @@
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link href="https://fonts.googleapis.com/css2?family=Handjet:wght@100..900&display=swap" rel="stylesheet" />
+
+	<meta name="description" content="{$_('meta_description')}">
+	<meta name="keywords" content="{$_('meta_keywords')}">
+	<meta name="author" content="{$_('meta_author')}">
+	<meta property="og:title" content="{$_('og_title')}">
+	<meta property="og:description" content="{$_('og_description')}">
+	<meta property="og:url" content={currentUrl}>
+	<meta property="og:image" content="">
+
+	{#if jsonLd}
+		<script type="application/ld+json">{jsonLd}</script>
+	{/if}
 </svelte:head>
 
 <div class="app">

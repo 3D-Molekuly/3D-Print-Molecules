@@ -8,6 +8,12 @@
     "examples_tittle":"Examples",
     "about_tittle":"About",
 
+    "meta_description": "Easily prepare 3D molecule prints with our app. Generate print files from public databases like PubChem.",
+    "meta_keywords": "3D printing, molecules, bioorganic models",
+    "meta_author": "UCT - Prague, FFM CUNI",
+    "og_title": "3D Printing Molecules",
+    "og_description": "A simple app for creating print files of bioorganic molecules.",
+
     "bug_report":"Bug Report",
 
     "error":"Error",

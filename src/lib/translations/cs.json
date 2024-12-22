@@ -8,6 +8,12 @@
     "examples_tittle": "Příklady",
     "about_tittle": "O Nás",
 
+    "meta_description": "Usnadněte 3D tisk molekul pomocí naší aplikace. Generujte tiskové soubory z veřejných databází PubChem.",
+    "meta_keywords": "3D tisk, molekuly, bioorganické modely",
+    "meta_author": "VŠCHT, 1.LF UK",
+    "og_title": "3D tisk molekul",
+    "og_description": "Jednoduchá aplikace pro tvorbu tiskových souborů bioorganických molekul.",
+
     "bug_report":"Nahlásit Chybu",
 
     "error":"Chyba",

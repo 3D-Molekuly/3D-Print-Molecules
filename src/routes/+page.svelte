@@ -14,6 +14,7 @@
   let searchHistory: string[] = [];
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
   let imageUrl = '';
+  let fileName: string = "molecule";
 
   let resizeCanvas: (() => void) | undefined;
   let canvas: HTMLCanvasElement | null = null;
@@ -80,6 +81,7 @@
 
   async function handleSubmit() {
     saveSearch();
+    isFileUploaded = false;
     const inputType = determineInputType(inputStr);
 
     // Fetch data and set table info and image
@@ -134,12 +136,19 @@
 
   async function downloadModel() {
     console.log("Generating something else after model is created...");
-    exportBinaryAsZip();
+    updateFileName();
+    exportBinaryAsZip(fileName, {
+      author: "3D Printing Molecules WEB APP",
+      quality: quality,
+      description: "ZIP of STL models with metadata",
+      hydrogens: String(showHydrogens)
+    });
   }
 
   async function downloadWholeModel() {
     console.log("Generating something else after model is created...");
-    exportModelAsSTL();
+    updateFileName();
+    exportModelAsSTL(fileName);
   }
 
   function redrawModel(atomCoordinates: AtomCoordinate[]) {
@@ -154,6 +163,22 @@
       console.log("createAtoms function not initialized");
       console.error("Function not initialized");
     }
+  }
+
+  function updateFileName() {
+    let name = "molecule";  // Default name
+
+    // Check if file was uploaded and set the name accordingly
+    if (isFileUploaded) {
+      name = `Molecule_${uploadedFileName}`;  // Use the uploaded file name without extension
+    }
+    // Check if `tableInfo.secondItem` has a value and set it as the file name.
+    else if (tableInfo.secondItem) {
+      name = `Molecule_${tableInfo.secondItem}`;
+    }
+
+    fileName = name;
+    console.log("Updated file name:", fileName);
   }
 
   // Search History
@@ -175,13 +200,22 @@
     searchHistory = [];
   }
 
+  let uploadedFileName: string = "";
+  let isFileUploaded: boolean = false;
+
   //File Upload feature
+
   function handleFiles(files: FileList) {
     if (files && files.length > 0) {
       const file = files[0];
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
       if (fileExtension === 'pdb' || fileExtension === 'sdf') {
+        // Set the uploaded file name and indicator
+        uploadedFileName = file.name.split('.').slice(0, -1).join('.');  // Remove extension
+        isFileUploaded = true;
+
+        // Update the table info and image
         setTableInfo(file.name, "", "");
         setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
 

@@ -195,7 +195,10 @@ export function exportBinary() {
     });
 }
 
-export function exportBinaryAsZip() {
+export function exportBinaryAsZip(
+    fileName: string,
+    metadata: Record<string, string | number>
+) {
     if (!group || group.children.length === 0) {
         console.warn("No mesh available for export.");
         return;
@@ -203,41 +206,41 @@ export function exportBinaryAsZip() {
 
     const zip = new JSZip();
 
-    const promises: Promise<void>[] = [];
-
+    // Přidání STL souborů do ZIP
     group.children.forEach((child, index) => {
         if (child instanceof THREE.Group) {
             const result = exporter.parse(child, { binary: true }) as DataView;
 
             const groupName = child.name || `Group_${index}`;
-            console.log(`Adding group to ZIP: ${groupName}`);
+            console.log(`Exporting group: ${groupName}`);
 
-            // Převod na ArrayBuffer
-            const arrayBuffer = result.buffer instanceof ArrayBuffer ? result.buffer : new ArrayBuffer(result.buffer.byteLength);
-            if (!(result.buffer instanceof ArrayBuffer)) {
-                new Uint8Array(arrayBuffer).set(new Uint8Array(result.buffer));
-            }
-
-            // Přidáme STL data do ZIP archivu
-            zip.file(`${groupName}.stl`, new Blob([arrayBuffer], { type: "application/octet-stream" }));
+            // Přidání STL do ZIP
+            zip.file(`${groupName}.stl`, new Blob([result.buffer as ArrayBuffer], { type: "application/octet-stream" }));
         }
     });
 
-    // Po přidání všech souborů vytvoříme a stáhneme ZIP
-    Promise.all(promises).then(() => {
-        zip.generateAsync({ type: "blob" }).then((content) => {
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(content);
-            link.download = "molecule.zip";
-            link.click();
+    // Přidání metadat jako textového souboru
+    const metadataContent = Object.entries(metadata)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("\n");
 
-            // Cleanup URL object
-            URL.revokeObjectURL(link.href);
-        });
+    zip.file("metadata.txt", metadataContent);
+
+    // Generování ZIP a stažení
+    zip.generateAsync({ type: "blob" }).then((content) => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(content);
+        link.download = `${fileName}.zip`;
+        link.click();
+        URL.revokeObjectURL(link.href); // Uvolnění paměti
+        console.log("ZIP was created with metadaty:", fileName);
+    }).catch((error) => {
+        console.error("Error creating ZIP:", error);
     });
 }
 
-export function exportModelAsSTL() {
+
+export function exportModelAsSTL(fileName: string) {
     if (!group) {
         console.warn("No mesh available for export.");
         return;
@@ -247,7 +250,7 @@ export function exportModelAsSTL() {
     const result = exporter.parse(group, { binary: true }) as DataView;
 
     // Stáhneme jako jeden STL soubor
-    downloadSTL(result.buffer, "molecule.stl");
+    downloadSTL(result.buffer, `${fileName}.stl`);
 }
 
 // Helper function to trigger download

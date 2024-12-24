@@ -35,7 +35,11 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(response => {
-      return response || fetch(event.request);
+      // Serve from cache if available, else fetch from the network
+      return response || fetch(event.request).catch(() => {
+        // Fallback when network is unavailable, e.g., serve an offline page
+        return caches.match('/offline.html');
+      });
     })
   );
 });

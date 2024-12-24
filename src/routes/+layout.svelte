@@ -50,15 +50,18 @@
       jsonLd = generateJsonLd();
 	  import('bootstrap/dist/js/bootstrap.bundle.min.js');
 
+	  // Inside +layout.svelte or wherever you're registering the service worker
 	  if ('serviceWorker' in navigator) {
-		navigator.serviceWorker
+		window.addEventListener('load', () => {
+			navigator.serviceWorker
 			.register('/service-worker.js')
-			.then((registration) => {
-			console.log('Service Worker registered: ', registration);
+			.then(registration => {
+				console.log('Service Worker registered with scope:', registration.scope);
 			})
-			.catch((error) => {
-			console.error('Service Worker registration failed: ', error);
+			.catch(error => {
+				console.error('Service Worker registration failed:', error);
 			});
+		});
 		}
 	});
 

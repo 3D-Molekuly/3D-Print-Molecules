@@ -52,17 +52,14 @@
 
 	  // Inside +layout.svelte or wherever you're registering the service worker
 	  if ('serviceWorker' in navigator) {
-		window.addEventListener('load', () => {
-			addEventListener('load', function () {
-			navigator.serviceWorker.register('/service-worker.js')
-			.then((registration: ServiceWorkerRegistration) => {
-				console.log('Service Worker registered with scope:', registration.scope);
+		navigator.serviceWorker
+			.register('/service-worker.js')
+			.then((registration) => {
+			console.log('Service Worker registered: ', registration);
 			})
-			.catch(error => {
-				console.error('Service Worker registration failed:', error);
+			.catch((error) => {
+			console.error('Service Worker registration failed: ', error);
 			});
-			});
-		  });
 		}
 	});
 

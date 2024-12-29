@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { AtomCoordinate } from '$lib/molecules/pdbParser'; // Make sure to import AtomCoordinate type
+import type { AtomCoordinate } from '$lib/molecules/molecularDataParser'; // Make sure to import AtomCoordinate type
 
 export function setupThreeJS(canvas: HTMLCanvasElement, atomCoordinates: AtomCoordinate[]) {
     console.log("setupThreeJS loaded");

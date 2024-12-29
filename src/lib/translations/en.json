@@ -37,6 +37,7 @@
     "hydrogens_checbox":"Hydrogens",
     "download_whole_model_button": "One STL File",
     "download_model_button":"Download Model",
+    "multiplication_factor":"Multiplication Factor",
 
     "infobox_tittle":"Help",
     "infobox_helptext":"This app is designed to assist you in multicolor 3D printing of molecular structures.",

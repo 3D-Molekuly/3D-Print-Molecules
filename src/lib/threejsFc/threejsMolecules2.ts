@@ -2,7 +2,8 @@ import * as THREE from "three";
 import JSZip from "jszip";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
-import type { AtomCoordinate } from '$lib/molecules/pdbParser';
+import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
+import type { CreateAtomsParams, SelectedGeneratorParams } from '$lib/types';
 
 const exporter = new STLExporter();
 
@@ -61,12 +62,8 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
         scene.children = essentialObjects;
     };
 
-    const createAtoms = (
-        coordinates: AtomCoordinate[],
-        quality: number,
-        showHydrogens: boolean,
-        selectedGenerator: (x: number, y: number, z: number, quality: number, size: number, color: number) => THREE.Mesh
-    ) => {
+    const createAtoms = (params: CreateAtomsParams) => {
+        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator } = params;
         clearScene();
 
         group = new THREE.Group();
@@ -97,7 +94,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                 const size = AtomicRadius ? parseFloat(AtomicRadius) : 0.5;
                 const color = CPKHexColor ? parseInt(CPKHexColor.replace('#', '0x')) : 0x000000;
 
-                const mesh = selectedGenerator(x - avgX, y - avgY, z - avgZ, quality, size, color);
+                const mesh = selectedGenerator({ x: x - avgX, y: y - avgY, z: z - avgZ, quality, size, color, multiplicationFactor });
                 mesh.castShadow = true;
 
                 // Create or retrieve group for the atom type
@@ -132,17 +129,11 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     return { animate, updateCanvasSize, createAtoms, clearScene };
 }
 
-export const createSphereMesh = (
-    x: number,
-    y: number,
-    z: number,
-    quality: number,
-    size: number,
-    color: number
-) => {
+export const createSphereMesh = (params: SelectedGeneratorParams) => {
+    const { x, y, z, quality, size, color, multiplicationFactor } = params;
     const material = new THREE.MeshStandardMaterial({ color });
     const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(size, quality, quality),
+        new THREE.SphereGeometry(size * multiplicationFactor, quality, quality),
         material
     );
     sphere.position.set(x, y, z);
@@ -150,17 +141,11 @@ export const createSphereMesh = (
     return sphere;
 };
 
-export const createCubeMesh = (
-    x: number,
-    y: number,
-    z: number,
-    quality: number,
-    size: number,
-    color: number
-) => {
+export const createCubeMesh = (params: SelectedGeneratorParams) => {
+    const { x, y, z, quality, size, color, multiplicationFactor } = params;
     const material = new THREE.MeshStandardMaterial({ color });
     const cube = new THREE.Mesh(
-        new THREE.BoxGeometry(size, size, size),
+        new THREE.BoxGeometry(size * multiplicationFactor, size * multiplicationFactor, size * multiplicationFactor),
         material
     );
     cube.position.set(x, y, z);

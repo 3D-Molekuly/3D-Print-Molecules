@@ -4,9 +4,10 @@
   import { browser } from '$app/environment';
   import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
-  import { parsePDB } from '$lib/molecules/pdbParser';
-  import type { AtomCoordinate } from '$lib/molecules/pdbParser';
+  import { parsePDB, parseSDF, parseSDF2 } from '$lib/molecules/molecularDataParser';
+  import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
   import { buildLocalizedPath } from '$lib/functions/language';
+  import type { CreateAtomsParams, SelectedGeneratorParams } from '$lib/types';
 
   import InfoButton from '$lib/buttons/infoButton.svelte';
 
@@ -27,13 +28,15 @@
   let showHydrogens = true;
 
   let atomCoordinates: AtomCoordinate[] = [];
-  let createAtoms: ((coordinates: AtomCoordinate[], quality: number, showHydrogens: boolean, generator: any) => void);
+  let createAtoms: ((params: CreateAtomsParams) => void);
 
   const modelGenerators = [
     { name: 'Spheres', func: createSphereMesh },
     { name: 'Cubes', func: createCubeMesh }
   ];
   let selectedGenerator = modelGenerators[0].func;
+
+  let multiplicationFactor = 1.0;
 
   onMount(async () => {
   if (browser) {
@@ -111,7 +114,7 @@
             }
         }
         const content = await response.text();
-        atomCoordinates = await parsePDB(content);  // Await the async parser function
+        atomCoordinates = await parseSDF2(content);  // Await the async parser function
 
     } else if (inputType === "PDB") {
         const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
@@ -158,7 +161,14 @@
     console.log(atomCoordinates); // Log the parsed coordinates
     // Safely redraw the spheres with the updated coordinates
     if (typeof createAtoms === "function") {
-      createAtoms(atomCoordinates, quality, showHydrogens, selectedGenerator);  // Update the spheres in the scene
+      const params: CreateAtomsParams = {
+        coordinates: atomCoordinates,
+        quality: quality,
+        showHydrogens: showHydrogens,
+        multiplicationFactor: multiplicationFactor,
+        selectedGenerator: selectedGenerator
+      };
+      createAtoms(params);  // Update the spheres in the scene
     } else {
       console.log("createAtoms function not initialized");
       console.error("Function not initialized");
@@ -464,6 +474,22 @@
               </select>
             </td>
           </tr>
+          {#if selectedGenerator === createSphereMesh}
+          <tr>
+            <td>
+              <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+              <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+            </td>
+          </tr>
+          {/if}
+          {#if selectedGenerator === createCubeMesh}
+          <tr>
+            <td>
+              <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+              <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+            </td>
+          </tr>
+          {/if}
           <tr>
             <td>
               <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>

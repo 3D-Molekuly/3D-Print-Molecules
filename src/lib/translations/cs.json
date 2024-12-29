@@ -37,6 +37,7 @@
     "hydrogens_checbox": "Vodíky",
     "download_whole_model_button": "Jedno STL",
     "download_model_button": "Stáhnout Model",
+    "multiplication_factor":"Násobící faktor",
 
     "infobox_tittle":"Nápověda",
     "infobox_helptext": "Tato aplikace je navržena tak, aby vám pomohla s vícebarevným 3D tiskem molekulárních struktur.",

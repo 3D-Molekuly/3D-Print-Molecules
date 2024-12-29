@@ -4,7 +4,7 @@
   import { browser } from '$app/environment';
   import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
-  import { parsePDB, parseSDF, parseSDF2 } from '$lib/molecules/molecularDataParser';
+  import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
   import { buildLocalizedPath } from '$lib/functions/language';
   import type { CreateAtomsParams, SelectedGeneratorParams } from '$lib/types';
@@ -114,7 +114,7 @@
             }
         }
         const content = await response.text();
-        atomCoordinates = await parseSDF2(content);  // Await the async parser function
+        atomCoordinates = await parseSDF(content);  // Await the async parser function
 
     } else if (inputType === "PDB") {
         const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
@@ -232,7 +232,7 @@
         const reader = new FileReader();
         reader.onload = async (e) => {
           const content = e.target?.result as string;
-          atomCoordinates = await parsePDB(content);
+          atomCoordinates = await parseSDF(content);
           redrawModel(atomCoordinates);
         };
         reader.readAsText(file);

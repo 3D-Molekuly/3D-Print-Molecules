@@ -8,11 +8,26 @@ import type { CreateAtomsParams, SelectedGeneratorParams, AtomWithBonds } from '
 const exporter = new STLExporter();
 
 let group: THREE.Group | null = null;
+let renderer: THREE.WebGLRenderer | null = null;
+let scene: THREE.Scene | null = null;
+let camera: THREE.PerspectiveCamera | null = null;
+
+interface LocalSelectedGeneratorParams {
+    x: number;
+    y: number;
+    z: number;
+    quality: number;
+    size: number;
+    color: number;
+    multiplicationFactor: number;
+    coordinates?: AtomWithBonds[];
+    originalCoordinates?: AtomWithBonds[];
+}
 
 export function setupThreeJS(canvas: HTMLCanvasElement) {
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-    const renderer = new THREE.WebGLRenderer({ canvas });
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
+    renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
 
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
     renderer.setClearColor(0xffffff);
@@ -59,7 +74,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
 
     const clearScene = () => {
         const essentialObjects = [ambientLight, directionalLight, backLight, pointLight, hemisphereLight];
-        scene.children = essentialObjects;
+        scene!.children = essentialObjects;
     };
 
     const createAtoms = (params: CreateAtomsParams) => {
@@ -67,7 +82,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
         clearScene();
 
         group = new THREE.Group();
-        scene.add(group);
+        scene!.add(group);
 
         const atomGroups: { [atomType: string]: THREE.Group } = {};
         const filteredCoordinates = showHydrogens ? coordinates : coordinates.filter(({ atomType }) => atomType !== "H");
@@ -94,8 +109,8 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                 centeredZ: coord.z - avgZ
             }));
 
-            camera.position.set(avgX, avgY, avgZ + 10);
-            camera.lookAt(avgX, avgY, avgZ);
+            camera!.position.set(avgX, avgY, avgZ + 10);
+            camera!.lookAt(avgX, avgY, avgZ);
 
             centeredCoordinates.forEach((atom) => {
                 const { atomType, centeredX, centeredY, centeredZ, AtomicRadius, CPKHexColor } = atom;
@@ -133,21 +148,25 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
-        renderer.render(scene, camera);
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+        }
     }
 
     function updateCanvasSize() {
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
-        renderer.setSize(width, height);
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
+        if (renderer && camera) {
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        }
     }
 
     return { animate, updateCanvasSize, createAtoms, clearScene };
 }
 
-export const createSphereMesh = (params: SelectedGeneratorParams) => {
+export const createSphereMesh = (params: LocalSelectedGeneratorParams) => {
     const { x, y, z, quality, size, color, multiplicationFactor } = params;
     const material = new THREE.MeshStandardMaterial({ color });
     const sphere = new THREE.Mesh(
@@ -159,7 +178,7 @@ export const createSphereMesh = (params: SelectedGeneratorParams) => {
     return sphere;
 };
 
-export const createCubeMesh = (params: SelectedGeneratorParams) => {
+export const createCubeMesh = (params: LocalSelectedGeneratorParams) => {
     const { x, y, z, quality, size, color, multiplicationFactor } = params;
     const material = new THREE.MeshStandardMaterial({ color });
     const cube = new THREE.Mesh(
@@ -169,6 +188,89 @@ export const createCubeMesh = (params: SelectedGeneratorParams) => {
     cube.position.set(x, y, z);
     cube.castShadow = true;
     return cube;
+};
+
+export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams) => {
+    const { x, y, z, quality, size, color, multiplicationFactor, coordinates, originalCoordinates } = params;
+
+    if (!coordinates || !originalCoordinates) {
+        console.warn("Coordinates are required for ball-and-stick representation");
+        return createSphereMesh(params);
+    }
+
+    const group = new THREE.Group();
+
+    // Create sphere for the atom
+    const sphereSize = size * multiplicationFactor * 0.4;
+    const material = new THREE.MeshStandardMaterial({ color });
+    const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(sphereSize, quality, quality),
+        material
+    );
+    sphere.position.set(x, y, z);
+    sphere.castShadow = true;
+    group.add(sphere);
+
+    // Find the current atom using a tolerance for floating-point comparison
+    const EPSILON = 0.0001;
+    const currentAtom = coordinates.find(atom => {
+        return atom.centeredX !== undefined && atom.centeredY !== undefined && atom.centeredZ !== undefined &&
+               Math.abs(atom.centeredX - x) < EPSILON &&
+               Math.abs(atom.centeredY - y) < EPSILON &&
+               Math.abs(atom.centeredZ - z) < EPSILON;
+    });
+
+    if (currentAtom && Array.isArray(currentAtom.bonds) && currentAtom.bonds.length > 0) {
+        currentAtom.bonds.forEach(bond => {
+            // Find the bonded atom in the centered coordinates
+            const bondedAtom = coordinates.find(atom => atom.id === bond.atomId);
+
+            if (bondedAtom) {
+                const startPos = new THREE.Vector3(x, y, z);
+                const endPos = new THREE.Vector3(
+                    bondedAtom.centeredX,
+                    bondedAtom.centeredY,
+                    bondedAtom.centeredZ
+                );
+
+                // Calculate midpoint
+                const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
+
+                // Calculate direction and length
+                const direction = new THREE.Vector3().subVectors(endPos, startPos);
+                const bondLength = direction.length();
+
+                // Create cylinder geometry
+                const bondRadius = sphereSize * 0.5;
+                // Create cylinder geometry for the bond
+                const cylinderGeometry = new THREE.CylinderGeometry(
+                    bondRadius, // Radius of the top of the cylinder
+                    bondRadius, // Radius of the bottom of the cylinder
+                    bondLength, // Height of the cylinder
+                    50,          // Number of segmented faces around the circumference
+                    1           // Number of segmented faces along the height
+                );
+
+                // Center the cylinder geometry
+                cylinderGeometry.translate(0, bondLength / 2, 0);
+
+                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+                const cylinder = new THREE.Mesh(cylinderGeometry, bondMaterial);
+
+                // Position and rotate the cylinder
+                cylinder.position.copy(startPos);
+                cylinder.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0),
+                    direction.normalize()
+                );
+
+                cylinder.castShadow = true;
+                group.add(cylinder);
+            }
+        });
+    }
+
+    return group;
 };
 
 // Export scene or specific mesh as binary STL
@@ -242,7 +344,6 @@ export function exportBinaryAsZip(
     });
 }
 
-
 export function exportModelAsSTL(fileName: string) {
     if (!group) {
         console.warn("No mesh available for export.");
@@ -269,89 +370,17 @@ function downloadSTL(data: ArrayBufferLike, filename: string) {
     URL.revokeObjectURL(link.href);
 }
 
-interface UpdatedSelectedGeneratorParams extends SelectedGeneratorParams {
-    originalCoordinates?: AtomWithBonds[];
+// Add this new function
+export function takeScreenshot(): string | null {
+    if (!renderer || !scene || !camera) {
+        console.warn("Three.js not initialized");
+        return null;
+    }
+
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/png');
 }
 
-export const createBallAndStickMesh = (params: UpdatedSelectedGeneratorParams) => {
-    const { x, y, z, quality, size, color, multiplicationFactor, coordinates, originalCoordinates } = params;
-
-    if (!coordinates || !originalCoordinates) {
-        console.warn("Coordinates are required for ball-and-stick representation");
-        return createSphereMesh(params);
-    }
-
-    const group = new THREE.Group();
-
-    // Create sphere for the atom
-    const sphereSize = size * multiplicationFactor * 0.4;
-    const material = new THREE.MeshStandardMaterial({ color });
-    const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(sphereSize, quality, quality),
-        material
-    );
-    sphere.position.set(x, y, z);
-    sphere.castShadow = true;
-    group.add(sphere);
-
-    // Find the current atom using a tolerance for floating-point comparison
-    const EPSILON = 0.0001;
-    const currentAtom = coordinates.find(atom => {
-        return atom.centeredX !== undefined && atom.centeredY !== undefined && atom.centeredZ !== undefined &&
-               Math.abs(atom.centeredX - x) < EPSILON &&
-               Math.abs(atom.centeredY - y) < EPSILON &&
-               Math.abs(atom.centeredZ - z) < EPSILON;
-    });
-
-    if (currentAtom && Array.isArray(currentAtom.bonds) && currentAtom.bonds.length > 0) {
-        currentAtom.bonds.forEach(bond => {
-            // Find the bonded atom in the centered coordinates
-            const bondedAtom = coordinates.find(atom => atom.id === bond.atomId);
-
-            if (bondedAtom) {
-                const startPos = new THREE.Vector3(x, y, z);
-                const endPos = new THREE.Vector3(
-                    bondedAtom.centeredX,
-                    bondedAtom.centeredY,
-                    bondedAtom.centeredZ
-                );
-
-                // Calculate midpoint
-                const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
-
-                // Calculate direction and length
-                const direction = new THREE.Vector3().subVectors(endPos, startPos);
-                const bondLength = direction.length();
-
-                // Create cylinder geometry
-                const bondRadius = sphereSize * 0.5;
-                // Create cylinder geometry for the bond
-                const cylinderGeometry = new THREE.CylinderGeometry(
-                    bondRadius, // Radius of the top of the cylinder
-                    bondRadius, // Radius of the bottom of the cylinder
-                    bondLength, // Height of the cylinder
-                    8,          // Number of segmented faces around the circumference
-                    1           // Number of segmented faces along the height
-                );
-
-                // Center the cylinder geometry
-                cylinderGeometry.translate(0, bondLength / 2, 0);
-
-                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
-                const cylinder = new THREE.Mesh(cylinderGeometry, bondMaterial);
-
-                // Position and rotate the cylinder
-                cylinder.position.copy(startPos);
-                cylinder.quaternion.setFromUnitVectors(
-                    new THREE.Vector3(0, 1, 0),
-                    direction.normalize()
-                );
-
-                cylinder.castShadow = true;
-                group.add(cylinder);
-            }
-        });
-    }
-
-    return group;
-};
+interface UpdatedLocalSelectedGeneratorParams extends LocalSelectedGeneratorParams {
+    originalCoordinates?: AtomWithBonds[];
+}

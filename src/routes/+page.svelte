@@ -2,7 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh, createBallAndStickMesh } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh, createBallAndStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
@@ -22,7 +22,7 @@
   let dropZone: HTMLElement;
   let fileInput: HTMLInputElement;
 
-  let acceptFormats = '.pdb,.sdf';
+  let acceptFormats = '.sdf';
 
   let quality = 50;
   let showHydrogens = true;
@@ -304,6 +304,20 @@
   function isIOS() {
     return /iPad|iPhone|iPod/.test(navigator.userAgent);
   }
+
+  function saveCanvasAsImage() {
+    updateFileName();
+    const imageData = takeScreenshot();
+    if (imageData) {
+      const link = document.createElement('a');
+      link.download = `Photo_${fileName}.png`;
+      link.href = imageData;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } else {
+      console.error("Failed to capture screenshot");
+    }
+  }
 </script>
 
 <div
@@ -517,7 +531,27 @@
 
     <!-- Right side with canvas -->
     <div class="col-md-4">
-      <canvas id="threeCanvas" class="border rounded"></canvas>
+      <div class="canvas-container" id="canvasContainer">
+        <div class="canvas-controls">
+          <button class="btn" on:click={saveCanvasAsImage}>
+            <span class="material-symbols-outlined canvas-control">photo_camera</span>
+          </button>
+
+          <button class="btn" on:click={() => {
+            const container = document.getElementById('canvasContainer');
+            if (container) {
+              if (!document.fullscreenElement) {
+                container.requestFullscreen();
+              } else {
+                document.exitFullscreen();
+              }
+            }
+          }}>
+            <span class="material-symbols-outlined canvas-control">fullscreen</span>
+          </button>
+        </div>
+        <canvas id="threeCanvas" class="border rounded"></canvas>
+      </div>
     </div>
   </div>
 </div>
@@ -647,4 +681,66 @@ img {
   .editable-button:focus {
     outline: 1px dashed #ccc;
   }
+
+.canvas-container {
+  position: relative;
+  width: 100%;
+}
+
+.canvas-container:fullscreen {
+  background: rgb(255, 255, 255);
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.canvas-container:fullscreen canvas {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+}
+
+.canvas-container:fullscreen .canvas-controls {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+}
+
+.canvas-controls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  gap: 5px;
+}
+
+.canvas-controls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    height: 31px;
+    width: 31px;
+    line-height: 1;
+}
+
+.canvas-controls .material-symbols-outlined {
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.canvas-controls button:hover {
+  background-color: rgb(195, 195, 195);
+}
+
+.material-symbols-outlined.canvas-control {
+  margin: 0; /* Odstraňte jakékoli vnější mezery */
+  padding: 0; /* Odstraňte vnitřní mezery */
+  display: inline-block; /* Zajistěte, že ikona má přesnou velikost */
+}
+
 </style>

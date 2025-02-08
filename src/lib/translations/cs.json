@@ -41,7 +41,7 @@
 
     "infobox_tittle":"Nápověda",
     "infobox_helptext": "Tato aplikace je navržena tak, aby vám pomohla s vícebarevným 3D tiskem molekulárních struktur.",
-    "infobox_appusage": "<h6>Jak používat tuto aplikaci?</h6><ul><li>Hledejte/importujte svá molekulární data (.pdb/.sdf)</li><li>Načtěte data</li><li>Stáhněte model</li></ul>",
+    "infobox_appusage": "<h6>Jak používat tuto aplikaci?</h6><ul><li>Hledejte/importujte svá molekulární data (.sdf)</li><li>Načtěte data</li><li>Stáhněte model</li></ul>",
     "infobox_slicer_multipartobject": "<h6>Jak importovat do sliceru?</h6>Pro <b>vícebarevný</b> tisk molekul zajistěte, aby slicer zobrazil zprávu ‘<i>Multi-part object detected/An object with multiple parts was detected,</i>’ a poté potvrďte výběrem ‘<b style='font-weight: 900;'>ANO</b>.’",
     "infobox_moreinfo": "Více informací"
 }

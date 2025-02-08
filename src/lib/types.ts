@@ -17,4 +17,16 @@ export interface SelectedGeneratorParams {
     size: number;
     color: number;
     multiplicationFactor: number;
+    coordinates?: AtomWithBonds[]; // Added this optional parameter
+}
+
+export interface AtomWithBonds extends AtomCoordinate {
+    id: number;
+    centeredX?: number;
+    centeredY?: number;
+    centeredZ?: number;
+    bonds?: {
+        atomId: number;
+        bondType: number;
+    }[];
 }

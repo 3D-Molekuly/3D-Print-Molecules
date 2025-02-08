@@ -2,7 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh, createBallAndStickMesh } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
@@ -32,7 +32,8 @@
 
   const modelGenerators = [
     { name: 'Spheres', func: createSphereMesh },
-    { name: 'Cubes', func: createCubeMesh }
+    { name: 'Ball-and-Stick', func: createBallAndStickMesh },
+    { name: 'Minecraft', func: createCubeMesh }
   ];
   let selectedGenerator = modelGenerators[0].func;
 
@@ -293,7 +294,7 @@
     isEditing = false;
   }
 
-  let isCollapsed = typeof window !== 'undefined' && localStorage.getItem('menuCollapsed') === 'true' ? true : false;
+  let isCollapsed = typeof window !== 'undefined' && localStorage.getItem('menuCollapsed') !== 'false';
 
   function toggleCollapse() {
     isCollapsed = !isCollapsed;

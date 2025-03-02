@@ -39,8 +39,20 @@
 
   let multiplicationFactor = 1.0;
 
-  onMount(async () => {
-  if (browser) {
+  // Add new variables to store the source content and its extension
+  let originalContent: string = "";
+  let originalFileExtension: string = "sdf";
+
+  onMount(() => {
+    if (browser) {
+      initialize();
+    }
+    if (isIOS()) {
+      acceptFormats = ''; // Allows all file types on iOS
+    }
+  });
+
+  async function initialize() {
     searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
     canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
     if (!canvas) {
@@ -67,10 +79,6 @@
       console.error("Error during onMount initialization:", error);
     }
   }
-  if (isIOS()) {
-      acceptFormats = ''; // Allows all file types on iOS
-    }
-  });
 
   // Molecular Search and Handeling of MOlecular Data
   import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
@@ -115,12 +123,16 @@
             }
         }
         const content = await response.text();
+        originalContent = content; // Save fetched content
+        originalFileExtension = "sdf"; // Set the file extension
         atomCoordinates = await parseSDF(content);  // Await the async parser function
 
     } else if (inputType === "PDB") {
         const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
         const response = await fetch(url);
         const content = await response.text();
+        originalContent = content; // Save fetched content
+        originalFileExtension = "pdb"; // Set the file extension
         atomCoordinates = await parsePDB(content);  // Await the async parser function
     }
 
@@ -145,7 +157,9 @@
       author: "3D Printing Molecules WEB APP",
       quality: quality,
       description: "ZIP of STL models with metadata",
-      hydrogens: String(showHydrogens)
+      hydrogens: String(showHydrogens),
+      selectedGenerator: selectedGenerator.name,
+      multiplicationFactor: multiplicationFactor
     });
   }
 
@@ -233,6 +247,8 @@
         const reader = new FileReader();
         reader.onload = async (e) => {
           const content = e.target?.result as string;
+          originalContent = content; // Save the uploaded file content
+          originalFileExtension = fileExtension; // Save the extension
           atomCoordinates = await parseSDF(content);
           redrawModel(atomCoordinates);
         };
@@ -316,13 +332,27 @@
     const imageData = takeScreenshot();
     if (imageData) {
       const link = document.createElement('a');
-      link.download = `Photo_${fileName}.png`;
+      link.download = `Photo_${fileName}`;
       link.href = imageData;
       link.click();
       URL.revokeObjectURL(link.href);
     } else {
       console.error("Failed to capture screenshot");
     }
+  }
+
+  // New function: download the source file (SDF or PDB)
+  function downloadSourceFile() {
+    if (!originalContent) {
+      alert("No source file available");
+      return;
+    }
+    const blob = new Blob([originalContent], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.download = `Source_${fileName}.${originalFileExtension}`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 </script>
 
@@ -520,6 +550,11 @@
               <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
                 <span class="material-symbols-outlined">deployed_code_update</span>
                 {$_('download_whole_model_button')}
+              </button>
+              <!-- New button for downloading source (SDF/PDB) -->
+              <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 mt-2">
+                <span class="material-symbols-outlined">download</span>
+                {$_('download_template_button')}
               </button>
             </td>
           </tr>

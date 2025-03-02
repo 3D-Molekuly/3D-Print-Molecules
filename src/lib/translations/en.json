@@ -36,6 +36,7 @@
     "select_model_type":"Select Model Type",
     "hydrogens_checbox":"Hydrogens",
     "download_whole_model_button": "One STL File",
+    "download_template_button":"Download Template",
     "download_model_button":"Download Model",
     "multiplication_factor":"Multiplication Factor",
 

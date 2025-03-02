@@ -36,6 +36,7 @@
     "select_model_type":"Vyber typ zobrazení",
     "hydrogens_checbox": "Vodíky",
     "download_whole_model_button": "Jedno STL",
+    "download_template_button": "Stáhnout Předlohu",
     "download_model_button": "Stáhnout Model",
     "multiplication_factor":"Násobící faktor",
 

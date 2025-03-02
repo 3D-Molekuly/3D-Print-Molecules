@@ -27,10 +27,11 @@ interface LocalSelectedGeneratorParams {
 export function setupThreeJS(canvas: HTMLCanvasElement) {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-    renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
+    // Add alpha: true for transparency support
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, preserveDrawingBuffer: true });
 
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    renderer.setClearColor(0xffffff);
+    renderer.setClearColor(0xffffff); // scene background for display remains white
     renderer.shadowMap.enabled = true;
 
     // Lights setup
@@ -376,9 +377,16 @@ export function takeScreenshot(): string | null {
         console.warn("Three.js not initialized");
         return null;
     }
-
+    // Store original clear settings
+    const originalClearColor = renderer.getClearColor(new THREE.Color()).getHex();
+    const originalAlpha = renderer.getClearAlpha();
+    // Set transparent background for the screenshot
+    renderer.setClearColor(0x000000, 0);
     renderer.render(scene, camera);
-    return renderer.domElement.toDataURL('image/png');
+    const dataUrl = renderer.domElement.toDataURL('image/png');
+    // Restore original clear settings
+    renderer.setClearColor(originalClearColor, originalAlpha);
+    return dataUrl;
 }
 
 interface UpdatedLocalSelectedGeneratorParams extends LocalSelectedGeneratorParams {

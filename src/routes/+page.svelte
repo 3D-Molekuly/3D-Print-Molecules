@@ -54,15 +54,15 @@
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
 
-      resizeCanvas = setupCanvasResizing(canvas, updateCanvasSize);
+      const cleanup = setupCanvasResizing(canvas, updateCanvasSize);
       createAtoms = generatedCreateAtoms;
       animate();
 
-      // Setup event listeners
-      dropZone = document.getElementById('dropZone') as HTMLElement;
-      fileInput = document.getElementById('fileInput') as HTMLInputElement;
+      // Return cleanup function
+      return () => {
+        cleanup();
+      };
 
-      // We don't need to add event listeners here anymore, as they're handled in the template
     } catch (error) {
       console.error("Error during onMount initialization:", error);
     }
@@ -299,6 +299,12 @@
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
     localStorage.setItem('menuCollapsed', isCollapsed.toString());
+    // Wait for the collapse animation to finish before resizing
+    setTimeout(() => {
+        if (typeof resizeCanvas === "function") {
+            resizeCanvas();
+        }
+    }, 350); // Bootstrap's default collapse animation duration is 300ms
   }
 
   function isIOS() {
@@ -618,13 +624,23 @@ img {
 
 @media (min-width: 768px) {
   .row {
-      display: flex;
-      flex-direction: row;
+    display: flex;
+    flex-direction: row;
   }
 
   .col-md-4 {
-      display: flex;
-      align-items: center;
+    display: flex;
+    align-items: flex-start; /* Changed from center to flex-start */
+    height: fit-content;
+  }
+
+  .canvas-container {
+    height: 100%;
+    max-height: none; /* Remove the max-height constraint */
+  }
+
+  #threeCanvas {
+    max-height: none; /* Remove the max-height constraint */
   }
 }
 
@@ -685,6 +701,7 @@ img {
 .canvas-container {
   position: relative;
   width: 100%;
+  max-height: 100vh; /* Prevent excessive height */
 }
 
 .canvas-container:fullscreen {
@@ -741,6 +758,11 @@ img {
   margin: 0; /* Odstraňte jakékoli vnější mezery */
   padding: 0; /* Odstraňte vnitřní mezery */
   display: inline-block; /* Zajistěte, že ikona má přesnou velikost */
+}
+
+#threeCanvas {
+  max-height: 100vh; /* Prevent canvas from exceeding viewport height */
+  object-fit: contain;
 }
 
 </style>

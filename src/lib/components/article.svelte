@@ -1,3 +1,50 @@
+<!--
+    Article Component Documentation
+    =============================
+
+    This component renders Markdown content into HTML
+    It supports three different ways to provide content:
+
+    1. Direct content:
+       <Article content={markdownContent} />
+
+    2. Local file path:
+       <Article filePath="markdown/example.md" />
+
+    3. Remote URL:
+       <Article url="https://raw.githubusercontent.com/user/repo/main/README.md" />
+
+    Example usage:
+    -------------
+
+<script>
+    import Article from "$lib/components/article.svelte";
+
+    const markdownContent = `# Direct Content Example
+This is a paragraph with **bold text** and *italic text*.
+
+\`\`\`js
+console.log('Hello from inline markdown!');
+\`\`\`
+
+<p align="right">
+  <img src="https://upload.wikimedia.org/wikipedia/commons/1/1b/Svelte_Logo.svg" alt="Logo Svelte" width="100">
+</p>
+
+- List item 1
+- List item 2
+
+![Logo Svelte](https://upload.wikimedia.org/wikipedia/commons/1/1b/Svelte_Logo.svg)
+
+`;
+</script>
+
+<Article content={markdownContent} />
+<Article filePath="markdown/TEST.md" />
+<Article url="https://raw.githubusercontent.com/KubiV/blue-light-oroboros/refs/heads/main/README.md?token=GHSAT0AAAAAADA6E2SYJWJBGICIF5IXHJJWZ67ZOCQ" />
+
+-->
+
 <script lang="ts">
     import { onMount } from 'svelte';
     import rehypeStringify from 'rehype-stringify';
@@ -9,6 +56,7 @@
 
     export let content = '';
     export let filePath = '';
+    export let url = '';
 
     let htmlContent = '';
 
@@ -25,25 +73,52 @@
     }
 
     async function loadAndProcessFile() {
-        if (filePath) {
-            try {
+        try {
+            let text;
+            if (url) {
+                try {
+                    const response = await fetch(url, {
+                        headers: {
+                            'Accept': 'text/plain,text/markdown,*/*'
+                        }
+                    });
+                    if (!response.ok) {
+                        throw new Error(
+                            response.status === 404 ? 'File not found' :
+                            response.status === 403 ? 'Access denied' :
+                            `Server returned ${response.status} ${response.statusText}`
+                        );
+                    }
+                    text = await response.text();
+                } catch (fetchError) {
+                    // Handle CORS and network errors specifically
+                    const errorMessage = fetchError instanceof TypeError && fetchError.message.includes('CORS') ?
+                        'CORS policy prevented loading the content. The server needs to allow access.' :
+                        fetchError instanceof TypeError ?
+                        'Network error. Check your connection or the URL validity.' :
+                        (fetchError as Error).message;
+                    throw new Error(`Failed to load URL: ${errorMessage}`);
+                }
+            } else if (filePath) {
                 const response = await fetch(`/${filePath.replace(/^\//, '')}`);
                 if (!response.ok) {
                     throw new Error(`Failed to load file: ${response.statusText}`);
                 }
-                const text = await response.text();
-                htmlContent = await processMarkdown(text);
-            } catch (error) {
-                console.error('Error loading markdown file:', error);
-                const errorMessage = (error as Error).message;
-                htmlContent = `<p>Error loading content: ${errorMessage}</p>`;
+                text = await response.text();
+            } else if (content) {
+                text = content;
+            } else {
+                throw new Error('No content source provided');
             }
-        } else if (content) {
-            htmlContent = await processMarkdown(content);
+            htmlContent = await processMarkdown(text);
+        } catch (error) {
+            console.error('Error loading markdown:', error);
+            const errorMessage = (error as Error).message;
+            htmlContent = `<div class="error-message">⚠️ ${errorMessage}</div>`;
         }
     }
 
-    function copyToClipboard(event) {
+    function copyToClipboard(event: any) {
         const codeBlock = event.target.closest('.code-wrapper').querySelector('pre');
         const code = codeBlock.textContent;
         navigator.clipboard.writeText(code);
@@ -191,5 +266,14 @@
 
     article :global(p[align="center"]) {
         text-align: center;
+    }
+
+    article :global(.error-message) {
+        color: #721c24;
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 4px;
+        padding: 1rem;
+        margin: 1rem 0;
     }
 </style>

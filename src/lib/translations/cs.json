@@ -40,6 +40,9 @@
     "download_model_button": "Stáhnout Model",
     "multiplication_factor":"Násobící faktor",
 
+    "no_molecule_found": "Žádná molekula nenalezena",
+    "close_popup": "Zavřít okno",
+
     "infobox_tittle":"Nápověda",
     "infobox_helptext": "Tato aplikace je navržena tak, aby vám pomohla s vícebarevným 3D tiskem molekulárních struktur.",
     "infobox_appusage": "<h6>Jak používat tuto aplikaci?</h6><ul><li>Hledejte/importujte svá molekulární data (.sdf)</li><li>Načtěte data</li><li>Stáhněte model</li></ul>",

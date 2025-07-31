@@ -2,7 +2,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createCubeMesh, createBallAndStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
@@ -28,7 +28,6 @@
   let showHydrogens = true;
 
   let atomCoordinates: AtomCoordinate[] = [];
-  let prevAtomCoordinates: AtomCoordinate[] = []; // Store previous coordinates for comparison
   let createAtoms: ((params: CreateAtomsParams) => void);
 
   const modelGenerators = [
@@ -39,10 +38,10 @@
   let selectedGenerator = modelGenerators[0].func;
 
   let multiplicationFactor = 1.0;
+
+  // Add new variables to store the source content and its extension
   let originalContent: string = "";
   let originalFileExtension: string = "sdf";
-
-  let showMoleculePopup = false;
 
   onMount(() => {
     if (browser) {
@@ -64,7 +63,6 @@
     try {
       const storedCoordinates = sessionStorage.getItem('atomCoordinates');
       atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
-      prevAtomCoordinates = atomCoordinates; // Initialize previous coordinates
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
 
@@ -72,14 +70,17 @@
       createAtoms = generatedCreateAtoms;
       animate();
 
+      // Return cleanup function
       return () => {
         cleanup();
       };
+
     } catch (error) {
       console.error("Error during onMount initialization:", error);
     }
   }
 
+  // Molecular Search and Handeling of MOlecular Data
   import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
 
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
@@ -90,20 +91,9 @@
     imageUrl = url;
   }
 
-  // Compare coordinates to determine if popup should be shown
-  function areCoordinatesEqual(coords1: AtomCoordinate[], coords2: AtomCoordinate[]): boolean {
-    if (coords1.length !== coords2.length) return false;
-    return coords1.every((coord, i) =>
-      coord.x === coords2[i].x &&
-      coord.y === coords2[i].y &&
-      coord.z === coords2[i].z &&
-      coord.element === coords2[i].element
-    );
-  }
-
   async function handleSubmit() {
+    saveSearch();
     isFileUploaded = false;
-    showMoleculePopup = false;
     const inputType = determineInputType(inputStr);
 
     // Fetch data and set table info and image
@@ -113,62 +103,44 @@
       await fetchPDBData(inputStr, setTableInfo, setImage);
     } else {
       console.error("Unsupported input type.");
-      showMoleculePopup = true;
-      return;
+      return;  // Exit if unsupported input type
     }
 
     // Fetch and parse the molecule data
-    try {
-      if (inputType === "CID") {
+    if (inputType === "CID") {
         const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF?record_type=3d&response_type=display`;
         const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF`;
 
         let response;
         try {
-          response = await fetch(primaryUrl);
-          if (!response.ok) throw new Error("Primary URL failed");
+            response = await fetch(primaryUrl);
+            if (!response.ok) throw new Error("Primary URL failed");
         } catch (error) {
-          console.error("Failed to fetch from primary URL, trying fallback:", error);
-          response = await fetch(fallbackUrl);
-          if (!response.ok) {
-            showMoleculePopup = true;
-            throw new Error("Fallback URL also failed");
-          }
+            console.error("Failed to fetch from primary URL, trying fallback:", error);
+            response = await fetch(fallbackUrl);
+            if (!response.ok) {
+                throw new Error("Fallback URL also failed");
+            }
         }
         const content = await response.text();
-        originalContent = content;
-        originalFileExtension = "sdf";
-        atomCoordinates = await parseSDF(content);
-      } else if (inputType === "PDB") {
+        originalContent = content; // Save fetched content
+        originalFileExtension = "sdf"; // Set the file extension
+        atomCoordinates = await parseSDF(content);  // Await the async parser function
+
+    } else if (inputType === "PDB") {
         const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
         const response = await fetch(url);
-        if (!response.ok) {
-          showMoleculePopup = true;
-          throw new Error("Failed to fetch PDB data");
-        }
         const content = await response.text();
-        originalContent = content;
-        originalFileExtension = "pdb";
-        atomCoordinates = await parsePDB(content);
-      }
-
-      // Check if coordinates are empty or same as previous
-      if (atomCoordinates.length === 0 || areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
-        showMoleculePopup = true;
-        return;
-      }
-
-      // If valid coordinates, save to history and update previous coordinates
-      saveSearch();
-      prevAtomCoordinates = [...atomCoordinates];
-      redrawModel(atomCoordinates);
-
-      // Update canvas size
-      if (typeof resizeCanvas === "function") resizeCanvas();
-    } catch (error) {
-      console.error("Error fetching/parsing molecule data:", error);
-      showMoleculePopup = true;
+        originalContent = content; // Save fetched content
+        originalFileExtension = "pdb"; // Set the file extension
+        atomCoordinates = await parsePDB(content);  // Await the async parser function
     }
+
+    // Optionally, redraw the model with the new atom coordinates
+    redrawModel(atomCoordinates);
+
+    // Update canvas size if applicable
+    if (typeof resizeCanvas === "function") resizeCanvas();
   }
 
   function handleKeyPress(event: KeyboardEvent) {
@@ -179,10 +151,7 @@
   }
 
   async function downloadModel() {
-    if (atomCoordinates.length === 0) {
-      showMoleculePopup = true;
-      return;
-    }
+    console.log("Generating something else after model is created...");
     updateFileName();
     exportBinaryAsZip(fileName, {
       author: "3D Printing Molecules WEB APP",
@@ -195,18 +164,17 @@
   }
 
   async function downloadWholeModel() {
-    if (atomCoordinates.length === 0) {
-      showMoleculePopup = true;
-      return;
-    }
+    console.log("Generating something else after model is created...");
     updateFileName();
     exportModelAsSTL(fileName);
   }
 
   function redrawModel(atomCoordinates: AtomCoordinate[]) {
+    // Store the atom coordinates in session storage for persistence
     sessionStorage.setItem('atomCoordinates', JSON.stringify(atomCoordinates));
     console.log("redrawModel function initiated");
-    console.log(atomCoordinates);
+    console.log(atomCoordinates); // Log the parsed coordinates
+    // Safely redraw the spheres with the updated coordinates
     if (typeof createAtoms === "function") {
       const params: CreateAtomsParams = {
         coordinates: atomCoordinates,
@@ -215,7 +183,7 @@
         multiplicationFactor: multiplicationFactor,
         selectedGenerator: selectedGenerator
       };
-      createAtoms(params);
+      createAtoms(params);  // Update the spheres in the scene
     } else {
       console.log("createAtoms function not initialized");
       console.error("Function not initialized");
@@ -223,35 +191,44 @@
   }
 
   function updateFileName() {
-    let name = "molecule";
+    let name = "molecule";  // Default name
+
+    // Check if file was uploaded and set the name accordingly
     if (isFileUploaded) {
-      name = `Molecule_${uploadedFileName}`;
-    } else if (tableInfo.secondItem) {
+      name = `Molecule_${uploadedFileName}`;  // Use the uploaded file name without extension
+    }
+    // Check if `tableInfo.secondItem` has a value and set it as the file name.
+    else if (tableInfo.secondItem) {
       name = `Molecule_${tableInfo.secondItem}`;
     }
+
     fileName = name;
     console.log("Updated file name:", fileName);
   }
 
+  // Search History
   function saveSearch() {
-    if (browser && inputStr.trim() !== '' && !searchHistory.includes(inputStr) && !showMoleculePopup) {
+    if (browser && inputStr.trim() !== '' && !searchHistory.includes(inputStr)) {
       searchHistory = [inputStr, ...searchHistory.slice(0, 4)];
       localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
     }
   }
 
+  // Handle search item click from history
   function handleHistoryClick(item: string) {
     inputStr = item;
-    handleSubmit();
+    saveSearch();  // Update history
+    handleSubmit();  // Trigger the search action
   }
 
   function clearHistory() {
     searchHistory = [];
-    localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
   }
 
   let uploadedFileName: string = "";
   let isFileUploaded: boolean = false;
+
+  //File Upload feature
 
   function handleFiles(files: FileList) {
     if (files && files.length > 0) {
@@ -259,32 +236,25 @@
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
       if (fileExtension === 'pdb' || fileExtension === 'sdf') {
-        uploadedFileName = file.name.split('.').slice(0, -1).join('.');
+        // Set the uploaded file name and indicator
+        uploadedFileName = file.name.split('.').slice(0, -1).join('.');  // Remove extension
         isFileUploaded = true;
+
+        // Update the table info and image
         setTableInfo(file.name, "", "");
         setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
 
         const reader = new FileReader();
         reader.onload = async (e) => {
           const content = e.target?.result as string;
-          originalContent = content;
-          originalFileExtension = fileExtension;
-          try {
-            atomCoordinates = fileExtension === 'pdb' ? await parsePDB(content) : await parseSDF(content);
-            if (atomCoordinates.length === 0 || areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
-              showMoleculePopup = true;
-              return;
-            }
-            prevAtomCoordinates = [...atomCoordinates];
-            redrawModel(atomCoordinates);
-          } catch (error) {
-            console.error("Error parsing uploaded file:", error);
-            showMoleculePopup = true;
-          }
+          originalContent = content; // Save the uploaded file content
+          originalFileExtension = fileExtension; // Save the extension
+          atomCoordinates = await parseSDF(content);
+          redrawModel(atomCoordinates);
         };
         reader.readAsText(file);
       } else {
-        showMoleculePopup = true;
+        alert($_('invalid_file_type'));
       }
     }
   }
@@ -292,9 +262,9 @@
   function handleFileUpload(event: Event) {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
-      handleFiles(target.files);
+        handleFiles(target.files);
     }
-  }
+}
 
   let isDragging = false;
   let dragCounter = 0;
@@ -330,7 +300,7 @@
     }
   }
 
-  let isEditing = false;
+  let isEditing = false; // boolean to track if editing mode is active
 
   function enableEditing() {
     isEditing = true;
@@ -345,11 +315,12 @@
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
     localStorage.setItem('menuCollapsed', isCollapsed.toString());
+    // Wait for the collapse animation to finish before resizing
     setTimeout(() => {
-      if (typeof resizeCanvas === "function") {
-        resizeCanvas();
-      }
-    }, 350);
+        if (typeof resizeCanvas === "function") {
+            resizeCanvas();
+        }
+    }, 350); // Bootstrap's default collapse animation duration is 300ms
   }
 
   function isIOS() {
@@ -357,10 +328,6 @@
   }
 
   function saveCanvasAsImage() {
-    if (atomCoordinates.length === 0) {
-      showMoleculePopup = true;
-      return;
-    }
     updateFileName();
     const imageData = takeScreenshot();
     if (imageData) {
@@ -374,9 +341,10 @@
     }
   }
 
+  // New function: download the source file (SDF or PDB)
   function downloadSourceFile() {
-    if (!originalContent || atomCoordinates.length === 0) {
-      showMoleculePopup = true;
+    if (!originalContent) {
+      alert("No source file available");
       return;
     }
     const blob = new Blob([originalContent], { type: 'text/plain' });
@@ -397,11 +365,14 @@
   on:drop={handleDrop}
   role="region"
 >
+
 <div class="container mt-4 main-panel main-content">
   <div class="row">
+    <!-- Left side with form -->
     <div class="col-md-8 left-panel">
+      <!-- Search field and buttons -->
       <div class="d-flex mb-3 align-items-center">
-        <div class="input-group">
+          <div class="input-group">
           <input
             type="text"
             bind:value={inputStr}
@@ -412,6 +383,7 @@
             placeholder={$_('search_field')}
             aria-label="Search"
           />
+          <!-- "X" button to clear search -->
           {#if inputStr}
             <button
               type="button"
@@ -422,28 +394,31 @@
             ></button>
           {/if}
 
-          {#if searchHistory.length > 0}
-            <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
-              {#each searchHistory as item, index}
-                <li>
-                  <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
-                    {item}
-                  </a>
-                </li>
-              {/each}
-              <li>
-                <button
-                  type="button"
-                  class="dropdown-item"
-                  style="font-weight: bold; cursor: pointer; color: red; font-size: 10px;"
-                  on:click={clearHistory}
-                >
-                  ⨉ {$_('delete_history')}
-                </button>
-              </li>
-            </ul>
-          {/if}
-        </div>
+        {#if searchHistory.length > 0}
+        <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
+          <!-- Search history items -->
+          {#each searchHistory as item, index}
+            <li>
+              <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
+                {item}
+              </a>
+            </li>
+          {/each}
+
+          <!-- Red "Delete history" button -->
+          <li>
+            <button
+              type="button"
+              class="dropdown-item"
+              style="font-weight: bold; cursor: pointer; color: red; font-size: 10px;"
+              on:click={clearHistory}
+            >
+            ⨉ {$_('delete_history')}
+            </button>
+          </li>
+        </ul>
+        {/if}
+      </div>
 
         <div>
           <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
@@ -465,6 +440,7 @@
         </button>
       </div>
 
+      <!-- Table with data -->
       <table class="table table-borderless">
         <thead>
           <tr>
@@ -493,110 +469,115 @@
       </table>
 
       <div>
-        <table class="table table-borderless">
-          <thead>
-            <tr>
-              <th>
-                {$_('model_settings')}
-                <button
-                  type="button"
-                  on:click={toggleCollapse}
-                  aria-expanded={!isCollapsed}
-                  aria-controls="collapseOne"
-                  class="btn btn-link"
-                >
-                  <span class="material-symbols-outlined google-font-darkmode" style="font-size: 36px;">
-                    {isCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
-                  </span>
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody class={isCollapsed ? 'collapse' : ''} id="collapseOne">
-            <tr>
-              <td>
-                <label for="qualityRange">
-                  {$_('quality_slider')}
-                  {#if isEditing}
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      bind:value={quality}
-                      on:blur={disableEditing}
-                      class=""
-                      style="width: 3em; text-align: center;">
-                  {:else}
-                    <button
-                      type="button"
-                      on:click={enableEditing}
-                      class="editable-button">
-                      {quality}
-                    </button>
-                  {/if}
-                </label>
-                <div class="quality-container">
-                  <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
-                </div>
-              </td>
-              <td>
-                <label for="model-generator">{$_('select_model_type')}</label>
-                <select class="form-select" id="model-generator" bind:value={selectedGenerator}>
-                  {#each modelGenerators as generator}
-                    <option value={generator.func}>{generator.name}</option>
-                  {/each}
-                </select>
-              </td>
-            </tr>
-            {#if selectedGenerator === createSphereMesh}
-              <tr>
-                <td>
-                  <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                  <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                </td>
-              </tr>
-            {/if}
-            {#if selectedGenerator === createCubeMesh}
-              <tr>
-                <td>
-                  <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                  <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                </td>
-              </tr>
-            {/if}
-            <tr>
-              <td>
-                <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
-                <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
-              </td>
-              <td>
-                <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
-                  <span class="material-symbols-outlined">deployed_code_update</span>
-                  {$_('download_whole_model_button')}
-                </button>
-                <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 mt-2">
-                  <span class="material-symbols-outlined">download</span>
-                  {$_('download_template_button')}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <table class="table table-borderless">
+        <thead>
+          <tr>
+            <th>
+              {$_('model_settings')}
+
+              <button
+                type="button"
+                on:click={toggleCollapse}
+                aria-expanded={!isCollapsed}
+                aria-controls="collapseOne"
+                class="btn btn-link"
+              >
+                <span class="material-symbols-outlined google-font-darkmode" style="font-size: 36px;">
+                  {isCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
+                </span>
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody class={isCollapsed ? 'collapse' : ''} id="collapseOne">
+          <tr>
+            <td>
+              <label for="qualityRange">
+                {$_('quality_slider')}
+                {#if isEditing}
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    bind:value={quality}
+                    on:blur={disableEditing}
+                    class=""
+                    style="width: 3em; text-align: center;">
+                {:else}
+                  <button
+                    type="button"
+                    on:click={enableEditing}
+                    class="editable-button">
+                    {quality}
+                  </button>
+                {/if}
+              </label>
+              <div class="quality-container">
+                <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
+              </div>
+            </td>
+            <td>
+              <label for="model-generator">{$_('select_model_type')}</label>
+              <select class="form-select"  id="model-generator" bind:value={selectedGenerator}>
+                {#each modelGenerators as generator}
+                  <option value={generator.func}>{generator.name}</option>
+                {/each}
+              </select>
+            </td>
+          </tr>
+          {#if selectedGenerator === createSphereMesh}
+          <tr>
+            <td>
+              <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+              <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+            </td>
+          </tr>
+          {/if}
+          {#if selectedGenerator === createCubeMesh}
+          <tr>
+            <td>
+              <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+              <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+            </td>
+          </tr>
+          {/if}
+          <tr>
+            <td>
+              <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
+              <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
+            </td>
+            <td>
+              <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
+                <span class="material-symbols-outlined">deployed_code_update</span>
+                {$_('download_whole_model_button')}
+              </button>
+              <!-- New button for downloading source (SDF/PDB) -->
+              <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 mt-2">
+                <span class="material-symbols-outlined">download</span>
+                {$_('download_template_button')}
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
       </div>
       <br>
 
+      <!-- Button to generate model -->
       <button on:click={downloadModel} class="btn btn-success btn-lg w-100">
         <span class="material-symbols-outlined">deployed_code_update</span>
         {$_('download_model_button')}
       </button>
     </div>
 
+    <!-- Right side with canvas -->
     <div class="col-md-4">
       <div class="canvas-container" id="canvasContainer">
         <div class="canvas-controls">
           <button class="btn" on:click={saveCanvasAsImage}>
             <span class="material-symbols-outlined canvas-control">photo_camera</span>
           </button>
+
           <button class="btn" on:click={() => {
             const container = document.getElementById('canvasContainer');
             if (container) {
@@ -617,28 +598,13 @@
 </div>
 
 {#if isDragging}
-  <div class="drag-overlay" role="status" aria-live="polite">
-    <div class="drag-message">
-      {$_('drag_and_drop_message')}
-    </div>
-  </div>
-{/if}
-
-{#if showMoleculePopup}
-  <div class="popup-overlay">
-    <div class="popup-content">
-      <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">warning</span>
-      <div style="margin-top: 10px; font-weight: bold;">
-        {$_('no_molecule_found') || 'No molecule found for the provided input.'}
+    <div class="drag-overlay" role="status" aria-live="polite">
+      <div class="drag-message">
+        {$_('drag_and_drop_message')}
       </div>
-      <button class="btn btn-warning mt-3" on:click={() => showMoleculePopup = false}>
-        {$_('close_popup') || 'Close'}
-      </button>
     </div>
-  </div>
 {/if}
 </div>
-
 <InfoButton title={$_('infobox_tittle')}>
   <div>
     {@html $_('infobox_helptext')}
@@ -652,14 +618,13 @@
   </div>
   <a href={buildLocalizedPath('/tutorials')}>{@html $_('infobox_moreinfo')}</a>
 </InfoButton>
-
 <style>
 .main-content {
   margin-bottom: 2rem;
 }
 
 .main-search-line {
-  height: 65px;
+  height: 65px; /* Adjust this value to match the button height */
 }
 
 .container {
@@ -668,20 +633,20 @@
 }
 
 img {
-  object-fit: cover;
-}
+    object-fit: cover;  /* Ensures the image maintains its aspect ratio */
+  }
 
 .image-placeholder {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 200px;
-  height: 200px;
-  background-color: #f0f0f0;
-  color: #777;
-  font-size: 14px;
-  text-align: center;
-}
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 200px;
+    height: 200px;
+    background-color: #f0f0f0;  /* Light gray background */
+    color: #777;                /* Gray text color */
+    font-size: 14px;
+    text-align: center;
+  }
 
 .quality-container {
   display: flex;
@@ -689,7 +654,7 @@ img {
 }
 
 .form-range {
-  width: 150px;
+  width: 150px; /* Adjust this value to control the slider width */
 }
 
 @media (min-width: 768px) {
@@ -700,78 +665,78 @@ img {
 
   .col-md-4 {
     display: flex;
-    align-items: flex-start;
+    align-items: flex-start; /* Changed from center to flex-start */
     height: fit-content;
   }
 
   .canvas-container {
     height: 100%;
-    max-height: none;
+    max-height: none; /* Remove the max-height constraint */
   }
 
   #threeCanvas {
-    max-height: none;
+    max-height: none; /* Remove the max-height constraint */
   }
 }
 
 @media (max-width: 767px) {
   .row {
-    display: flex;
-    flex-direction: column;
+      display: flex;
+      flex-direction: column;
   }
 
   .col-md-4 {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 40px;
   }
 }
 
 .full-page-drop-zone {
-  width: 100%;
-  position: relative;
-}
+    width: 100%;
+    position: relative;
+  }
 
-.drag-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
+  .drag-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
 
-.drag-message {
-  font-size: 2rem;
-  color: white;
-  background-color: rgba(0, 0, 0, 0.7);
-  padding: 20px;
-  border-radius: 10px;
-}
+  .drag-message {
+    font-size: 2rem;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+  }
 
-.editable-button {
-  background: none;
-  border: none;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
+  .editable-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
 
-.editable-button:hover,
-.editable-button:focus {
-  outline: 1px dashed #ccc;
-}
+  .editable-button:hover,
+  .editable-button:focus {
+    outline: 1px dashed #ccc;
+  }
 
 .canvas-container {
   position: relative;
   width: 100%;
-  max-height: 100vh;
+  max-height: 100vh; /* Prevent excessive height */
 }
 
 .canvas-container:fullscreen {
@@ -804,20 +769,20 @@ img {
 }
 
 .canvas-controls button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  height: 31px;
-  width: 31px;
-  line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    height: 31px;
+    width: 31px;
+    line-height: 1;
 }
 
 .canvas-controls .material-symbols-outlined {
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .canvas-controls button:hover {
@@ -825,65 +790,14 @@ img {
 }
 
 .material-symbols-outlined.canvas-control {
-  margin: 0;
-  padding: 0;
-  display: inline-block;
+  margin: 0; /* Odstraňte jakékoli vnější mezery */
+  padding: 0; /* Odstraňte vnitřní mezery */
+  display: inline-block; /* Zajistěte, že ikona má přesnou velikost */
 }
 
 #threeCanvas {
-  max-height: 100vh;
+  max-height: 100vh; /* Prevent canvas from exceeding viewport height */
   object-fit: contain;
 }
 
-.popup-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-.popup-content {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  text-align: center;
-  min-width: 300px;
-  max-width: 400px;
-  animation: slideIn 0.3s ease-in-out;
-}
-
-.popup-content .material-symbols-outlined {
-  font-size: 48px;
-  color: #d32f2f;
-  margin-bottom: 16px;
-}
-
-.popup-content div {
-  font-size: 1.2rem;
-  margin-bottom: 20px;
-  color: #333;
-}
-
-.popup-content .btn-warning {
-  padding: 8px 24px;
-  font-weight: 500;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideIn {
-  from { transform: translateY(-20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
 </style>

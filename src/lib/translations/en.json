@@ -40,6 +40,9 @@
     "download_model_button":"Download Model",
     "multiplication_factor":"Multiplication Factor",
 
+    "no_molecule_found": "No molecule found",
+    "close_popup":"Close Popup",
+
     "infobox_tittle":"Help",
     "infobox_helptext":"This app is designed to assist you in multicolor 3D printing of molecular structures.",
     "infobox_appusage":"<h6>How to use this app?</h6><ul><li>Search for/Import your molecular data (.sdf)</li><li>Fetch the data</li><li>Download the model</li></ul>",

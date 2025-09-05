@@ -79,7 +79,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     };
 
     const createAtoms = (params: CreateAtomsParams) => {
-        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator } = params;
+        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator, bondDiameterMultiplicationFactor, bondQuality } = params;
         clearScene();
 
         group = new THREE.Group();
@@ -126,6 +126,8 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                     size,
                     color,
                     multiplicationFactor,
+                    bondDiameterMultiplicationFactor, // Forward to generator
+                    bondQuality, // Forward to generator
                     coordinates: centeredCoordinates as AtomWithBonds[],
                     originalCoordinates: filteredCoordinates as AtomWithBonds[]
                 });
@@ -191,6 +193,7 @@ export const createCubeMesh = (params: LocalSelectedGeneratorParams) => {
     return cube;
 };
 
+/*
 export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams) => {
     const { x, y, z, quality, size, color, multiplicationFactor, coordinates, originalCoordinates } = params;
 
@@ -273,6 +276,143 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
 
     return group;
 };
+*/
+
+
+export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams) => {
+    // Log all relevant parameters for debugging
+    console.log("createBallAndStickMesh parameters:", {
+        x: params.x,
+        y: params.y,
+        z: params.z,
+        quality: params.quality,
+        size: params.size,
+        color: params.color,
+        multiplicationFactor: params.multiplicationFactor,
+        bondDiameterMultiplicationFactor: params.bondDiameterMultiplicationFactor,
+        bondQuality: params.bondQuality,
+        coordinates: params.coordinates,
+        originalCoordinates: params.originalCoordinates
+    });
+
+    const {
+        x,
+        y,
+        z,
+        quality,
+        size,
+        color,
+        multiplicationFactor,
+        coordinates,
+        originalCoordinates,
+        bondDiameterMultiplicationFactor, // New parameter for bond diameter
+        bondQuality // New parameter for cylinder mesh quality
+    } = params;
+
+    if (!coordinates || !originalCoordinates) {
+        console.warn("Coordinates are required for ball-and-stick representation");
+        return createSphereMesh(params);
+    }
+
+    const group = new THREE.Group();
+
+    // Create sphere for the atom
+    const sphereSize = size * multiplicationFactor * 0.4;
+    const material = new THREE.MeshStandardMaterial({ color });
+    const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(sphereSize, quality, quality),
+        material
+    );
+    sphere.position.set(x, y, z);
+    sphere.castShadow = true;
+    group.add(sphere);
+
+    // Find the current atom using a tolerance for floating-point comparison
+    const EPSILON = 0.0001;
+    const currentAtom = coordinates.find(atom => {
+        return atom.centeredX !== undefined &&
+               atom.centeredY !== undefined &&
+               atom.centeredZ !== undefined &&
+               Math.abs(atom.centeredX - x) < EPSILON &&
+               Math.abs(atom.centeredY - y) < EPSILON &&
+               Math.abs(atom.centeredZ - z) < EPSILON;
+    });
+
+    if (currentAtom && Array.isArray(currentAtom.bonds) && currentAtom.bonds.length > 0) {
+        currentAtom.bonds.forEach(bond => {
+            // Find the bonded atom in the centered coordinates
+            const bondedAtom = coordinates.find(atom => atom.id === bond.atomId);
+
+            if (bondedAtom) {
+                const startPos = new THREE.Vector3(x, y, z);
+                const endPos = new THREE.Vector3(
+                    bondedAtom.centeredX,
+                    bondedAtom.centeredY,
+                    bondedAtom.centeredZ
+                );
+
+                // Calculate midpoint
+                const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
+
+                // Calculate direction and half-length for each cylinder
+                const direction = new THREE.Vector3().subVectors(endPos, startPos);
+                const bondLength = direction.length();
+                const halfBondLength = bondLength / 2;
+
+                // Create cylinder geometry with consistent diameter
+                const bondRadius = sphereSize * (bondDiameterMultiplicationFactor ?? 0.5);
+
+                // First cylinder (from start to midpoint)
+                const cylinderGeometry1 = new THREE.CylinderGeometry(
+                    bondRadius, // Radius of the top
+                    bondRadius, // Radius of the bottom
+                    halfBondLength, // Height of the cylinder
+                    bondQuality, // Number of segmented faces around circumference
+                    1 // Number of segmented faces along height
+                );
+
+                // Second cylinder (from midpoint to end)
+                const cylinderGeometry2 = new THREE.CylinderGeometry(
+                    bondRadius,
+                    bondRadius,
+                    halfBondLength,
+                    bondQuality,
+                    1
+                );
+
+                // Center the cylinder geometries
+                cylinderGeometry1.translate(0, halfBondLength / 2, 0);
+                cylinderGeometry2.translate(0, halfBondLength / 2, 0);
+
+                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+
+                // Create and position first cylinder (start to midpoint)
+                const cylinder1 = new THREE.Mesh(cylinderGeometry1, bondMaterial);
+                cylinder1.position.copy(startPos);
+                cylinder1.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0),
+                    direction.normalize()
+                );
+                cylinder1.castShadow = true;
+                group.add(cylinder1);
+
+                // Create and position second cylinder (midpoint to end)
+                const cylinder2 = new THREE.Mesh(cylinderGeometry2, bondMaterial);
+                cylinder2.position.copy(midPoint);
+                cylinder2.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0),
+                    direction.normalize()
+                );
+                cylinder2.castShadow = true;
+                group.add(cylinder2);
+            }
+        });
+    }
+
+    return group;
+};
+
+
 
 // Export scene or specific mesh as binary STL
 export function exportBinary() {
@@ -391,4 +531,6 @@ export function takeScreenshot(): string | null {
 
 interface UpdatedLocalSelectedGeneratorParams extends LocalSelectedGeneratorParams {
     originalCoordinates?: AtomWithBonds[];
+    bondDiameterMultiplicationFactor?: number; // New parameter for bond diameter
+    bondQuality?: number; // New parameter for cylinder mesh quality
 }

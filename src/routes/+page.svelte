@@ -7,7 +7,6 @@
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
   import { buildLocalizedPath } from '$lib/functions/language';
-  import type { CreateAtomsParams, SelectedGeneratorParams } from '$lib/types';
 
   import InfoButton from '$lib/buttons/infoButton.svelte';
 
@@ -19,8 +18,6 @@
 
   let resizeCanvas: (() => void) | undefined;
   let canvas: HTMLCanvasElement | null = null;
-  let dropZone: HTMLElement;
-  let fileInput: HTMLInputElement;
 
   let acceptFormats = '.sdf';
 
@@ -28,7 +25,7 @@
   let showHydrogens = true;
 
   let atomCoordinates: AtomCoordinate[] = [];
-  let prevAtomCoordinates: AtomCoordinate[] = []; // Store previous coordinates for comparison
+  let prevAtomCoordinates: AtomCoordinate[] = [];
   let createAtoms: ((params: CreateAtomsParams) => void);
 
   const modelGenerators = [
@@ -39,6 +36,8 @@
   let selectedGenerator = modelGenerators[0].func;
 
   let multiplicationFactor = 1.0;
+  let bondDiameterMultiplicationFactor = 0.4;
+  let bondQuality = 32;
   let originalContent: string = "";
   let originalFileExtension: string = "sdf";
 
@@ -49,7 +48,7 @@
       initialize();
     }
     if (isIOS()) {
-      acceptFormats = ''; // Allows all file types on iOS
+      acceptFormats = '';
     }
   });
 
@@ -64,7 +63,7 @@
     try {
       const storedCoordinates = sessionStorage.getItem('atomCoordinates');
       atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
-      prevAtomCoordinates = atomCoordinates; // Initialize previous coordinates
+      prevAtomCoordinates = atomCoordinates;
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
 
@@ -90,14 +89,13 @@
     imageUrl = url;
   }
 
-  // Compare coordinates to determine if popup should be shown
   function areCoordinatesEqual(coords1: AtomCoordinate[], coords2: AtomCoordinate[]): boolean {
     if (coords1.length !== coords2.length) return false;
     return coords1.every((coord, i) =>
       coord.x === coords2[i].x &&
       coord.y === coords2[i].y &&
       coord.z === coords2[i].z &&
-      coord.element === coords2[i].element
+      coord.atomType === coords2[i].atomType
     );
   }
 
@@ -106,7 +104,6 @@
     showMoleculePopup = false;
     const inputType = determineInputType(inputStr);
 
-    // Fetch data and set table info and image
     if (inputType === "CID") {
       await fetchPubChemData(inputStr, setTableInfo, setImage);
     } else if (inputType === "PDB") {
@@ -117,7 +114,6 @@
       return;
     }
 
-    // Fetch and parse the molecule data
     try {
       if (inputType === "CID") {
         const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF?record_type=3d&response_type=display`;
@@ -152,18 +148,15 @@
         atomCoordinates = await parsePDB(content);
       }
 
-      // Check if coordinates are empty or same as previous
       if (atomCoordinates.length === 0 || areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
         showMoleculePopup = true;
         return;
       }
 
-      // If valid coordinates, save to history and update previous coordinates
       saveSearch();
       prevAtomCoordinates = [...atomCoordinates];
       redrawModel(atomCoordinates);
 
-      // Update canvas size
       if (typeof resizeCanvas === "function") resizeCanvas();
     } catch (error) {
       console.error("Error fetching/parsing molecule data:", error);
@@ -174,7 +167,7 @@
   function handleKeyPress(event: KeyboardEvent) {
     if (event.key === "Enter") {
       event.preventDefault();
-      handleSubmit();
+        handleSubmit();
     }
   }
 
@@ -184,14 +177,23 @@
       return;
     }
     updateFileName();
-    exportBinaryAsZip(fileName, {
+
+    const metadata: Record<string, any> = {
       author: "3D Printing Molecules WEB APP",
       quality: quality,
       description: "ZIP of STL models with metadata",
       hydrogens: String(showHydrogens),
-      selectedGenerator: selectedGenerator.name,
-      multiplicationFactor: multiplicationFactor
-    });
+      selectedGenerator: modelGenerators.find(g => g.func === selectedGenerator)?.name,
+      multiplicationFactor: multiplicationFactor,
+      ...(selectedGenerator === createBallAndStickMesh
+        ? {
+            bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
+            bondQuality: bondQuality
+          }
+        : {})
+    };
+
+    exportBinaryAsZip(fileName, metadata);
   }
 
   async function downloadWholeModel() {
@@ -213,7 +215,10 @@
         quality: quality,
         showHydrogens: showHydrogens,
         multiplicationFactor: multiplicationFactor,
-        selectedGenerator: selectedGenerator
+        selectedGenerator: selectedGenerator,
+        ...(selectedGenerator === createBallAndStickMesh
+          ? { bondDiameterMultiplicationFactor, bondQuality }
+          : {})
       };
       createAtoms(params);
     } else {
@@ -385,6 +390,12 @@
     link.href = URL.createObjectURL(blob);
     link.click();
     URL.revokeObjectURL(link.href);
+  }
+
+  function handlePopupKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      showMoleculePopup = false;
+    }
   }
 </script>
 
@@ -564,6 +575,20 @@
                 </td>
               </tr>
             {/if}
+            {#if selectedGenerator === createBallAndStickMesh}
+              <tr>
+                <td>
+                  <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+                  <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+
+                  <label for="bondDiameterFactor">{$_('bond_diameter_factor')}</label>
+                  <input type="number" id="bondDiameterFactor" bind:value={bondDiameterMultiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+
+                  <label for="bondQuality">{$_('bond_quality')}</label>
+                  <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
+                </td>
+              </tr>
+            {/if}
             <tr>
               <td>
                 <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
@@ -625,8 +650,17 @@
 {/if}
 
 {#if showMoleculePopup}
-  <div class="popup-overlay">
-    <div class="popup-content">
+  <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div
+    class="popup-overlay"
+    tabindex="0"
+    on:keydown={handlePopupKeydown}
+    on:click={() => showMoleculePopup = false}
+  >
+    <!-- svelte-ignore a11y-click-events-have-key-events -->
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="popup-content" on:click|stopPropagation>
       <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">warning</span>
       <div style="margin-top: 10px; font-weight: bold;">
         {$_('no_molecule_found') || 'No molecule found for the provided input.'}

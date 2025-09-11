@@ -2,12 +2,14 @@ import * as THREE from "three";
 import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
 
 export interface CreateAtomsParams {
-    coordinates: AtomWithBonds[];
+    coordinates: AtomCoordinate[];
     quality: number;
     showHydrogens: boolean;
     multiplicationFactor: number;
-    selectedGenerator: SelectedGeneratorParams;
-    bondDiameterMultiplicationFactor?: number; // Added property for bond diameter
+    selectedGenerator: (params: any) => any; // vyřešit později
+    bondDiameterMultiplicationFactor: number;
+    bondQuality: number;
+    groupBondsSeparately: boolean;
 }
 
 export interface SelectedGeneratorParams {

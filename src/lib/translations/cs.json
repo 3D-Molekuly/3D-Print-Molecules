@@ -43,6 +43,7 @@
     "multiplication_factor":"Násobící faktor",
     "bond_diameter_factor":"Násobící faktor vazby",
     "bond_quality":"Kvalita vazby",
+    "bonds_checbox":"Seskupit vazby zvlášť",
 
     "no_molecule_found": "Žádná molekula nenalezena",
     "close_popup": "Zavřít okno",

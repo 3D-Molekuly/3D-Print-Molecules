@@ -22,9 +22,6 @@
 
   let acceptFormats = '.sdf';
 
-  let quality = 50;
-  let showHydrogens = true;
-
   let atomCoordinates: AtomCoordinate[] = [];
   let prevAtomCoordinates: AtomCoordinate[] = [];
   let createAtoms: ((params: CreateAtomsParams) => void);
@@ -36,9 +33,12 @@
   ];
   let selectedGenerator = modelGenerators[0].func;
 
+  let quality = 50;
+  let showHydrogens = true;
   let multiplicationFactor = 1.0;
   let bondDiameterMultiplicationFactor = 0.4;
   let bondQuality = 32;
+  let groupBondsSeparately = false;
   let originalContent: string = "";
   let originalFileExtension: string = "sdf";
 
@@ -242,7 +242,8 @@
       ...(selectedGenerator === createBallAndStickMesh
         ? {
             bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
-            bondQuality: bondQuality
+            bondQuality: bondQuality,
+            groupBondsSeparately: groupBondsSeparately
           }
         : {})
     };
@@ -272,7 +273,7 @@
         multiplicationFactor: multiplicationFactor,
         selectedGenerator: selectedGenerator,
         ...(selectedGenerator === createBallAndStickMesh
-          ? { bondDiameterMultiplicationFactor, bondQuality }
+          ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately }
           : {})
       };
       createAtoms(params);
@@ -683,6 +684,9 @@
 
                     <label for="bondQuality">{$_('bond_quality')}</label>
                     <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
+
+                    <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
+                    <input class="form-check-input" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
                   </td>
                 </tr>
               {/if}

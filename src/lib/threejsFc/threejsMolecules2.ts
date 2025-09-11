@@ -78,17 +78,32 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
         scene!.children = essentialObjects;
     };
 
+    // Inside your setupThreeJS function
+
     const createAtoms = (params: CreateAtomsParams) => {
-        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator, bondDiameterMultiplicationFactor, bondQuality } = params;
+        // Add the new parameter here
+        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator, bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately } = params;
         clearScene();
 
         group = new THREE.Group();
         scene!.add(group);
 
         const atomGroups: { [atomType: string]: THREE.Group } = {};
+
+        // ---- NEW: Conditionally create a single group for all bonds ----
+        let bondsGroup: THREE.Group | null = null;
+        if (groupBondsSeparately) {
+            bondsGroup = new THREE.Group();
+            bondsGroup.name = 'Group_Bonds'; // Set the name for the exporter
+            group.add(bondsGroup);
+        }
+        // ----------------------------------------------------------------
+
         const filteredCoordinates = showHydrogens ? coordinates : coordinates.filter(({ atomType }) => atomType !== "H");
 
         if (filteredCoordinates.length > 0) {
+            // ---- START OF CORRECTED SECTION ----
+            // Calculate the geometric center of the molecule
             const center = filteredCoordinates.reduce(
                 (acc, { x, y, z }) => {
                     acc.x += x;
@@ -103,6 +118,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
             const avgY = center.y / filteredCoordinates.length;
             const avgZ = center.z / filteredCoordinates.length;
 
+            // Create new coordinates centered around the origin (0,0,0)
             const centeredCoordinates = filteredCoordinates.map(coord => ({
                 ...coord,
                 centeredX: coord.x - avgX,
@@ -110,15 +126,18 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                 centeredZ: coord.z - avgZ
             }));
 
-            camera!.position.set(avgX, avgY, avgZ + 10);
-            camera!.lookAt(avgX, avgY, avgZ);
+            // Position the camera to look at the center of the molecule
+            camera!.position.set(0, 0, 10); // Adjust camera distance as needed
+            camera!.lookAt(0, 0, 0);
+            // ---- END OF CORRECTED SECTION ----
 
             centeredCoordinates.forEach((atom) => {
                 const { atomType, centeredX, centeredY, centeredZ, AtomicRadius, CPKHexColor } = atom;
                 const size = AtomicRadius ? parseFloat(AtomicRadius) : 0.5;
                 const color = CPKHexColor ? parseInt(CPKHexColor.replace('#', '0x')) : 0x000000;
 
-                const mesh = selectedGenerator({
+                // ---- MODIFIED: Handle the new return structure from generators ----
+                const { atomMesh, bondMeshes } = selectedGenerator({
                     x: centeredX,
                     y: centeredY,
                     z: centeredZ,
@@ -126,14 +145,13 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                     size,
                     color,
                     multiplicationFactor,
-                    bondDiameterMultiplicationFactor, // Forward to generator
-                    bondQuality, // Forward to generator
+                    bondDiameterMultiplicationFactor,
+                    bondQuality,
                     coordinates: centeredCoordinates as AtomWithBonds[],
                     originalCoordinates: filteredCoordinates as AtomWithBonds[]
                 });
-                mesh.castShadow = true;
+                // ------------------------------------------------------------------
 
-                // Create or retrieve group for the atom type
                 if (!atomGroups[atomType]) {
                     const groupForType = new THREE.Group();
                     groupForType.name = `Group_${atomType}`;
@@ -141,7 +159,19 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                     group!.add(groupForType);
                 }
 
-                atomGroups[atomType].add(mesh);
+                // The atom mesh ALWAYS goes into its element-specific group
+                atomGroups[atomType].add(atomMesh);
+
+                // ---- NEW: Decide where to put the bonds ----
+                if (groupBondsSeparately && bondsGroup) {
+                    // If checkbox is on, move bond meshes to the single "Group_Bonds"
+                    // We use the spread operator (...) to move the children, not the group container itself
+                    bondsGroup.add(...bondMeshes.children);
+                } else {
+                    // Otherwise, add the bonds to the same group as their parent atom
+                    atomGroups[atomType].add(...bondMeshes.children);
+                }
+                // ---------------------------------------------
             });
         }
 
@@ -178,11 +208,16 @@ export const createSphereMesh = (params: LocalSelectedGeneratorParams) => {
     );
     sphere.position.set(x, y, z);
     sphere.castShadow = true;
-    return sphere;
+
+    // Return the new structure
+    return {
+        atomMesh: sphere,
+        bondMeshes: new THREE.Group() // Return an empty group for bonds
+    };
 };
 
 export const createCubeMesh = (params: LocalSelectedGeneratorParams) => {
-    const { x, y, z, quality, size, color, multiplicationFactor } = params;
+    const { x, y, z, size, color, multiplicationFactor } = params;
     const material = new THREE.MeshStandardMaterial({ color });
     const cube = new THREE.Mesh(
         new THREE.BoxGeometry(size * multiplicationFactor, size * multiplicationFactor, size * multiplicationFactor),
@@ -190,7 +225,12 @@ export const createCubeMesh = (params: LocalSelectedGeneratorParams) => {
     );
     cube.position.set(x, y, z);
     cube.castShadow = true;
-    return cube;
+
+    // Return the new structure
+    return {
+        atomMesh: cube,
+        bondMeshes: new THREE.Group() // Return an empty group for bonds
+    };
 };
 
 /*
@@ -279,22 +319,7 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
 */
 
 
-export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams) => {
-    // Log all relevant parameters for debugging
-    console.log("createBallAndStickMesh parameters:", {
-        x: params.x,
-        y: params.y,
-        z: params.z,
-        quality: params.quality,
-        size: params.size,
-        color: params.color,
-        multiplicationFactor: params.multiplicationFactor,
-        bondDiameterMultiplicationFactor: params.bondDiameterMultiplicationFactor,
-        bondQuality: params.bondQuality,
-        coordinates: params.coordinates,
-        originalCoordinates: params.originalCoordinates
-    });
-
+export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams): { atomMesh: THREE.Mesh, bondMeshes: THREE.Group } => {
     const {
         x,
         y,
@@ -304,100 +329,103 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
         color,
         multiplicationFactor,
         coordinates,
-        originalCoordinates,
         bondDiameterMultiplicationFactor,
         bondQuality
     } = params;
 
-    if (!coordinates || !originalCoordinates) {
+    // Fallback if coordinates are not provided, ensuring the correct return type
+    if (!coordinates) {
         console.warn("Coordinates are required for ball-and-stick representation");
-        return createSphereMesh(params);
+        return {
+            atomMesh: createSphereMesh(params).atomMesh, // Assuming createSphereMesh is updated to return { atomMesh, bondMeshes }
+            bondMeshes: new THREE.Group()
+        };
     }
 
-    const group = new THREE.Group();
+    // This group will hold ONLY the bonds for this atom
+    const bondsGroup = new THREE.Group();
+    bondsGroup.name = 'Bonds'; // Optional: Give the temporary group a name for debugging
 
-    // Create sphere for the atom
+    // The atom sphere is created as a standalone mesh
     const sphereSize = size * multiplicationFactor * 0.4;
     const material = new THREE.MeshStandardMaterial({ color });
-    const sphere = new THREE.Mesh(
+    const atomMesh = new THREE.Mesh(
         new THREE.SphereGeometry(sphereSize, quality, quality),
         material
     );
-    sphere.position.set(x, y, z);
-    sphere.castShadow = true;
-    group.add(sphere);
+    atomMesh.position.set(x, y, z);
+    atomMesh.castShadow = true;
 
-    // Find the current atom using a tolerance for floating-point comparison
+    // Find the full data for the current atom in the coordinates list
     const EPSILON = 0.0001;
-    const currentAtom = coordinates.find(atom => {
-        return atom.centeredX !== undefined &&
-               atom.centeredY !== undefined &&
-               atom.centeredZ !== undefined &&
-               Math.abs(atom.centeredX - x) < EPSILON &&
-               Math.abs(atom.centeredY - y) < EPSILON &&
-               Math.abs(atom.centeredZ - z) < EPSILON;
-    });
+    const currentAtom = coordinates.find(atom =>
+        atom.centeredX !== undefined &&
+        atom.centeredY !== undefined &&
+        atom.centeredZ !== undefined &&
+        Math.abs(atom.centeredX - x) < EPSILON &&
+        Math.abs(atom.centeredY - y) < EPSILON &&
+        Math.abs(atom.centeredZ - z) < EPSILON
+    );
 
+    // If the atom is found and has bonds, create the 'sticks'
     if (currentAtom && Array.isArray(currentAtom.bonds) && currentAtom.bonds.length > 0) {
         currentAtom.bonds.forEach(bond => {
-            // Find the bonded atom in the centered coordinates
             const bondedAtom = coordinates.find(atom => atom.id === bond.atomId);
 
             if (bondedAtom) {
                 const startPos = new THREE.Vector3(x, y, z);
-                // The logical end position is still the center of the other atom
                 const endPos = new THREE.Vector3(
                     bondedAtom.centeredX,
                     bondedAtom.centeredY,
                     bondedAtom.centeredZ
                 );
 
-                // We still need the full direction and length to correctly calculate the half-length
                 const direction = new THREE.Vector3().subVectors(endPos, startPos);
                 const bondLength = direction.length();
+
+                // This atom will only draw its half of the bond, from its center to the midpoint.
                 const halfBondLength = bondLength / 2;
 
-                // If the bond length is zero, don't draw anything
+                // Avoid creating a cylinder with zero length (e.g., atom bonded to itself)
                 if (halfBondLength === 0) return;
 
-                // Create cylinder geometry with consistent diameter
-                const bondRadius = 0.5 * (bondDiameterMultiplicationFactor ?? 0.5); // old was: const bondRadius = sphereSize * (bondDiameterMultiplicationFactor ?? 0.5);
+                // Bond radius is proportional to the atom's size for a natural look.
+                const bondRadius = 0.5 * (bondDiameterMultiplicationFactor ?? 0.5);//const bondRadius = sphereSize * (bondDiameterMultiplicationFactor ?? 0.5);
 
-                // Create a single cylinder that goes from the start to the midpoint
                 const cylinderGeometry = new THREE.CylinderGeometry(
-                    bondRadius, // Radius of the top
-                    bondRadius, // Radius of the bottom
-                    halfBondLength, // Height of the cylinder is now half the bond length
-                    bondQuality, // Number of segmented faces around circumference
-                    1 // Number of segmented faces along height
+                    bondRadius,          // top radius
+                    bondRadius,          // bottom radius
+                    halfBondLength,      // height
+                    bondQuality,         // radial segments
+                    1                    // height segments
                 );
 
-                // Center the cylinder geometry so its base is at the origin
+                // Move the cylinder's origin to its base for easy positioning and rotation.
                 cylinderGeometry.translate(0, halfBondLength / 2, 0);
 
-                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
-
-                // Create and position the single cylinder (start to midpoint)
+                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 }); // Grey for bonds
                 const cylinder = new THREE.Mesh(cylinderGeometry, bondMaterial);
-                cylinder.position.copy(startPos); // Position it at the center of the main atom
-                cylinder.quaternion.setFromUnitVectors(
-                    new THREE.Vector3(0, 1, 0),
-                    direction.normalize() // Point it towards the bonded atom
-                );
-                cylinder.castShadow = true;
-                group.add(cylinder);
 
-                // --- ADJUSTMENT START ---
-                // The code for the second cylinder has been removed.
-                // We are no longer drawing the part of the bond from the midpoint to the end atom.
-                // --- ADJUSTMENT END ---
+                // Position the cylinder's base at the center of the current atom.
+                cylinder.position.copy(startPos);
+
+                // Rotate the cylinder to point from the current atom towards the bonded atom.
+                cylinder.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0), // Default cylinder orientation is along the Y-axis
+                    direction.normalize()
+                );
+
+                cylinder.castShadow = true;
+
+                // Add the new cylinder to the dedicated bonds group.
+                bondsGroup.add(cylinder);
             }
         });
     }
 
-    return group;
+    // Return the atom mesh and the group of bond meshes as separate properties.
+    return { atomMesh, bondMeshes: bondsGroup };
 };
-
 
 
 // Export scene or specific mesh as binary STL

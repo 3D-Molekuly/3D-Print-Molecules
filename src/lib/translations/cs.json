@@ -25,6 +25,7 @@
     "invalid_file_type":"Neplatný formát souboru. Použij .pdb nebo .sdf",
     "drag_and_drop_message":"Drag and Drop",
     "fetch_data_button": "Načíst Data",
+    "reload_data_button":"Obnovit",
     "name_table_header": "Název",
     "id_table_header": "ID",
     "description_table_header": "Popis",
@@ -38,7 +39,10 @@
     "download_whole_model_button": "Jedno STL",
     "download_template_button": "Stáhnout Předlohu",
     "download_model_button": "Stáhnout Model",
+
     "multiplication_factor":"Násobící faktor",
+    "bond_diameter_factor":"Násobící faktor vazby",
+    "bond_quality":"Kvalita vazby",
 
     "no_molecule_found": "Žádná molekula nenalezena",
     "close_popup": "Zavřít okno",

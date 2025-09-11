@@ -25,6 +25,7 @@
     "invalid_file_type":"Invalid File Type. Use .pdb or .sdf",
     "drag_and_drop_message":"Drag and Drop",
     "fetch_data_button":"Fetch Data",
+    "reload_data_button":"Reload",
     "name_table_header":"Name",
     "id_table_header":"ID",
     "description_table_header":"Description",
@@ -38,7 +39,10 @@
     "download_whole_model_button": "One STL File",
     "download_template_button":"Download Template",
     "download_model_button":"Download Model",
+
     "multiplication_factor":"Multiplication Factor",
+    "bond_diameter_factor":"Bond Diameter Factor",
+    "bond_quality":"Bond Quality",
 
     "no_molecule_found": "No molecule found",
     "close_popup":"Close Popup",

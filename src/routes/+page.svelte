@@ -1,4 +1,5 @@
 <script lang="ts">
+  // Imports
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
@@ -7,9 +8,9 @@
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
   import { buildLocalizedPath } from '$lib/functions/language';
-
   import InfoButton from '$lib/buttons/infoButton.svelte';
 
+  // Types
   let inputStr = '';
   let searchHistory: string[] = [];
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
@@ -43,6 +44,12 @@
 
   let showMoleculePopup = false;
 
+  // New variables for reload functionality
+  let isReloadMode = false;
+  let lastSuccessfulInput = '';
+  let lastSuccessfulFileContent = '';
+
+  // Lifecycle
   onMount(() => {
     if (browser) {
       initialize();
@@ -79,8 +86,10 @@
     }
   }
 
+  // Functions
   import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
 
+  // Setters for table info and image
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
     tableInfo = { firstItem, secondItem, thirdItem };
   }
@@ -89,6 +98,7 @@
     imageUrl = url;
   }
 
+  // Check if two sets of coordinates are equal
   function areCoordinatesEqual(coords1: AtomCoordinate[], coords2: AtomCoordinate[]): boolean {
     if (coords1.length !== coords2.length) return false;
     return coords1.every((coord, i) =>
@@ -99,20 +109,49 @@
     );
   }
 
+  // Handle form submission or reload
   async function handleSubmit() {
+    // Reset reload mode when starting new search
+    isReloadMode = false;
     isFileUploaded = false;
     showMoleculePopup = false;
+
+    // If input is empty, show popup and return
+    if (!inputStr.trim()) {
+      showMoleculePopup = true;
+      return;
+    }
+
     const inputType = determineInputType(inputStr);
+
+    // Check for valid input types first
+    if (inputType !== "CID" && inputType !== "PDB") {
+      console.error("Unsupported input type.");
+      showMoleculePopup = true;
+      return;
+    }
+
+    // Only check for reload mode AFTER validating input type and if it matches last successful input
+    if (inputStr === lastSuccessfulInput && atomCoordinates.length > 0) {
+      isReloadMode = true;
+      redrawModel(atomCoordinates);
+      if (typeof resizeCanvas === "function") resizeCanvas();
+      return;
+    }
+
+    // Clear previous molecule info before fetching new data.
+    // This prevents using stale data (e.g., the old CID) if the new search fails.
+    setTableInfo("", "", "");
+    setImage('');
 
     if (inputType === "CID") {
       await fetchPubChemData(inputStr, setTableInfo, setImage);
     } else if (inputType === "PDB") {
       await fetchPDBData(inputStr, setTableInfo, setImage);
-    } else {
-      console.error("Unsupported input type.");
-      showMoleculePopup = true;
-      return;
     }
+
+    // Store current coordinates before attempting to fetch new ones
+    let newAtomCoordinates: AtomCoordinate[] = [];
 
     try {
       if (inputType === "CID") {
@@ -134,7 +173,7 @@
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "sdf";
-        atomCoordinates = await parseSDF(content);
+        newAtomCoordinates = await parseSDF(content);
       } else if (inputType === "PDB") {
         const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
         const response = await fetch(url);
@@ -145,16 +184,30 @@
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "pdb";
-        atomCoordinates = await parsePDB(content);
+        newAtomCoordinates = await parsePDB(content);
       }
 
-      if (atomCoordinates.length === 0 || areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
+      // Check if no coordinates were found
+      if (newAtomCoordinates.length === 0) {
         showMoleculePopup = true;
         return;
       }
 
-      saveSearch();
-      prevAtomCoordinates = [...atomCoordinates];
+      // Only update atomCoordinates if we successfully got new data
+      atomCoordinates = newAtomCoordinates;
+
+      // Check if coordinates are the same as previous ones
+      if (areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
+        // Same data found - switch to reload mode
+        isReloadMode = true;
+      } else {
+        // New data found - proceed normally
+        saveSearch();
+        prevAtomCoordinates = [...atomCoordinates];
+        lastSuccessfulInput = inputStr;
+        lastSuccessfulFileContent = originalContent;
+      }
+
       redrawModel(atomCoordinates);
 
       if (typeof resizeCanvas === "function") resizeCanvas();
@@ -167,10 +220,11 @@
   function handleKeyPress(event: KeyboardEvent) {
     if (event.key === "Enter") {
       event.preventDefault();
-        handleSubmit();
+      handleSubmit();
     }
   }
 
+  // Download functions
   async function downloadModel() {
     if (atomCoordinates.length === 0) {
       showMoleculePopup = true;
@@ -205,6 +259,7 @@
     exportModelAsSTL(fileName);
   }
 
+  // Redraw model with new coordinates
   function redrawModel(atomCoordinates: AtomCoordinate[]) {
     sessionStorage.setItem('atomCoordinates', JSON.stringify(atomCoordinates));
     console.log("redrawModel function initiated");
@@ -227,6 +282,7 @@
     }
   }
 
+  // Update file name based on input or upload
   function updateFileName() {
     let name = "molecule";
     if (isFileUploaded) {
@@ -238,6 +294,7 @@
     console.log("Updated file name:", fileName);
   }
 
+  // Save search to history
   function saveSearch() {
     if (browser && inputStr.trim() !== '' && !searchHistory.includes(inputStr) && !showMoleculePopup) {
       searchHistory = [inputStr, ...searchHistory.slice(0, 4)];
@@ -247,6 +304,10 @@
 
   function handleHistoryClick(item: string) {
     inputStr = item;
+    // Reset reload mode when selecting from history
+    if (inputStr !== lastSuccessfulInput) {
+      isReloadMode = false;
+    }
     handleSubmit();
   }
 
@@ -255,6 +316,7 @@
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
   }
 
+  // File upload handling
   let uploadedFileName: string = "";
   let isFileUploaded: boolean = false;
 
@@ -266,6 +328,8 @@
       if (fileExtension === 'pdb' || fileExtension === 'sdf') {
         uploadedFileName = file.name.split('.').slice(0, -1).join('.');
         isFileUploaded = true;
+        // Reset reload mode when new file is uploaded
+        isReloadMode = false;
         setTableInfo(file.name, "", "");
         setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
 
@@ -276,11 +340,21 @@
           originalFileExtension = fileExtension;
           try {
             atomCoordinates = fileExtension === 'pdb' ? await parsePDB(content) : await parseSDF(content);
-            if (atomCoordinates.length === 0 || areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
+            if (atomCoordinates.length === 0) {
               showMoleculePopup = true;
               return;
             }
-            prevAtomCoordinates = [...atomCoordinates];
+
+            // Check if coordinates are the same as previous ones
+            if (areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
+              // Same data found - switch to reload mode
+              isReloadMode = true;
+            } else {
+              // New data found - proceed normally
+              prevAtomCoordinates = [...atomCoordinates];
+              lastSuccessfulFileContent = content;
+            }
+
             redrawModel(atomCoordinates);
           } catch (error) {
             console.error("Error parsing uploaded file:", error);
@@ -301,6 +375,7 @@
     }
   }
 
+  // Drag and drop state
   let isDragging = false;
   let dragCounter = 0;
 
@@ -335,7 +410,8 @@
     }
   }
 
-  let isEditing = false;
+  // Input box editing state
+  let isEditing = false; //editing state for quality input box
 
   function enableEditing() {
     isEditing = true;
@@ -345,6 +421,7 @@
     isEditing = false;
   }
 
+  // Collapsible menu state
   let isCollapsed = typeof window !== 'undefined' && localStorage.getItem('menuCollapsed') !== 'false';
 
   function toggleCollapse() {
@@ -357,10 +434,12 @@
     }, 350);
   }
 
+  // iOS detection for file input accept attribute
   function isIOS() {
     return /iPad|iPhone|iPod/.test(navigator.userAgent);
   }
 
+  // Save canvas as image
   function saveCanvasAsImage() {
     if (atomCoordinates.length === 0) {
       showMoleculePopup = true;
@@ -392,9 +471,17 @@
     URL.revokeObjectURL(link.href);
   }
 
+  // Popup keyboard accessibility
   function handlePopupKeydown(event: KeyboardEvent) {
     if (event.key === "Enter") {
       showMoleculePopup = false;
+    }
+  }
+
+  // Reset reload mode when input changes
+  function handleInputChange() {
+    if (inputStr !== lastSuccessfulInput) {
+      isReloadMode = false;
     }
   }
 </script>
@@ -408,269 +495,275 @@
   on:drop={handleDrop}
   role="region"
 >
-<div class="container mt-4 main-panel main-content">
-  <div class="row">
-    <div class="col-md-8 left-panel">
-      <div class="d-flex mb-3 align-items-center">
-        <div class="input-group">
-          <input
-            type="text"
-            bind:value={inputStr}
-            on:keydown={handleKeyPress}
-            class="form-control form-control-lg me-2 main-search-line dropdown-toggle"
-            id="dropdownMenuButton"
-            data-bs-toggle="dropdown"
-            placeholder={$_('search_field')}
-            aria-label="Search"
-          />
-          {#if inputStr}
-            <button
-              type="button"
-              class="btn-close"
-              aria-label="Clear"
-              on:click={() => (inputStr = '')}
-              style="position: absolute; right: 25px; top: 50%; transform: translateY(-50%);"
-            ></button>
-          {/if}
+  <div class="container mt-4 main-panel main-content">
+    <div class="row">
+      <div class="col-md-8 left-panel">
+        <div class="d-flex mb-3 align-items-center">
+          <div class="input-group">
+            <input
+              type="text"
+              bind:value={inputStr}
+              on:keydown={handleKeyPress}
+              on:input={handleInputChange}
+              class="form-control form-control-lg me-2 main-search-line dropdown-toggle"
+              id="dropdownMenuButton"
+              data-bs-toggle="dropdown"
+              placeholder={$_('search_field')}
+              aria-label="Search"
+            />
+            {#if inputStr}
+              <button
+                type="button"
+                class="btn-close"
+                aria-label="Clear"
+                on:click={() => {
+                  inputStr = '';
+                  isReloadMode = false;
+                }}
+                style="position: absolute; right: 25px; top: 50%; transform: translateY(-50%);"
+              ></button>
+            {/if}
 
-          {#if searchHistory.length > 0}
-            <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
-              {#each searchHistory as item, index}
+            {#if searchHistory.length > 0}
+              <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
+                {#each searchHistory as item, index}
+                  <li>
+                    <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
+                      {item}
+                    </a>
+                  </li>
+                {/each}
                 <li>
-                  <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
-                    {item}
-                  </a>
+                  <button
+                    type="button"
+                    class="dropdown-item"
+                    style="font-weight: bold; cursor: pointer; color: red; font-size: 10px;"
+                    on:click={clearHistory}
+                  >
+                    ⨉ {$_('delete_history')}
+                  </button>
                 </li>
-              {/each}
-              <li>
-                <button
-                  type="button"
-                  class="dropdown-item"
-                  style="font-weight: bold; cursor: pointer; color: red; font-size: 10px;"
-                  on:click={clearHistory}
-                >
-                  ⨉ {$_('delete_history')}
-                </button>
-              </li>
-            </ul>
-          {/if}
-        </div>
+              </ul>
+            {/if}
+          </div>
 
-        <div>
-          <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
-            <span class="material-symbols-outlined">upload_file</span>
-            {$_('upload_file_button')}
-          </label>
-          <input
-            on:change={handleFileUpload}
-            type="file"
-            id="fileInput"
-            class="d-none"
-            accept={acceptFormats}
+          <div>
+            <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
+              <span class="material-symbols-outlined">upload_file</span>
+              {$_('upload_file_button')}
+            </label>
+            <input
+              on:change={handleFileUpload}
+              type="file"
+              id="fileInput"
+              class="d-none"
+              accept={acceptFormats}
+            >
+          </div>
+
+          <button
+            on:click={handleSubmit}
+            class="btn btn-primary button-with-icon d-flex align-items-center main-search-line"
+            class:btn-warning={isReloadMode}
           >
+            <span class="material-symbols-outlined">
+              {isReloadMode ? 'refresh' : 'downloading'}
+            </span>
+            {isReloadMode ? $_('reload_data_button') : $_('fetch_data_button')}
+          </button>
         </div>
 
-        <button on:click={handleSubmit} class="btn btn-primary button-with-icon d-flex align-items-center main-search-line">
-          <span class="material-symbols-outlined">downloading</span>
-          {$_('fetch_data_button')}
-        </button>
-      </div>
-
-      <table class="table table-borderless">
-        <thead>
-          <tr>
-            <th>{$_('name_table_header')}</th>
-            <th>{$_('id_table_header')}</th>
-            <th>{$_('description_table_header')}</th>
-            <th>{$_('image_table_description')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="width: 40%;">{tableInfo.firstItem}</td>
-            <td>{tableInfo.secondItem}</td>
-            <td>{tableInfo.thirdItem}</td>
-            <td rowspan="2" style="width: 200px;">
-              {#if imageUrl}
-                <img src={imageUrl} alt="representation of the molecule" class="img-fluid">
-              {:else}
-                <div class="image-placeholder">
-                  <span>{$_('no_image_available')}</span>
-                </div>
-              {/if}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div>
         <table class="table table-borderless">
           <thead>
             <tr>
-              <th>
-                {$_('model_settings')}
-                <button
-                  type="button"
-                  on:click={toggleCollapse}
-                  aria-expanded={!isCollapsed}
-                  aria-controls="collapseOne"
-                  class="btn btn-link"
-                >
-                  <span class="material-symbols-outlined google-font-darkmode" style="font-size: 36px;">
-                    {isCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
-                  </span>
-                </button>
-              </th>
+              <th>{$_('name_table_header')}</th>
+              <th>{$_('id_table_header')}</th>
+              <th>{$_('description_table_header')}</th>
+              <th>{$_('image_table_description')}</th>
             </tr>
           </thead>
-          <tbody class={isCollapsed ? 'collapse' : ''} id="collapseOne">
+          <tbody>
             <tr>
-              <td>
-                <label for="qualityRange">
-                  {$_('quality_slider')}
-                  {#if isEditing}
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      bind:value={quality}
-                      on:blur={disableEditing}
-                      class=""
-                      style="width: 3em; text-align: center;">
-                  {:else}
-                    <button
-                      type="button"
-                      on:click={enableEditing}
-                      class="editable-button">
-                      {quality}
-                    </button>
-                  {/if}
-                </label>
-                <div class="quality-container">
-                  <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
-                </div>
-              </td>
-              <td>
-                <label for="model-generator">{$_('select_model_type')}</label>
-                <select class="form-select" id="model-generator" bind:value={selectedGenerator}>
-                  {#each modelGenerators as generator}
-                    <option value={generator.func}>{generator.name}</option>
-                  {/each}
-                </select>
-              </td>
-            </tr>
-            {#if selectedGenerator === createSphereMesh}
-              <tr>
-                <td>
-                  <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                  <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                </td>
-              </tr>
-            {/if}
-            {#if selectedGenerator === createCubeMesh}
-              <tr>
-                <td>
-                  <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                  <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                </td>
-              </tr>
-            {/if}
-            {#if selectedGenerator === createBallAndStickMesh}
-              <tr>
-                <td>
-                  <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                  <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-
-                  <label for="bondDiameterFactor">{$_('bond_diameter_factor')}</label>
-                  <input type="number" id="bondDiameterFactor" bind:value={bondDiameterMultiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-
-                  <label for="bondQuality">{$_('bond_quality')}</label>
-                  <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
-                </td>
-              </tr>
-            {/if}
-            <tr>
-              <td>
-                <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
-                <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
-              </td>
-              <td>
-                <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
-                  <span class="material-symbols-outlined">deployed_code_update</span>
-                  {$_('download_whole_model_button')}
-                </button>
-                <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 mt-2">
-                  <span class="material-symbols-outlined">download</span>
-                  {$_('download_template_button')}
-                </button>
+              <td style="width: 40%;">{tableInfo.firstItem}</td>
+              <td>{tableInfo.secondItem}</td>
+              <td>{tableInfo.thirdItem}</td>
+              <td rowspan="2" style="width: 200px;">
+                {#if imageUrl}
+                  <img src={imageUrl} alt="representation of the molecule" class="img-fluid">
+                {:else}
+                  <div class="image-placeholder">
+                    <span>{$_('no_image_available')}</span>
+                  </div>
+                {/if}
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
-      <br>
 
-      <button on:click={downloadModel} class="btn btn-success btn-lg w-100">
-        <span class="material-symbols-outlined">deployed_code_update</span>
-        {$_('download_model_button')}
-      </button>
-    </div>
+        <div>
+          <table class="table table-borderless">
+            <thead>
+              <tr>
+                <th>
+                  {$_('model_settings')}
+                  <button
+                    type="button"
+                    on:click={toggleCollapse}
+                    aria-expanded={!isCollapsed}
+                    aria-controls="collapseOne"
+                    class="btn btn-link"
+                  >
+                    <span class="material-symbols-outlined google-font-darkmode" style="font-size: 36px;">
+                      {isCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
+                    </span>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody class={isCollapsed ? 'collapse' : ''} id="collapseOne">
+              <tr>
+                <td>
+                  <label for="qualityRange">
+                    {$_('quality_slider')}
+                    {#if isEditing}
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        bind:value={quality}
+                        on:blur={disableEditing}
+                        class=""
+                        style="width: 3em; text-align: center;">
+                    {:else}
+                      <button
+                        type="button"
+                        on:click={enableEditing}
+                        class="editable-button">
+                        {quality}
+                      </button>
+                    {/if}
+                  </label>
+                  <div class="quality-container">
+                    <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
+                  </div>
+                </td>
+                <td>
+                  <label for="model-generator">{$_('select_model_type')}</label>
+                  <select class="form-select" id="model-generator" bind:value={selectedGenerator}>
+                    {#each modelGenerators as generator}
+                      <option value={generator.func}>{generator.name}</option>
+                    {/each}
+                  </select>
+                </td>
+              </tr>
+              {#if selectedGenerator === createSphereMesh}
+                <tr>
+                  <td>
+                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+                  </td>
+                </tr>
+              {/if}
+              {#if selectedGenerator === createCubeMesh}
+                <tr>
+                  <td>
+                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+                  </td>
+                </tr>
+              {/if}
+              {#if selectedGenerator === createBallAndStickMesh}
+                <tr>
+                  <td>
+                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
 
-    <div class="col-md-4">
-      <div class="canvas-container" id="canvasContainer">
-        <div class="canvas-controls">
-          <button class="btn" on:click={saveCanvasAsImage}>
-            <span class="material-symbols-outlined canvas-control">photo_camera</span>
-          </button>
-          <button class="btn" on:click={() => {
-            const container = document.getElementById('canvasContainer');
-            if (container) {
-              if (!document.fullscreenElement) {
-                container.requestFullscreen();
-              } else {
-                document.exitFullscreen();
-              }
-            }
-          }}>
-            <span class="material-symbols-outlined canvas-control">fullscreen</span>
-          </button>
+                    <label for="bondDiameterFactor">{$_('bond_diameter_factor')}</label>
+                    <input type="number" id="bondDiameterFactor" bind:value={bondDiameterMultiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+
+                    <label for="bondQuality">{$_('bond_quality')}</label>
+                    <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
+                  </td>
+                </tr>
+              {/if}
+              <tr>
+                <td>
+                  <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
+                  <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
+                </td>
+                <td>
+                  <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
+                    <span class="material-symbols-outlined">deployed_code_update</span>
+                    {$_('download_whole_model_button')}
+                  </button>
+                  <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 mt-2">
+                    <span class="material-symbols-outlined">download</span>
+                    {$_('download_template_button')}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <canvas id="threeCanvas" class="border rounded"></canvas>
+        <br>
+
+        <button on:click={downloadModel} class="btn btn-success btn-lg w-100">
+          <span class="material-symbols-outlined">deployed_code_update</span>
+          {$_('download_model_button')}
+        </button>
+      </div>
+
+      <div class="col-md-4">
+        <div class="canvas-container" id="canvasContainer">
+          <div class="canvas-controls">
+            <button class="btn" on:click={saveCanvasAsImage}>
+              <span class="material-symbols-outlined canvas-control">photo_camera</span>
+            </button>
+            <button class="btn" on:click={() => {
+              const container = document.getElementById('canvasContainer');
+              if (container) {
+                if (!document.fullscreenElement) {
+                  container.requestFullscreen();
+                } else {
+                  document.exitFullscreen();
+                }
+              }
+            }}>
+              <span class="material-symbols-outlined canvas-control">fullscreen</span>
+            </button>
+          </div>
+          <canvas id="threeCanvas" class="border rounded"></canvas>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-{#if isDragging}
-  <div class="drag-overlay" role="status" aria-live="polite">
-    <div class="drag-message">
-      {$_('drag_and_drop_message')}
-    </div>
-  </div>
-{/if}
-
-{#if showMoleculePopup}
-  <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div
-    class="popup-overlay"
-    tabindex="0"
-    on:keydown={handlePopupKeydown}
-    on:click={() => showMoleculePopup = false}
-  >
-    <!-- svelte-ignore a11y-click-events-have-key-events -->
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="popup-content" on:click|stopPropagation>
-      <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">warning</span>
-      <div style="margin-top: 10px; font-weight: bold;">
-        {$_('no_molecule_found') || 'No molecule found for the provided input.'}
+  {#if isDragging}
+    <div class="drag-overlay" role="status" aria-live="polite">
+      <div class="drag-message">
+        {$_('drag_and_drop_message')}
       </div>
-      <button class="btn btn-warning mt-3" on:click={() => showMoleculePopup = false}>
-        {$_('close_popup') || 'Close'}
-      </button>
     </div>
-  </div>
-{/if}
+  {/if}
+
+  {#if showMoleculePopup}
+    <div
+      class="popup-overlay"
+      tabindex="0"
+      on:keydown={handlePopupKeydown}
+      on:click={() => showMoleculePopup = false}
+    >
+      <div class="popup-content" on:click|stopPropagation>
+        <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">warning</span>
+        <div style="margin-top: 10px; font-weight: bold;">
+          {$_('no_molecule_found') || 'No molecule found for the provided input.'}
+        </div>
+        <button class="btn btn-warning mt-3" on:click={() => showMoleculePopup = false}>
+          {$_('close_popup') || 'Close'}
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <InfoButton title={$_('infobox_tittle')}>

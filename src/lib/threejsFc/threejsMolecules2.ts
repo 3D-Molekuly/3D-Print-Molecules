@@ -305,8 +305,8 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
         multiplicationFactor,
         coordinates,
         originalCoordinates,
-        bondDiameterMultiplicationFactor, // New parameter for bond diameter
-        bondQuality // New parameter for cylinder mesh quality
+        bondDiameterMultiplicationFactor,
+        bondQuality
     } = params;
 
     if (!coordinates || !originalCoordinates) {
@@ -345,66 +345,52 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
 
             if (bondedAtom) {
                 const startPos = new THREE.Vector3(x, y, z);
+                // The logical end position is still the center of the other atom
                 const endPos = new THREE.Vector3(
                     bondedAtom.centeredX,
                     bondedAtom.centeredY,
                     bondedAtom.centeredZ
                 );
 
-                // Calculate midpoint
-                const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
-
-                // Calculate direction and half-length for each cylinder
+                // We still need the full direction and length to correctly calculate the half-length
                 const direction = new THREE.Vector3().subVectors(endPos, startPos);
                 const bondLength = direction.length();
                 const halfBondLength = bondLength / 2;
 
-                // Create cylinder geometry with consistent diameter
-                const bondRadius = sphereSize * (bondDiameterMultiplicationFactor ?? 0.5);
+                // If the bond length is zero, don't draw anything
+                if (halfBondLength === 0) return;
 
-                // First cylinder (from start to midpoint)
-                const cylinderGeometry1 = new THREE.CylinderGeometry(
+                // Create cylinder geometry with consistent diameter
+                const bondRadius = 0.5 * (bondDiameterMultiplicationFactor ?? 0.5); // old was: const bondRadius = sphereSize * (bondDiameterMultiplicationFactor ?? 0.5);
+
+                // Create a single cylinder that goes from the start to the midpoint
+                const cylinderGeometry = new THREE.CylinderGeometry(
                     bondRadius, // Radius of the top
                     bondRadius, // Radius of the bottom
-                    halfBondLength, // Height of the cylinder
+                    halfBondLength, // Height of the cylinder is now half the bond length
                     bondQuality, // Number of segmented faces around circumference
                     1 // Number of segmented faces along height
                 );
 
-                // Second cylinder (from midpoint to end)
-                const cylinderGeometry2 = new THREE.CylinderGeometry(
-                    bondRadius,
-                    bondRadius,
-                    halfBondLength,
-                    bondQuality,
-                    1
-                );
-
-                // Center the cylinder geometries
-                cylinderGeometry1.translate(0, halfBondLength / 2, 0);
-                cylinderGeometry2.translate(0, halfBondLength / 2, 0);
+                // Center the cylinder geometry so its base is at the origin
+                cylinderGeometry.translate(0, halfBondLength / 2, 0);
 
                 const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
 
-                // Create and position first cylinder (start to midpoint)
-                const cylinder1 = new THREE.Mesh(cylinderGeometry1, bondMaterial);
-                cylinder1.position.copy(startPos);
-                cylinder1.quaternion.setFromUnitVectors(
+                // Create and position the single cylinder (start to midpoint)
+                const cylinder = new THREE.Mesh(cylinderGeometry, bondMaterial);
+                cylinder.position.copy(startPos); // Position it at the center of the main atom
+                cylinder.quaternion.setFromUnitVectors(
                     new THREE.Vector3(0, 1, 0),
-                    direction.normalize()
+                    direction.normalize() // Point it towards the bonded atom
                 );
-                cylinder1.castShadow = true;
-                group.add(cylinder1);
+                cylinder.castShadow = true;
+                group.add(cylinder);
 
-                // Create and position second cylinder (midpoint to end)
-                const cylinder2 = new THREE.Mesh(cylinderGeometry2, bondMaterial);
-                cylinder2.position.copy(midPoint);
-                cylinder2.quaternion.setFromUnitVectors(
-                    new THREE.Vector3(0, 1, 0),
-                    direction.normalize()
-                );
-                cylinder2.castShadow = true;
-                group.add(cylinder2);
+                // --- ADJUSTMENT START ---
+                // The code for the second cylinder has been removed.
+                // We are no longer drawing the part of the bond from the midpoint to the end atom.
+                // --- ADJUSTMENT END ---
             }
         });
     }

@@ -111,16 +111,27 @@
 
   // Handle form submission or reload
   async function handleSubmit() {
-    // Reset reload mode when starting new search
-    isReloadMode = false;
-    isFileUploaded = false;
-    showMoleculePopup = false;
-
     // If input is empty, show popup and return
     if (!inputStr.trim()) {
       showMoleculePopup = true;
       return;
     }
+
+    // First, check if this is a reload action.
+    // This happens if the reload mode is already active, or if the input
+    // hasn't changed from the last successful search.
+    if (isReloadMode || (inputStr === lastSuccessfulInput && atomCoordinates.length > 0)) {
+      isReloadMode = true; // Ensure the state is correct for the UI
+      redrawModel(atomCoordinates);
+      if (typeof resizeCanvas === "function") resizeCanvas();
+      return; // We're done, no need to fetch new data.
+    }
+
+    // If we've reached this point, it's a NEW search.
+    // Reset states for the new search.
+    isReloadMode = false;
+    isFileUploaded = false;
+    showMoleculePopup = false;
 
     const inputType = determineInputType(inputStr);
 
@@ -128,14 +139,6 @@
     if (inputType !== "CID" && inputType !== "PDB") {
       console.error("Unsupported input type.");
       showMoleculePopup = true;
-      return;
-    }
-
-    // Only check for reload mode AFTER validating input type and if it matches last successful input
-    if (inputStr === lastSuccessfulInput && atomCoordinates.length > 0) {
-      isReloadMode = true;
-      redrawModel(atomCoordinates);
-      if (typeof resizeCanvas === "function") resizeCanvas();
       return;
     }
 
@@ -411,6 +414,22 @@
     }
   }
 
+  // Reset settings to their default values
+  function resetSettingsToDefault() {
+    quality = 50;
+    //selectedGenerator = modelGenerators[0].func;
+    showHydrogens = true;
+    multiplicationFactor = 1.0;
+    bondDiameterMultiplicationFactor = 0.4;
+    bondQuality = 32;
+    groupBondsSeparately = false;
+
+    // If a model is currently displayed, redraw it with the default settings
+    if (atomCoordinates.length > 0) {
+      redrawModel(atomCoordinates);
+    }
+  }
+
   // Input box editing state
   let isEditing = false; //editing state for quality input box
 
@@ -470,6 +489,14 @@
     link.href = URL.createObjectURL(blob);
     link.click();
     URL.revokeObjectURL(link.href);
+  }
+
+  // Helper to focus an element on mount for accessibility
+  function focusOnMount(element: HTMLElement) {
+    if (element) {
+      // Defer focus until next tick to ensure element is rendered and visible
+      setTimeout(() => element.focus(), 0);
+    }
   }
 
   // Popup keyboard accessibility
@@ -564,8 +591,11 @@
 
           <button
             on:click={handleSubmit}
+            on:keydown={handleKeyPress}
             class="btn btn-primary button-with-icon d-flex align-items-center main-search-line"
             class:btn-warning={isReloadMode}
+            role="button"
+            tabindex="0"
           >
             <span class="material-symbols-outlined">
               {isReloadMode ? 'refresh' : 'downloading'}
@@ -649,7 +679,19 @@
                   </div>
                 </td>
                 <td>
-                  <label for="model-generator">{$_('select_model_type')}</label>
+                  <div class="d-flex align-items-center mb-1">
+                    <label for="model-generator" class="form-label mb-0">{$_('select_model_type')}</label>
+                    <button
+                      type="button"
+                      on:click={resetSettingsToDefault}
+                      class="btn btn-sm btn-link p-1 ms-2"
+                      title="Reset settings to default"
+                      aria-label="Reset settings to default"
+                      style="align: right;"
+                    >
+                      <span class="material-symbols-outlined" style="vertical-align: middle;">restart_alt</span>
+                    </button>
+                  </div>
                   <select class="form-select" id="model-generator" bind:value={selectedGenerator}>
                     {#each modelGenerators as generator}
                       <option value={generator.func}>{generator.name}</option>
@@ -753,7 +795,8 @@
   {#if showMoleculePopup}
     <div
       class="popup-overlay"
-      tabindex="0"
+      tabindex="-1"
+      use:focusOnMount
       on:keydown={handlePopupKeydown}
       on:click={() => showMoleculePopup = false}
     >

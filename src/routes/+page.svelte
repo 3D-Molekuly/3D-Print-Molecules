@@ -3,7 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules2';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
@@ -29,6 +29,7 @@
   const modelGenerators = [
     { name: 'Spheres', func: createSphereMesh },
     { name: 'Ball-and-Stick', func: createBallAndStickMesh },
+    { name: 'Sticks', func: createStickMesh },
     { name: 'Minecraft', func: createCubeMesh }
   ];
   let selectedGenerator = modelGenerators[0].func;
@@ -780,6 +781,14 @@
                       <input class="form-check-input" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
                       </div>
                     </div>
+                  </td>
+                </tr>
+              {/if}
+              {#if selectedGenerator === createStickMesh}
+                <tr>
+                  <td>
+                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
+                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
                   </td>
                 </tr>
               {/if}

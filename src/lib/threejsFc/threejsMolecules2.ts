@@ -268,40 +268,68 @@ export const createCubeMesh = (params: LocalSelectedGeneratorParams) => {
     };
 };
 
-/*
-export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams) => {
-    const { x, y, z, quality, size, color, multiplicationFactor, coordinates, originalCoordinates } = params;
+export const createStickMesh = (params: UpdatedLocalSelectedGeneratorParams): { atomMesh: THREE.Mesh, bondMeshes: THREE.Group } => {
+    const {
+        x,
+        y,
+        z,
+        quality,
+        // size, // The atom's own radius ('size') is intentionally ignored in the "Sticks" model.
+        color,
+        multiplicationFactor,
+        coordinates,
+        // bondDiameterMultiplicationFactor, // Not used in this model
+        // bondQuality // Not used in this model, combined into 'quality'
+    } = params;
 
-    if (!coordinates || !originalCoordinates) {
-        console.warn("Coordinates are required for ball-and-stick representation");
-        return createSphereMesh(params);
+    // Fallback if coordinates are not provided (e.g., for a single atom with no bonds)
+    if (!coordinates) {
+        console.warn("Coordinates are required for stick representation; creating a fallback sphere.");
+        const fallbackMaterial = new THREE.MeshStandardMaterial({ color });
+        // The fallback atom still respects the stick model's visual rules.
+        const stickRadius = 0.2 * multiplicationFactor;
+        const fallbackAtom = new THREE.Mesh(
+            new THREE.SphereGeometry(stickRadius, quality, quality),
+            fallbackMaterial
+        );
+        fallbackAtom.position.set(x, y, z);
+        fallbackAtom.castShadow = true;
+        return {
+            atomMesh: fallbackAtom,
+            bondMeshes: new THREE.Group()
+        };
     }
 
-    const group = new THREE.Group();
+    const bondsGroup = new THREE.Group();
+    bondsGroup.name = 'Bonds';
 
-    // Create sphere for the atom
-    const sphereSize = size * multiplicationFactor * 0.4;
+    // In the "Sticks" model, the radius for both atoms (spheres) and bonds (cylinders)
+    // is uniform and controlled by the multiplication factor. A base of 0.2 is used.
+    const stickRadius = 0.2 * multiplicationFactor;
+
+    // The atom "ball" is a sphere with the same radius as the bond "sticks".
     const material = new THREE.MeshStandardMaterial({ color });
-    const sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(sphereSize, quality, quality),
+    const atomMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(stickRadius, quality, quality),
         material
     );
-    sphere.position.set(x, y, z);
-    sphere.castShadow = true;
-    group.add(sphere);
+    atomMesh.position.set(x, y, z);
+    atomMesh.castShadow = true;
 
-    // Find the current atom using a tolerance for floating-point comparison
+    // Find the current atom's full data to access its bond information.
     const EPSILON = 0.0001;
-    const currentAtom = coordinates.find(atom => {
-        return atom.centeredX !== undefined && atom.centeredY !== undefined && atom.centeredZ !== undefined &&
-               Math.abs(atom.centeredX - x) < EPSILON &&
-               Math.abs(atom.centeredY - y) < EPSILON &&
-               Math.abs(atom.centeredZ - z) < EPSILON;
-    });
+    const currentAtom = coordinates.find(atom =>
+        atom.centeredX !== undefined &&
+        atom.centeredY !== undefined &&
+        atom.centeredZ !== undefined &&
+        Math.abs(atom.centeredX - x) < EPSILON &&
+        Math.abs(atom.centeredY - y) < EPSILON &&
+        Math.abs(atom.centeredZ - z) < EPSILON
+    );
 
+    // If the atom is found and has bonds, create the cylinder meshes for them.
     if (currentAtom && Array.isArray(currentAtom.bonds) && currentAtom.bonds.length > 0) {
         currentAtom.bonds.forEach(bond => {
-            // Find the bonded atom in the centered coordinates
             const bondedAtom = coordinates.find(atom => atom.id === bond.atomId);
 
             if (bondedAtom) {
@@ -312,47 +340,45 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
                     bondedAtom.centeredZ
                 );
 
-                // Calculate midpoint
-                const midPoint = new THREE.Vector3().addVectors(startPos, endPos).multiplyScalar(0.5);
-
-                // Calculate direction and length
                 const direction = new THREE.Vector3().subVectors(endPos, startPos);
                 const bondLength = direction.length();
+                const halfBondLength = bondLength / 2;
 
-                // Create cylinder geometry
-                const bondRadius = sphereSize * 0.5;
-                // Create cylinder geometry for the bond
+                // Avoid creating a zero-length cylinder.
+                if (halfBondLength === 0) return;
+
                 const cylinderGeometry = new THREE.CylinderGeometry(
-                    bondRadius, // Radius of the top of the cylinder
-                    bondRadius, // Radius of the bottom of the cylinder
-                    bondLength, // Height of the cylinder
-                    50,          // Number of segmented faces around the circumference
-                    1           // Number of segmented faces along the height
+                    stickRadius,    // top radius
+                    stickRadius,    // bottom radius
+                    halfBondLength, // height
+                    quality,        // radial segments (using the single quality parameter)
+                    1               // height segments
                 );
 
-                // Center the cylinder geometry
-                cylinderGeometry.translate(0, bondLength / 2, 0);
+                // Shift the cylinder's origin to its base.
+                cylinderGeometry.translate(0, halfBondLength / 2, 0);
 
+                // Use a neutral grey material; final color is applied later in createAtoms.
                 const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
                 const cylinder = new THREE.Mesh(cylinderGeometry, bondMaterial);
 
-                // Position and rotate the cylinder
+                // Position the cylinder's base at the current atom's center.
                 cylinder.position.copy(startPos);
+
+                // Rotate it to point towards the bonded atom.
                 cylinder.quaternion.setFromUnitVectors(
                     new THREE.Vector3(0, 1, 0),
                     direction.normalize()
                 );
-
                 cylinder.castShadow = true;
-                group.add(cylinder);
+
+                bondsGroup.add(cylinder);
             }
         });
     }
 
-    return group;
+    return { atomMesh, bondMeshes: bondsGroup };
 };
-*/
-
 
 export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorParams): { atomMesh: THREE.Mesh, bondMeshes: THREE.Group } => {
     const {

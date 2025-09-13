@@ -23,6 +23,7 @@ interface LocalSelectedGeneratorParams {
     coordinates?: AtomWithBonds[];
     originalCoordinates?: AtomWithBonds[];
     groupBondsSeparately?: boolean;
+    uniformAtomDiameter?: boolean;
 }
 
 export function setupThreeJS(canvas: HTMLCanvasElement) {
@@ -82,8 +83,9 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     // Inside your setupThreeJS function
 
     const createAtoms = (params: CreateAtomsParams) => {
+        // NOTE: The CreateAtomsParams type will need to be updated to include `uniformAtomDiameter?: boolean;`
         // Add the new parameter here
-        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator, bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately } = params;
+        const { coordinates, quality, showHydrogens, multiplicationFactor, selectedGenerator, bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately, uniformAtomDiameter } = params;
         clearScene();
 
         group = new THREE.Group();
@@ -134,7 +136,16 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
 
             centeredCoordinates.forEach((atom) => {
                 const { atomType, centeredX, centeredY, centeredZ, AtomicRadius, CPKHexColor } = atom;
-                const size = AtomicRadius ? parseFloat(AtomicRadius) : 0.5;
+
+                // Original size calculation
+                let size = AtomicRadius ? parseFloat(AtomicRadius) : 0.5;
+
+                // ---- NEW: Handle uniform atom diameter for Ball-and-Stick model ----
+                if (selectedGenerator === createBallAndStickMesh && uniformAtomDiameter) {
+                    size = 0.6; // Use a constant size for all atoms
+                }
+                // --------------------------------------------------------------------
+
                 const color = CPKHexColor ? parseInt(CPKHexColor.replace('#', '0x')) : 0x000000;
 
                 // ---- MODIFIED: Handle the new return structure from generators ----
@@ -143,7 +154,7 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                     y: centeredY,
                     z: centeredZ,
                     quality,
-                    size,
+                    size, // Pass the potentially modified size
                     color,
                     multiplicationFactor,
                     bondDiameterMultiplicationFactor,

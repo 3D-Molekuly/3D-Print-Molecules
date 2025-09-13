@@ -45,6 +45,7 @@
     "bond_diameter_factor":"Násobící faktor vazby",
     "bond_quality":"Kvalita vazby",
     "bonds_checbox":"Seskupit vazby zvlášť",
+    "uniform_atom_diameter_checkbox":"Jednotný průměr atomů",
 
     "no_molecule_found": "Žádná molekula nenalezena",
     "close_popup": "Zavřít okno",

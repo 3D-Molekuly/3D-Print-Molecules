@@ -10,6 +10,7 @@ export interface CreateAtomsParams {
     bondDiameterMultiplicationFactor: number;
     bondQuality: number;
     groupBondsSeparately: boolean;
+    uniformAtomDiameter: boolean;
 }
 
 export interface SelectedGeneratorParams {

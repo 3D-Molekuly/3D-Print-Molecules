@@ -45,6 +45,7 @@
     "bond_diameter_factor":"Bond Diameter Factor",
     "bond_quality":"Bond Quality",
     "bonds_checbox":"Group Bonds Separately",
+    "uniform_atom_diameter_checkbox":"Uniform Atom Diameter",
 
     "no_molecule_found": "No molecule found",
     "close_popup":"Close Popup",

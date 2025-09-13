@@ -39,10 +39,15 @@
   let bondDiameterMultiplicationFactor = 0.4;
   let bondQuality = 32;
   let groupBondsSeparately = false;
+  let uniformAtomDiameter = false;
+
   let originalContent: string = "";
   let originalFileExtension: string = "sdf";
 
   let showMoleculePopup = false;
+
+  // Flag to prevent overwriting localStorage on initial load
+  let settingsLoaded = false;
 
   // New variables for reload functionality
   let isReloadMode = false;
@@ -61,6 +66,21 @@
 
   async function initialize() {
     searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+
+    // Load saved settings from localStorage, with defaults
+    if (browser) {
+      multiplicationFactor = parseFloat(localStorage.getItem('multiplicationFactor') || '1.0');
+      bondDiameterMultiplicationFactor = parseFloat(localStorage.getItem('bondDiameterMultiplicationFactor') || '0.4');
+      bondQuality = parseInt(localStorage.getItem('bondQuality') || '32', 10);
+      quality = parseInt(localStorage.getItem('quality') || '50', 10);
+      groupBondsSeparately = JSON.parse(localStorage.getItem('groupBondsSeparately') || 'false');
+      showHydrogens = JSON.parse(localStorage.getItem('showHydrogens') || 'true');
+      uniformAtomDiameter = JSON.parse(localStorage.getItem('uniformAtomDiameter') || 'false');
+
+      // Allow settings to be saved from now on
+      settingsLoaded = true;
+    }
+
     canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
     if (!canvas) {
       console.error('Canvas not found');
@@ -276,7 +296,7 @@
         multiplicationFactor: multiplicationFactor,
         selectedGenerator: selectedGenerator,
         ...(selectedGenerator === createBallAndStickMesh
-          ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately }
+          ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately, uniformAtomDiameter }
           : {})
       };
       createAtoms(params);
@@ -423,11 +443,34 @@
     bondDiameterMultiplicationFactor = 0.4;
     bondQuality = 32;
     groupBondsSeparately = false;
+    uniformAtomDiameter = false; // Reset new setting
+
+    // Clear from localStorage
+    if (browser) {
+      localStorage.removeItem('quality');
+      localStorage.removeItem('multiplicationFactor');
+      localStorage.removeItem('bondDiameterMultiplicationFactor');
+      localStorage.removeItem('bondQuality');
+      localStorage.removeItem('groupBondsSeparately');
+      localStorage.removeItem('showHydrogens');
+      localStorage.removeItem('uniformAtomDiameter');
+    }
 
     // If a model is currently displayed, redraw it with the default settings
     if (atomCoordinates.length > 0) {
       redrawModel(atomCoordinates);
     }
+  }
+
+  // Reactive statement to save settings to localStorage whenever they change
+  $: if (browser && settingsLoaded) {
+    localStorage.setItem('quality', String(quality));
+    localStorage.setItem('multiplicationFactor', String(multiplicationFactor));
+    localStorage.setItem('bondDiameterMultiplicationFactor', String(bondDiameterMultiplicationFactor));
+    localStorage.setItem('bondQuality', String(bondQuality));
+    localStorage.setItem('groupBondsSeparately', JSON.stringify(groupBondsSeparately));
+    localStorage.setItem('showHydrogens', JSON.stringify(showHydrogens));
+    localStorage.setItem('uniformAtomDiameter', JSON.stringify(uniformAtomDiameter));
   }
 
   // Input box editing state
@@ -727,8 +770,16 @@
                     <label for="bondQuality">{$_('bond_quality')}</label>
                     <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
 
-                    <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
-                    <input class="form-check-input" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
+                    <div class="d-flex flex-column gap-2">
+                      <div>
+                      <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
+                      <input class="form-check-input" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
+                      </div>
+                      <div>
+                      <label class="form-check-label" for="uniformAtomDiameterCheckbox">{$_('uniform_atom_diameter_checkbox')}</label>
+                      <input class="form-check-input" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               {/if}

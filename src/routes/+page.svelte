@@ -685,8 +685,8 @@
                       type="button"
                       on:click={resetSettingsToDefault}
                       class="btn btn-sm btn-link p-1 ms-2"
-                      title="Reset settings to default"
-                      aria-label="Reset settings to default"
+                      title={$_('reset_settings_to_default')}
+                      aria-label={$_('reset_settings_to_default')}
                       style="align: right;"
                     >
                       <span class="material-symbols-outlined" style="vertical-align: middle;">restart_alt</span>

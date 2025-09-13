@@ -40,6 +40,7 @@
     "download_template_button": "Stáhnout Předlohu",
     "download_model_button": "Stáhnout Model",
 
+    "reset_settings_to_default":"Obnovit výchozí nastavení",
     "multiplication_factor":"Násobící faktor",
     "bond_diameter_factor":"Násobící faktor vazby",
     "bond_quality":"Kvalita vazby",

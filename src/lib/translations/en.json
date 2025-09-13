@@ -40,6 +40,7 @@
     "download_template_button":"Download Template",
     "download_model_button":"Download Model",
 
+    "reset_settings_to_default":"Reset Settings to Default",
     "multiplication_factor":"Multiplication Factor",
     "bond_diameter_factor":"Bond Diameter Factor",
     "bond_quality":"Bond Quality",

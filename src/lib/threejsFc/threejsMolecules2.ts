@@ -22,6 +22,7 @@ interface LocalSelectedGeneratorParams {
     multiplicationFactor: number;
     coordinates?: AtomWithBonds[];
     originalCoordinates?: AtomWithBonds[];
+    groupBondsSeparately?: boolean;
 }
 
 export function setupThreeJS(canvas: HTMLCanvasElement) {
@@ -148,7 +149,8 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                     bondDiameterMultiplicationFactor,
                     bondQuality,
                     coordinates: centeredCoordinates as AtomWithBonds[],
-                    originalCoordinates: filteredCoordinates as AtomWithBonds[]
+                    originalCoordinates: filteredCoordinates as AtomWithBonds[],
+                    groupBondsSeparately
                 });
                 // ------------------------------------------------------------------
 
@@ -173,6 +175,28 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
                 }
                 // ---------------------------------------------
             });
+
+            // ---- NEW COLORING LOGIC ----
+            // When bonds are part of an atom's group, this ensures all meshes in that group (the atom and its bond halves) share the same color.
+            if (!groupBondsSeparately) {
+                Object.values(atomGroups).forEach(atomGroup => {
+                    // Find the atom sphere in the group to get its color. We assume the first Mesh found is the atom.
+                    const representativeAtom = atomGroup.children.find(child => child instanceof THREE.Mesh) as THREE.Mesh | undefined;
+
+                    if (representativeAtom && representativeAtom.material instanceof THREE.MeshStandardMaterial) {
+                        const atomColor = representativeAtom.material.color;
+                        const sharedMaterial = new THREE.MeshStandardMaterial({ color: atomColor });
+
+                        // Apply this single, shared material to all meshes in the group.
+                        atomGroup.traverse((child) => {
+                            if (child instanceof THREE.Mesh) {
+                                child.material = sharedMaterial;
+                            }
+                        });
+                    }
+                });
+            }
+            // If groupBondsSeparately is true, the bonds were already created grey and are in their own group, so no action is needed.
         }
 
         console.log('Group created and filled:', group);
@@ -403,7 +427,8 @@ export const createBallAndStickMesh = (params: UpdatedLocalSelectedGeneratorPara
                 // Move the cylinder's origin to its base for easy positioning and rotation.
                 cylinderGeometry.translate(0, halfBondLength / 2, 0);
 
-                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 }); // Grey for bonds
+                // Bonds are now always created grey. The final coloring is handled in createAtoms.
+                const bondMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
                 const cylinder = new THREE.Mesh(cylinderGeometry, bondMaterial);
 
                 // Position the cylinder's base at the center of the current atom.

@@ -108,7 +108,7 @@
   }
 
   // Functions
-  import { determineInputType, fetchPubChemData, fetchPDBData } from '$lib/molecules/inputs';
+  import { determineInputType, fetchPubChemDataWithAutocomplete, fetchPDBData } from '$lib/molecules/inputs';
 
   // Setters for table info and image
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
@@ -129,6 +129,7 @@
       coord.atomType === coords2[i].atomType
     );
   }
+
 
   // Handle form submission or reload
   async function handleSubmit() {
@@ -154,79 +155,89 @@
     isFileUploaded = false;
     showMoleculePopup = false;
 
-    const inputType = determineInputType(inputStr);
-
-    // Check for valid input types first
-    if (inputType !== "CID" && inputType !== "PDB") {
-      console.error("Unsupported input type.");
-      showMoleculePopup = true;
-      return;
-    }
-
     // Clear previous molecule info before fetching new data.
-    // This prevents using stale data (e.g., the old CID) if the new search fails.
+    // This prevents using stale data if the new search fails.
     setTableInfo("", "", "");
     setImage('');
 
-    if (inputType === "CID") {
-      await fetchPubChemData(inputStr, setTableInfo, setImage);
-    } else if (inputType === "PDB") {
-      await fetchPDBData(inputStr, setTableInfo, setImage);
-    }
-
-    // Store current coordinates before attempting to fetch new ones
+    const trimmedInput = inputStr.trim();
+    let nameToSaveForHistory = trimmedInput;
     let newAtomCoordinates: AtomCoordinate[] = [];
 
     try {
-      if (inputType === "CID") {
-        const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF?record_type=3d&response_type=display`;
-        const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${tableInfo.secondItem}/record/SDF`;
+      // --- Input Detection and Data Fetching ---
 
-        let response;
-        try {
-          response = await fetch(primaryUrl);
-          if (!response.ok) throw new Error("Primary URL failed");
-        } catch (error) {
-          console.error("Failed to fetch from primary URL, trying fallback:", error);
-          response = await fetch(fallbackUrl);
-          if (!response.ok) {
-            showMoleculePopup = true;
-            throw new Error("Fallback URL also failed");
-          }
-        }
-        const content = await response.text();
-        originalContent = content;
-        originalFileExtension = "sdf";
-        newAtomCoordinates = await parseSDF(content);
-      } else if (inputType === "PDB") {
-        const url = `https://files.rcsb.org/view/${inputStr}.pdb`;
+      // 2.3) Detect PDB code (e.g., 1CRN). A common format is a number followed by 3 alphanumeric chars.
+      const isPDB = /^[1-9][a-zA-Z0-9]{3}$/i.test(trimmedInput);
+
+      if (isPDB) {
+        await fetchPDBData(trimmedInput, setTableInfo, setImage);
+        nameToSaveForHistory = trimmedInput.toUpperCase(); // Save the PDB code to history
+
+        // Fetch and parse the PDB file
+        const url = `https://files.rcsb.org/view/${trimmedInput}.pdb`;
         const response = await fetch(url);
         if (!response.ok) {
-          showMoleculePopup = true;
           throw new Error("Failed to fetch PDB data");
         }
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "pdb";
         newAtomCoordinates = await parsePDB(content);
+      } else {
+        // 1), 2.1), 2.2) Treat as text, CID, or CAS number for PubChem search
+        // The helper function handles these different PubChem identifier types
+        nameToSaveForHistory = await fetchPubChemDataWithAutocomplete(trimmedInput, setTableInfo, setImage);
+
+        // The CID should now be populated in tableInfo.secondItem
+        const cid = tableInfo.secondItem;
+        if (!cid) {
+          throw new Error("PubChem could not find a molecule for the given input.");
+        }
+
+        // Fetch the SDF file using the CID found by the previous step
+        const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF?record_type=3d&response_type=display`;
+        const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF`;
+
+        let response;
+        try {
+          response = await fetch(primaryUrl);
+          if (!response.ok) throw new Error("Primary 3D URL failed, trying fallback 2D.");
+        } catch (error) {
+          console.warn("Failed to fetch from primary URL, trying fallback:", error);
+          response = await fetch(fallbackUrl);
+          if (!response.ok) {
+            throw new Error("Fallback URL also failed. Molecule data not available.");
+          }
+        }
+        const content = await response.text();
+        originalContent = content;
+        originalFileExtension = "sdf";
+        newAtomCoordinates = await parseSDF(content);
       }
 
-      // Check if no coordinates were found
+      // --- Post-Fetching Logic ---
+
+      // Check if no coordinates were found in the file
       if (newAtomCoordinates.length === 0) {
-        showMoleculePopup = true;
-        return;
+        throw new Error("No atom coordinates were found in the fetched file.");
       }
 
       // Only update atomCoordinates if we successfully got new data
       atomCoordinates = newAtomCoordinates;
 
-      // Check if coordinates are the same as previous ones
+      // Check if coordinates are the same as previous ones to enable reload mode
       if (areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
-        // Same data found - switch to reload mode
         isReloadMode = true;
       } else {
         // New data found - proceed normally
-        saveSearch();
+
+        // If the resolved name is too long, use the original user input for the history
+        if (nameToSaveForHistory.length > 50) {
+          nameToSaveForHistory = trimmedInput;
+        }
+
+        saveSearch(nameToSaveForHistory);
         prevAtomCoordinates = [...atomCoordinates];
         lastSuccessfulInput = inputStr;
         lastSuccessfulFileContent = originalContent;
@@ -235,6 +246,7 @@
       redrawModel(atomCoordinates);
 
       if (typeof resizeCanvas === "function") resizeCanvas();
+
     } catch (error) {
       console.error("Error fetching/parsing molecule data:", error);
       showMoleculePopup = true;
@@ -320,9 +332,10 @@
   }
 
   // Save search to history
-  function saveSearch() {
-    if (browser && inputStr.trim() !== '' && !searchHistory.includes(inputStr) && !showMoleculePopup) {
-      searchHistory = [inputStr, ...searchHistory.slice(0, 4)];
+  function saveSearch(nameToSave: string) {
+    const trimmedName = nameToSave.trim();
+    if (browser && trimmedName !== '' && !searchHistory.includes(trimmedName) && !showMoleculePopup) {
+      searchHistory = [trimmedName, ...searchHistory.slice(0, 4)];
       localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
     }
   }
@@ -660,7 +673,31 @@
           <tbody>
             <tr>
               <td style="width: 40%;">{tableInfo.firstItem}</td>
-              <td>{tableInfo.secondItem}</td>
+              <td>
+                {#if tableInfo.secondItem}
+                  {#if determineInputType(inputStr) === "CID" && !isFileUploaded}
+                    <a
+                      href="https://pubchem.ncbi.nlm.nih.gov/compound/{tableInfo.secondItem}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="pubchem-link"
+                    >
+                      {tableInfo.secondItem}
+                    </a>
+                  {:else if determineInputType(inputStr) === "PDB" && !isFileUploaded}
+                    <a
+                      href="https://www.rcsb.org/structure/{tableInfo.secondItem}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="pdb-link"
+                    >
+                      {tableInfo.secondItem}
+                    </a>
+                  {:else}
+                    {tableInfo.secondItem}
+                  {/if}
+                {/if}
+              </td>
               <td>{tableInfo.thirdItem}</td>
               <td rowspan="2" style="width: 200px;">
                 {#if imageUrl}
@@ -1119,5 +1156,29 @@ img {
 @keyframes slideIn {
   from { transform: translateY(-20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Add these styles to the existing <style> section */
+
+.pubchem-link, .pdb-link {
+  color: #0066cc;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.pubchem-link:hover, .pdb-link:hover {
+  color: #004499;
+  text-decoration: none;
+  border-bottom: 1px solid #004499;
+}
+
+.pubchem-link:visited, .pdb-link:visited {
+  color: #5533aa;
+}
+
+.pubchem-link:active, .pdb-link:active {
+  color: #002266;
 }
 </style>

@@ -46,6 +46,7 @@
     "bond_quality":"Kvalita vazby",
     "bonds_checbox":"Seskupit vazby zvlášť",
     "uniform_atom_diameter_checkbox":"Jednotný průměr atomů",
+    "show_multiple_bonds_checkbox":"Zobrazit násobné vazby",
 
     "no_molecule_found": "Žádná molekula nenalezena",
     "close_popup": "Zavřít okno",

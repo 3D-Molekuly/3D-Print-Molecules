@@ -11,6 +11,7 @@ export interface CreateAtomsParams {
     bondQuality: number;
     groupBondsSeparately: boolean;
     uniformAtomDiameter: boolean;
+    showMultipleBonds: boolean;
 }
 
 export interface SelectedGeneratorParams {

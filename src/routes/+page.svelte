@@ -3,7 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules2';
+  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
@@ -41,6 +41,7 @@
   let bondQuality = 32;
   let groupBondsSeparately = false;
   let uniformAtomDiameter = false;
+  let showMultipleBonds = false; // New setting for multiple bonds
 
   let originalContent: string = "";
   let originalFileExtension: string = "sdf";
@@ -77,6 +78,7 @@
       groupBondsSeparately = JSON.parse(localStorage.getItem('groupBondsSeparately') || 'false');
       showHydrogens = JSON.parse(localStorage.getItem('showHydrogens') || 'true');
       uniformAtomDiameter = JSON.parse(localStorage.getItem('uniformAtomDiameter') || 'false');
+      showMultipleBonds = JSON.parse(localStorage.getItem('showMultipleBonds') || 'false'); // Load new setting
 
       // Allow settings to be saved from now on
       settingsLoaded = true;
@@ -279,7 +281,8 @@
         ? {
             bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
             bondQuality: bondQuality,
-            groupBondsSeparately: groupBondsSeparately
+            groupBondsSeparately: groupBondsSeparately,
+            showMultipleBonds: showMultipleBonds // Add new setting to metadata
           }
         : {})
     };
@@ -309,7 +312,7 @@
         multiplicationFactor: multiplicationFactor,
         selectedGenerator: selectedGenerator,
         ...(selectedGenerator === createBallAndStickMesh
-          ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately, uniformAtomDiameter }
+          ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately, uniformAtomDiameter, showMultipleBonds }
           : {})
       };
       createAtoms(params);
@@ -457,7 +460,8 @@
     bondDiameterMultiplicationFactor = 0.4;
     bondQuality = 32;
     groupBondsSeparately = false;
-    uniformAtomDiameter = false; // Reset new setting
+    uniformAtomDiameter = false;
+    showMultipleBonds = false; // Reset new setting
 
     // Clear from localStorage
     if (browser) {
@@ -468,6 +472,7 @@
       localStorage.removeItem('groupBondsSeparately');
       localStorage.removeItem('showHydrogens');
       localStorage.removeItem('uniformAtomDiameter');
+      localStorage.removeItem('showMultipleBonds'); // Clear new setting
     }
 
     // If a model is currently displayed, redraw it with the default settings
@@ -485,6 +490,7 @@
     localStorage.setItem('groupBondsSeparately', JSON.stringify(groupBondsSeparately));
     localStorage.setItem('showHydrogens', JSON.stringify(showHydrogens));
     localStorage.setItem('uniformAtomDiameter', JSON.stringify(uniformAtomDiameter));
+    localStorage.setItem('showMultipleBonds', JSON.stringify(showMultipleBonds)); // Save new setting
   }
 
   // Input box editing state
@@ -816,6 +822,10 @@
                       <div>
                       <label class="form-check-label" for="uniformAtomDiameterCheckbox">{$_('uniform_atom_diameter_checkbox')}</label>
                       <input class="form-check-input" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
+                      </div>
+                      <div>
+                        <label class="form-check-label" for="showMultipleBondsCheckbox">{$_('show_multiple_bonds_checkbox') || 'Show Multiple Bonds'}</label>
+                        <input class="form-check-input" type="checkbox" id="showMultipleBondsCheckbox" bind:checked={showMultipleBonds}>
                       </div>
                     </div>
                   </td>

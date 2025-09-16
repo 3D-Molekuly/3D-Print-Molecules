@@ -46,6 +46,7 @@
     "bond_quality":"Bond Quality",
     "bonds_checbox":"Group Bonds Separately",
     "uniform_atom_diameter_checkbox":"Uniform Atom Diameter",
+    "show_multiple_bonds_checkbox":"Show Multiple Bonds",
 
     "no_molecule_found": "No molecule found",
     "close_popup":"Close Popup",

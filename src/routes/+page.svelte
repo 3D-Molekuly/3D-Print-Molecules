@@ -6,9 +6,12 @@
   import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
-  import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
+  import type { AtomCoordinate, CreateAtomsParams } from '$lib/molecules/molecularDataParser';
+  import { cifToSdf } from '$lib/utils/cifToSdf';
   import { buildLocalizedPath } from '$lib/functions/language';
   import InfoButton from '$lib/buttons/infoButton.svelte';
+  import { determineInputType, fetchPubChemDataWithAutocomplete, fetchPDBData } from '$lib/molecules/inputs';
+  import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte'; // <- NOVÝ IMPORT
 
   // Types
   let inputStr = '';
@@ -20,7 +23,7 @@
   let resizeCanvas: (() => void) | undefined;
   let canvas: HTMLCanvasElement | null = null;
 
-  let acceptFormats = '.sdf';
+  let acceptFormats = '.sdf, .pdb, .cif';
 
   let atomCoordinates: AtomCoordinate[] = [];
   let prevAtomCoordinates: AtomCoordinate[] = [];
@@ -41,22 +44,22 @@
   let bondQuality = 32;
   let groupBondsSeparately = false;
   let uniformAtomDiameter = false;
-  let showMultipleBonds = false; // New setting for multiple bonds
+  let showMultipleBonds = false;
 
   let originalContent: string = "";
   let originalFileExtension: string = "sdf";
 
   let showMoleculePopup = false;
-
-  // Flag to prevent overwriting localStorage on initial load
   let settingsLoaded = false;
-
-  // New variables for reload functionality
   let isReloadMode = false;
   let lastSuccessfulInput = '';
   let lastSuccessfulFileContent = '';
+  let isFileUploaded: boolean = false;
+  let uploadedFileName: string = "";
+  
+  // Nová proměnná pro zobrazení popupu
+  let showAdvancedSearch = false; 
 
-  // Lifecycle
   onMount(() => {
     if (browser) {
       initialize();
@@ -67,9 +70,14 @@
   });
 
   async function initialize() {
+
+    if (browser) {
+      sessionStorage.removeItem('atomCoordinates');
+      sessionStorage.removeItem('lastSuccessfulInput');
+    }
+
     searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
 
-    // Load saved settings from localStorage, with defaults
     if (browser) {
       multiplicationFactor = parseFloat(localStorage.getItem('multiplicationFactor') || '1.0');
       bondDiameterMultiplicationFactor = parseFloat(localStorage.getItem('bondDiameterMultiplicationFactor') || '0.4');
@@ -78,9 +86,7 @@
       groupBondsSeparately = JSON.parse(localStorage.getItem('groupBondsSeparately') || 'false');
       showHydrogens = JSON.parse(localStorage.getItem('showHydrogens') || 'true');
       uniformAtomDiameter = JSON.parse(localStorage.getItem('uniformAtomDiameter') || 'false');
-      showMultipleBonds = JSON.parse(localStorage.getItem('showMultipleBonds') || 'false'); // Load new setting
-
-      // Allow settings to be saved from now on
+      showMultipleBonds = JSON.parse(localStorage.getItem('showMultipleBonds') || 'false');
       settingsLoaded = true;
     }
 
@@ -92,15 +98,27 @@
 
     try {
       const storedCoordinates = sessionStorage.getItem('atomCoordinates');
-      atomCoordinates = storedCoordinates ? JSON.parse(storedCoordinates) : [];
-      prevAtomCoordinates = atomCoordinates;
+      const storedInput = sessionStorage.getItem('lastSuccessfulInput');
+      
+      if (storedCoordinates) {
+        atomCoordinates = JSON.parse(storedCoordinates);
+        prevAtomCoordinates = atomCoordinates;
+        lastSuccessfulInput = storedInput || '';
+        inputStr = lastSuccessfulInput;
+        isReloadMode = atomCoordinates.length > 0; // Set reload mode if there's a model
+      }
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
 
       const cleanup = setupCanvasResizing(canvas, updateCanvasSize);
+      resizeCanvas = updateCanvasSize;
       createAtoms = generatedCreateAtoms;
       animate();
 
+      if (atomCoordinates.length > 0) {
+        redrawModel(atomCoordinates); // Redraw existing model on init
+      }
+      
       return () => {
         cleanup();
       };
@@ -109,10 +127,6 @@
     }
   }
 
-  // Functions
-  import { determineInputType, fetchPubChemDataWithAutocomplete, fetchPDBData } from '$lib/molecules/inputs';
-
-  // Setters for table info and image
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
     tableInfo = { firstItem, secondItem, thirdItem };
   }
@@ -121,7 +135,6 @@
     imageUrl = url;
   }
 
-  // Check if two sets of coordinates are equal
   function areCoordinatesEqual(coords1: AtomCoordinate[], coords2: AtomCoordinate[]): boolean {
     if (coords1.length !== coords2.length) return false;
     return coords1.every((coord, i) =>
@@ -132,33 +145,22 @@
     );
   }
 
-
   // Handle form submission or reload
   async function handleSubmit() {
-    // If input is empty, show popup and return
-    if (!inputStr.trim()) {
-      showMoleculePopup = true;
+    // If input is empty, do nothing. The gear button handles opening the advanced search.
+    if (!inputStr.trim() && !isReloadMode) {
       return;
     }
 
-    // First, check if this is a reload action.
-    // This happens if the reload mode is already active, or if the input
-    // hasn't changed from the last successful search.
-    if (isReloadMode || (inputStr === lastSuccessfulInput && atomCoordinates.length > 0)) {
-      isReloadMode = true; // Ensure the state is correct for the UI
+    // If reload mode is active, just redraw the current model with new settings
+    if (isReloadMode && inputStr === lastSuccessfulInput) {
       redrawModel(atomCoordinates);
       if (typeof resizeCanvas === "function") resizeCanvas();
-      return; // We're done, no need to fetch new data.
+      return;
     }
 
-    // If we've reached this point, it's a NEW search.
-    // Reset states for the new search.
-    isReloadMode = false;
+    // --- Start a new search ---
     isFileUploaded = false;
-    showMoleculePopup = false;
-
-    // Clear previous molecule info before fetching new data.
-    // This prevents using stale data if the new search fails.
     setTableInfo("", "", "");
     setImage('');
 
@@ -167,91 +169,102 @@
     let newAtomCoordinates: AtomCoordinate[] = [];
 
     try {
-      // --- Input Detection and Data Fetching ---
-
-      // 2.3) Detect PDB code (e.g., 1CRN). A common format is a number followed by 3 alphanumeric chars.
       const isPDB = /^[1-9][a-zA-Z0-9]{3}$/i.test(trimmedInput);
 
       if (isPDB) {
         await fetchPDBData(trimmedInput, setTableInfo, setImage);
-        nameToSaveForHistory = trimmedInput.toUpperCase(); // Save the PDB code to history
-
-        // Fetch and parse the PDB file
+        nameToSaveForHistory = trimmedInput.toUpperCase();
         const url = `https://files.rcsb.org/view/${trimmedInput}.pdb`;
         const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error("Failed to fetch PDB data");
-        }
+        if (!response.ok) throw new Error("Failed to fetch PDB data");
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "pdb";
         newAtomCoordinates = await parsePDB(content);
       } else {
-        // 1), 2.1), 2.2) Treat as text, CID, or CAS number for PubChem search
-        // The helper function handles these different PubChem identifier types
         nameToSaveForHistory = await fetchPubChemDataWithAutocomplete(trimmedInput, setTableInfo, setImage);
-
-        // The CID should now be populated in tableInfo.secondItem
         const cid = tableInfo.secondItem;
-        if (!cid) {
-          throw new Error("PubChem could not find a molecule for the given input.");
-        }
-
-        // Fetch the SDF file using the CID found by the previous step
+        if (!cid) throw new Error("PubChem could not find a molecule for the given input.");
+        
         const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF?record_type=3d&response_type=display`;
         const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF`;
-
-        let response;
-        try {
-          response = await fetch(primaryUrl);
-          if (!response.ok) throw new Error("Primary 3D URL failed, trying fallback 2D.");
-        } catch (error) {
-          console.warn("Failed to fetch from primary URL, trying fallback:", error);
-          response = await fetch(fallbackUrl);
-          if (!response.ok) {
-            throw new Error("Fallback URL also failed. Molecule data not available.");
-          }
-        }
+        let response = await fetch(primaryUrl).catch(() => fetch(fallbackUrl));
+        if (!response.ok) throw new Error("Molecule data not available.");
+        
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "sdf";
         newAtomCoordinates = await parseSDF(content);
       }
 
-      // --- Post-Fetching Logic ---
-
-      // Check if no coordinates were found in the file
       if (newAtomCoordinates.length === 0) {
         throw new Error("No atom coordinates were found in the fetched file.");
       }
 
-      // Only update atomCoordinates if we successfully got new data
       atomCoordinates = newAtomCoordinates;
 
-      // Check if coordinates are the same as previous ones to enable reload mode
-      if (areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
-        isReloadMode = true;
-      } else {
-        // New data found - proceed normally
-
-        // If the resolved name is too long, use the original user input for the history
+      if (!areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
         if (nameToSaveForHistory.length > 50) {
           nameToSaveForHistory = trimmedInput;
         }
-
         saveSearch(nameToSaveForHistory);
-        prevAtomCoordinates = [...atomCoordinates];
-        lastSuccessfulInput = inputStr;
-        lastSuccessfulFileContent = originalContent;
       }
+      
+      prevAtomCoordinates = [...atomCoordinates];
+      lastSuccessfulInput = inputStr;
+      lastSuccessfulFileContent = originalContent;
+      sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
 
       redrawModel(atomCoordinates);
-
+      isReloadMode = true; // Set to true after a successful fetch
       if (typeof resizeCanvas === "function") resizeCanvas();
-
     } catch (error) {
       console.error("Error fetching/parsing molecule data:", error);
       showMoleculePopup = true;
+      isReloadMode = false; // Failed, so disable reload mode
+    }
+  }
+
+  // Nová funkce pro zpracování pokročilého vyhledávání
+  async function handleAdvancedSearch(event: CustomEvent) {
+    const { source, query, content } = event.detail;
+
+    setTableInfo("", "", "");
+    setImage('');
+    isFileUploaded = false; 
+
+    if (source === 'pubchem') {
+      inputStr = query;
+      isReloadMode = false; // Treat as a new search
+      handleSubmit();
+    } else if (source === 'cod') {
+      try {
+        originalContent = content;
+        originalFileExtension = "sdf"; // It's already converted to SDF
+        isFileUploaded = true; // Treat it like a file for naming purposes
+        uploadedFileName = `COD_${query}`;
+
+        atomCoordinates = await parseSDF(content);
+        if (atomCoordinates.length === 0) {
+          throw new Error("Failed to parse SDF content from COD.");
+        }
+
+        setTableInfo(`COD Entry: ${query}`, query, "Converted from CIF format");
+        setImage('https://www.crystallography.net/cod/images/cod-logo.png');
+
+        prevAtomCoordinates = [...atomCoordinates];
+        lastSuccessfulFileContent = content;
+        lastSuccessfulInput = `COD: ${query}`;
+        inputStr = lastSuccessfulInput; // Update input field to reflect the search
+        sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
+
+        redrawModel(atomCoordinates);
+        isReloadMode = true; // Enable reload after success
+      } catch (error) {
+        console.error("Error processing data from COD:", error);
+        showMoleculePopup = true;
+        isReloadMode = false;
+      }
     }
   }
 
@@ -262,7 +275,6 @@
     }
   }
 
-  // Download functions
   async function downloadModel() {
     if (atomCoordinates.length === 0) {
       showMoleculePopup = true;
@@ -282,7 +294,7 @@
             bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
             bondQuality: bondQuality,
             groupBondsSeparately: groupBondsSeparately,
-            showMultipleBonds: showMultipleBonds // Add new setting to metadata
+            showMultipleBonds: showMultipleBonds
           }
         : {})
     };
@@ -299,14 +311,12 @@
     exportModelAsSTL(fileName);
   }
 
-  // Redraw model with new coordinates
-  function redrawModel(atomCoordinates: AtomCoordinate[]) {
-    sessionStorage.setItem('atomCoordinates', JSON.stringify(atomCoordinates));
-    console.log("redrawModel function initiated");
-    console.log(atomCoordinates);
+  function redrawModel(coords: AtomCoordinate[]) {
+    if (coords.length === 0) return;
+    sessionStorage.setItem('atomCoordinates', JSON.stringify(coords));
     if (typeof createAtoms === "function") {
       const params: CreateAtomsParams = {
-        coordinates: atomCoordinates,
+        coordinates: coords,
         quality: quality,
         showHydrogens: showHydrogens,
         multiplicationFactor: multiplicationFactor,
@@ -317,12 +327,10 @@
       };
       createAtoms(params);
     } else {
-      console.log("createAtoms function not initialized");
-      console.error("Function not initialized");
+      console.error("createAtoms function not initialized");
     }
   }
 
-  // Update file name based on input or upload
   function updateFileName() {
     let name = "molecule";
     if (isFileUploaded) {
@@ -331,10 +339,8 @@
       name = `Molecule_${tableInfo.secondItem}`;
     }
     fileName = name;
-    console.log("Updated file name:", fileName);
   }
 
-  // Save search to history
   function saveSearch(nameToSave: string) {
     const trimmedName = nameToSave.trim();
     if (browser && trimmedName !== '' && !searchHistory.includes(trimmedName) && !showMoleculePopup) {
@@ -345,7 +351,7 @@
 
   function handleHistoryClick(item: string) {
     inputStr = item;
-    // Reset reload mode when selecting from history
+    // Check if it's a new search or the same as the last successful one
     if (inputStr !== lastSuccessfulInput) {
       isReloadMode = false;
     }
@@ -356,56 +362,66 @@
     searchHistory = [];
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
   }
-
-  // File upload handling
-  let uploadedFileName: string = "";
-  let isFileUploaded: boolean = false;
-
+  
   function handleFiles(files: FileList) {
     if (files && files.length > 0) {
       const file = files[0];
       const fileExtension = file.name.split('.').pop()?.toLowerCase();
-
-      if (fileExtension === 'pdb' || fileExtension === 'sdf') {
-        uploadedFileName = file.name.split('.').slice(0, -1).join('.');
-        isFileUploaded = true;
-        // Reset reload mode when new file is uploaded
-        isReloadMode = false;
-        setTableInfo(file.name, "", "");
-        setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-          const content = e.target?.result as string;
-          originalContent = content;
-          originalFileExtension = fileExtension;
-          try {
-            atomCoordinates = fileExtension === 'pdb' ? await parsePDB(content) : await parseSDF(content);
-            if (atomCoordinates.length === 0) {
-              showMoleculePopup = true;
-              return;
-            }
-
-            // Check if coordinates are the same as previous ones
-            if (areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
-              // Same data found - switch to reload mode
-              isReloadMode = true;
-            } else {
-              // New data found - proceed normally
-              prevAtomCoordinates = [...atomCoordinates];
-              lastSuccessfulFileContent = content;
-            }
-
-            redrawModel(atomCoordinates);
-          } catch (error) {
-            console.error("Error parsing uploaded file:", error);
-            showMoleculePopup = true;
-          }
-        };
-        reader.readAsText(file);
-      } else {
+      
+      if (!['pdb', 'sdf', 'cif'].includes(fileExtension || '')) {
         showMoleculePopup = true;
+        return;
       }
+      
+      isReloadMode = false; // New file means it's a new action, not a reload
+      uploadedFileName = file.name.split('.').slice(0, -1).join('.');
+      isFileUploaded = true;
+      setTableInfo(file.name, `Uploaded .${fileExtension} file`, "");
+      setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
+      inputStr = `File: ${file.name}`; // Update input field
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const content = e.target?.result as string;
+        
+        try {
+          let newAtomCoordinates: AtomCoordinate[] = [];
+
+          if (fileExtension === 'pdb') {
+            originalContent = content;
+            originalFileExtension = 'pdb';
+            newAtomCoordinates = await parsePDB(content);
+          } else if (fileExtension === 'sdf') {
+            originalContent = content;
+            originalFileExtension = 'sdf';
+            newAtomCoordinates = await parseSDF(content);
+          } else if (fileExtension === 'cif') {
+            // Convert CIF content to SDF format
+            const sdfContent = await cifToSdf(content);
+            originalContent = sdfContent; // Save the converted content
+            originalFileExtension = 'sdf';
+            newAtomCoordinates = await parseSDF(sdfContent);
+          }
+
+          if (newAtomCoordinates.length === 0) {
+            throw new Error(`No atoms found in the uploaded file: ${file.name}`);
+          }
+
+          atomCoordinates = newAtomCoordinates;
+          prevAtomCoordinates = [...atomCoordinates];
+          lastSuccessfulFileContent = originalContent;
+          lastSuccessfulInput = inputStr; // Store the "File: ..." string
+          sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
+
+          redrawModel(atomCoordinates);
+          isReloadMode = true; // Enable reload after successful upload
+        } catch (error) {
+          console.error("Error parsing uploaded file:", error);
+          showMoleculePopup = true;
+          isReloadMode = false;
+        }
+      };
+      reader.readAsText(file);
     }
   }
 
@@ -416,7 +432,6 @@
     }
   }
 
-  // Drag and drop state
   let isDragging = false;
   let dragCounter = 0;
 
@@ -451,19 +466,16 @@
     }
   }
 
-  // Reset settings to their default values
   function resetSettingsToDefault() {
     quality = 50;
-    //selectedGenerator = modelGenerators[0].func;
     showHydrogens = true;
     multiplicationFactor = 1.0;
     bondDiameterMultiplicationFactor = 0.4;
     bondQuality = 32;
     groupBondsSeparately = false;
     uniformAtomDiameter = false;
-    showMultipleBonds = false; // Reset new setting
+    showMultipleBonds = false;
 
-    // Clear from localStorage
     if (browser) {
       localStorage.removeItem('quality');
       localStorage.removeItem('multiplicationFactor');
@@ -472,16 +484,14 @@
       localStorage.removeItem('groupBondsSeparately');
       localStorage.removeItem('showHydrogens');
       localStorage.removeItem('uniformAtomDiameter');
-      localStorage.removeItem('showMultipleBonds'); // Clear new setting
+      localStorage.removeItem('showMultipleBonds');
     }
 
-    // If a model is currently displayed, redraw it with the default settings
     if (atomCoordinates.length > 0) {
       redrawModel(atomCoordinates);
     }
   }
 
-  // Reactive statement to save settings to localStorage whenever they change
   $: if (browser && settingsLoaded) {
     localStorage.setItem('quality', String(quality));
     localStorage.setItem('multiplicationFactor', String(multiplicationFactor));
@@ -490,23 +500,14 @@
     localStorage.setItem('groupBondsSeparately', JSON.stringify(groupBondsSeparately));
     localStorage.setItem('showHydrogens', JSON.stringify(showHydrogens));
     localStorage.setItem('uniformAtomDiameter', JSON.stringify(uniformAtomDiameter));
-    localStorage.setItem('showMultipleBonds', JSON.stringify(showMultipleBonds)); // Save new setting
+    localStorage.setItem('showMultipleBonds', JSON.stringify(showMultipleBonds));
   }
 
-  // Input box editing state
-  let isEditing = false; //editing state for quality input box
+  let isEditing = false;
+  function enableEditing() { isEditing = true; }
+  function disableEditing() { isEditing = false; }
 
-  function enableEditing() {
-    isEditing = true;
-  }
-
-  function disableEditing() {
-    isEditing = false;
-  }
-
-  // Collapsible menu state
   let isCollapsed = typeof window !== 'undefined' && localStorage.getItem('menuCollapsed') !== 'false';
-
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
     localStorage.setItem('menuCollapsed', isCollapsed.toString());
@@ -517,12 +518,10 @@
     }, 350);
   }
 
-  // iOS detection for file input accept attribute
   function isIOS() {
-    return /iPad|iPhone|iPod/.test(navigator.userAgent);
+    return typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
   }
 
-  // Save canvas as image
   function saveCanvasAsImage() {
     if (atomCoordinates.length === 0) {
       showMoleculePopup = true;
@@ -554,23 +553,20 @@
     URL.revokeObjectURL(link.href);
   }
 
-  // Helper to focus an element on mount for accessibility
   function focusOnMount(element: HTMLElement) {
     if (element) {
-      // Defer focus until next tick to ensure element is rendered and visible
       setTimeout(() => element.focus(), 0);
     }
   }
 
-  // Popup keyboard accessibility
   function handlePopupKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
+    if (event.key === "Enter" || event.key === "Escape") {
       showMoleculePopup = false;
     }
   }
 
-  // Reset reload mode when input changes
   function handleInputChange() {
+    // If user types something different than what's loaded, exit reload mode
     if (inputStr !== lastSuccessfulInput) {
       isReloadMode = false;
     }
@@ -602,28 +598,39 @@
               placeholder={$_('search_field')}
               aria-label="Search"
             />
-            {#if inputStr}
-              <button
-                type="button"
-                class="btn-close"
-                aria-label="Clear"
-                on:click={() => {
-                  inputStr = '';
-                  isReloadMode = false;
-                }}
-                style="position: absolute; right: 25px; top: 50%; transform: translateY(-50%);"
-              ></button>
-            {/if}
+            <div class="input-group-append-custom">
+              {#if inputStr}
+                <button
+                  type="button"
+                  class="btn-close"
+                  aria-label="Clear"
+                  on:click={() => {
+                    inputStr = '';
+                    isReloadMode = false;
+                  }}
+                ></button>
+              {:else}
+                <button 
+                  class="btn btn-icon" 
+                  on:click={() => showAdvancedSearch = true} 
+                  title="Advanced Search"
+                  aria-label="Advanced Search"
+                >
+                  <span class="material-symbols-outlined">settings</span>
+                </button>
+              {/if}
+            </div>
 
             {#if searchHistory.length > 0}
               <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
                 {#each searchHistory as item, index}
                   <li>
-                    <a class="dropdown-item" href="/" on:click={() => handleHistoryClick(item)}>
+                    <a class="dropdown-item" href="#" on:click|preventDefault={() => handleHistoryClick(item)}>
                       {item}
                     </a>
                   </li>
                 {/each}
+                <li><hr class="dropdown-divider"></li>
                 <li>
                   <button
                     type="button"
@@ -654,7 +661,6 @@
 
           <button
             on:click={handleSubmit}
-            on:keydown={handleKeyPress}
             class="btn btn-primary button-with-icon d-flex align-items-center main-search-line"
             class:btn-warning={isReloadMode}
             role="button"
@@ -786,15 +792,7 @@
                   </select>
                 </td>
               </tr>
-              {#if selectedGenerator === createSphereMesh}
-                <tr>
-                  <td>
-                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                  </td>
-                </tr>
-              {/if}
-              {#if selectedGenerator === createCubeMesh}
+              {#if selectedGenerator === createSphereMesh || selectedGenerator === createCubeMesh || selectedGenerator === createStickMesh}
                 <tr>
                   <td>
                     <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
@@ -814,35 +812,27 @@
                     <label for="bondQuality">{$_('bond_quality')}</label>
                     <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
 
-                    <div class="d-flex flex-column gap-2">
+                    <div class="d-flex flex-column gap-2 mt-2">
                       <div>
+                      <input class="form-check-input me-2" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
                       <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
-                      <input class="form-check-input" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
                       </div>
                       <div>
+                      <input class="form-check-input me-2" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
                       <label class="form-check-label" for="uniformAtomDiameterCheckbox">{$_('uniform_atom_diameter_checkbox')}</label>
-                      <input class="form-check-input" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
                       </div>
                       <div>
+                        <input class="form-check-input me-2" type="checkbox" id="showMultipleBondsCheckbox" bind:checked={showMultipleBonds}>
                         <label class="form-check-label" for="showMultipleBondsCheckbox">{$_('show_multiple_bonds_checkbox') || 'Show Multiple Bonds'}</label>
-                        <input class="form-check-input" type="checkbox" id="showMultipleBondsCheckbox" bind:checked={showMultipleBonds}>
                       </div>
                     </div>
                   </td>
                 </tr>
               {/if}
-              {#if selectedGenerator === createStickMesh}
-                <tr>
-                  <td>
-                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                  </td>
-                </tr>
-              {/if}
               <tr>
                 <td>
+                  <input class="form-check-input me-2" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
                   <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
-                  <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
                 </td>
                 <td>
                   <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
@@ -869,7 +859,7 @@
       <div class="col-md-4">
         <div class="canvas-container" id="canvasContainer">
           <div class="canvas-controls">
-            <button class="btn" on:click={saveCanvasAsImage}>
+            <button class="btn" on:click={saveCanvasAsImage} title="Save as image">
               <span class="material-symbols-outlined canvas-control">photo_camera</span>
             </button>
             <button class="btn" on:click={() => {
@@ -881,7 +871,7 @@
                   document.exitFullscreen();
                 }
               }
-            }}>
+            }} title="Fullscreen">
               <span class="material-symbols-outlined canvas-control">fullscreen</span>
             </button>
           </div>
@@ -903,6 +893,8 @@
     <div
       class="popup-overlay"
       tabindex="-1"
+      role="alertdialog"
+      aria-modal="true"
       use:focusOnMount
       on:keydown={handlePopupKeydown}
       on:click={() => showMoleculePopup = false}
@@ -920,6 +912,8 @@
   {/if}
 </div>
 
+<AdvancedSearchPopup bind:show={showAdvancedSearch} on:search={handleAdvancedSearch} on:close={() => showAdvancedSearch = false}/>
+
 <InfoButton title={$_('infobox_tittle')}>
   <div>
     {@html $_('infobox_helptext')}
@@ -935,23 +929,20 @@
 </InfoButton>
 
 <style>
+/* ... (všechny vaše stávající styly z původního souboru) ... */
 .main-content {
   margin-bottom: 2rem;
 }
-
 .main-search-line {
   height: 65px;
 }
-
 .container {
   display: flex;
   flex-direction: column;
 }
-
 img {
   object-fit: cover;
 }
-
 .image-placeholder {
   display: flex;
   justify-content: center;
@@ -963,44 +954,36 @@ img {
   font-size: 14px;
   text-align: center;
 }
-
 .quality-container {
   display: flex;
   align-items: center;
 }
-
 .form-range {
   width: 150px;
 }
-
 @media (min-width: 768px) {
   .row {
     display: flex;
     flex-direction: row;
   }
-
   .col-md-4 {
     display: flex;
     align-items: flex-start;
     height: fit-content;
   }
-
   .canvas-container {
     height: 100%;
     max-height: none;
   }
-
   #threeCanvas {
     max-height: none;
   }
 }
-
 @media (max-width: 767px) {
   .row {
     display: flex;
     flex-direction: column;
   }
-
   .col-md-4 {
     display: flex;
     justify-content: center;
@@ -1008,12 +991,10 @@ img {
     margin-top: 40px;
   }
 }
-
 .full-page-drop-zone {
   width: 100%;
   position: relative;
 }
-
 .drag-overlay {
   position: fixed;
   top: 0;
@@ -1026,7 +1007,6 @@ img {
   align-items: center;
   z-index: 1000;
 }
-
 .drag-message {
   font-size: 2rem;
   color: white;
@@ -1034,7 +1014,6 @@ img {
   padding: 20px;
   border-radius: 10px;
 }
-
 .editable-button {
   background: none;
   border: none;
@@ -1043,18 +1022,15 @@ img {
   font: inherit;
   cursor: pointer;
 }
-
 .editable-button:hover,
 .editable-button:focus {
   outline: 1px dashed #ccc;
 }
-
 .canvas-container {
   position: relative;
   width: 100%;
   max-height: 100vh;
 }
-
 .canvas-container:fullscreen {
   background: rgb(255, 255, 255);
   padding: 20px;
@@ -1062,19 +1038,16 @@ img {
   justify-content: center;
   align-items: center;
 }
-
 .canvas-container:fullscreen canvas {
   width: 100% !important;
   height: 100% !important;
   border: none !important;
 }
-
 .canvas-container:fullscreen .canvas-controls {
   position: fixed;
   top: 20px;
   right: 20px;
 }
-
 .canvas-controls {
   position: absolute;
   top: 10px;
@@ -1083,7 +1056,6 @@ img {
   display: flex;
   gap: 5px;
 }
-
 .canvas-controls button {
   display: flex;
   align-items: center;
@@ -1093,29 +1065,24 @@ img {
   width: 31px;
   line-height: 1;
 }
-
 .canvas-controls .material-symbols-outlined {
   font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
 .canvas-controls button:hover {
   background-color: rgb(195, 195, 195);
 }
-
 .material-symbols-outlined.canvas-control {
   margin: 0;
   padding: 0;
   display: inline-block;
 }
-
 #threeCanvas {
   max-height: 100vh;
   object-fit: contain;
 }
-
 .popup-overlay {
   position: fixed;
   top: 0;
@@ -1129,7 +1096,6 @@ img {
   justify-content: center;
   animation: fadeIn 0.3s ease-in-out;
 }
-
 .popup-content {
   background: #fff;
   border-radius: 12px;
@@ -1140,36 +1106,28 @@ img {
   max-width: 400px;
   animation: slideIn 0.3s ease-in-out;
 }
-
 .popup-content .material-symbols-outlined {
   font-size: 48px;
   color: #d32f2f;
   margin-bottom: 16px;
 }
-
 .popup-content div {
   font-size: 1.2rem;
   margin-bottom: 20px;
   color: #333;
 }
-
 .popup-content .btn-warning {
   padding: 8px 24px;
   font-weight: 500;
 }
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-
 @keyframes slideIn {
   from { transform: translateY(-20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
-
-/* Add these styles to the existing <style> section */
-
 .pubchem-link, .pdb-link {
   color: #0066cc;
   text-decoration: none;
@@ -1177,18 +1135,37 @@ img {
   border-bottom: 1px solid transparent;
   transition: all 0.2s ease;
 }
-
 .pubchem-link:hover, .pdb-link:hover {
   color: #004499;
   text-decoration: none;
   border-bottom: 1px solid #004499;
 }
 
-.pubchem-link:visited, .pdb-link:visited {
-  color: #5533aa;
+/* NOVÉ STYLY pro tlačítko s kolečkem v inputu */
+.input-group {
+  position: relative;
 }
-
-.pubchem-link:active, .pdb-link:active {
-  color: #002266;
+.input-group-append-custom {
+  position: absolute;
+  right: 1.5rem; /* Upravte podle potřeby, aby sedělo vedle 'me-2' na inputu */
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+.btn.btn-icon {
+  background: transparent;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+  color: #6c757d; /* Neutrální barva */
+}
+.btn.btn-icon:hover {
+  color: #212529; /* Tmavší barva při najetí */
+}
+.main-search-line.form-control {
+  padding-right: 3.5rem; /* Uvolní místo pro tlačítko */
 }
 </style>

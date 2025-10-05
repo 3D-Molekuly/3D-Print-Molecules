@@ -12,7 +12,7 @@
         <a href="/" class="mb-3 me-2 mb-md-0 text-muted text-decoration-none lh-1">
           <img src={logo} alt="Logo" width="20" height="20" />
         </a>
-        <span class="mb-3 mb-md-0 text-muted">3DP MLC ©2024</span>
+        <span class="mb-3 mb-md-0 text-muted">3DP MLC ©2025</span>
       </div>
 
       <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">

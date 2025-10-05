@@ -1,6 +1,6 @@
 <script lang="ts">
-  // případně importovat nějaké datové struktury či obrázky
-  // např. import logo from '$lib/assets/logo.svg';
+    import vscht from '$lib/images/logoVSCHT.svg';
+    import lf1 from '$lib/images/logo1LF.svg';
 </script>
 
 <style>
@@ -82,10 +82,10 @@
   </p>
     <div class="logos-container">
         <a href="https://kuhv.vscht.cz" target="_blank" rel="noopener noreferrer" title="Ústav učitelství chemie a humanitních věd VŠCHT Praha">
-            <img src="/src/lib/images/logoVSCHT.svg" alt="Logo Ústavu učitelství chemie a humanitních věd VŠCHT Praha" class="logo" style="color:red;">
+            <img src={vscht} alt="Logo Ústavu učitelství chemie a humanitních věd VŠCHT Praha" class="logo" style="color:red;">
         </a>
         <a href="https://www.lf1.cuni.cz" target="_blank" rel="noopener noreferrer" title="1. lékařská fakulta Univerzity Karlovy">
-            <img src="/src/lib/images/logo1LF.svg" alt="Logo 1. lékařské fakulty Univerzity Karlovy" class="logo" style="color:blue;">
+            <img src={lf1} alt="Logo 1. lékařské fakulty Univerzity Karlovy" class="logo" style="color:blue;">
         </a>
     </div>
 

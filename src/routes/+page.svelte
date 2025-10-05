@@ -785,7 +785,6 @@
                       class="btn btn-sm btn-link p-1 ms-2"
                       title={$_('reset_settings_to_default')}
                       aria-label={$_('reset_settings_to_default')}
-                      style="align: right;"
                     >
                       <span class="material-symbols-outlined" style="vertical-align: middle;">restart_alt</span>
                     </button>
@@ -797,57 +796,71 @@
                   </select>
                 </td>
               </tr>
-              {#if selectedGenerator === createSphereMesh || selectedGenerator === createCubeMesh || selectedGenerator === createStickMesh}
-                <tr>
-                  <td>
-                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
-                  </td>
-                </tr>
-              {/if}
-              {#if selectedGenerator === createBallAndStickMesh}
-                <tr>
-                  <td>
-                    <label for="multiplicationFactor">{$_('multiplication_factor')}</label>
-                    <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
 
-                    <label for="bondDiameterFactor">{$_('bond_diameter_factor')}</label>
-                    <input type="number" id="bondDiameterFactor" bind:value={bondDiameterMultiplicationFactor} step="0.1" min="0.1" class="form-control w-auto">
+              <tr>
+                <td colspan="2">
+                  <div class="row mt-3">
+                    <div class="col-md-6">
+                      <div class="d-flex flex-column gap-3">
+                        {#if selectedGenerator === createSphereMesh || selectedGenerator === createCubeMesh || selectedGenerator === createStickMesh || selectedGenerator === createBallAndStickMesh}
+                          <div>
+                            <label for="multiplicationFactor" class="form-label">{$_('multiplication_factor')}</label>
+                            <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control">
+                          </div>
+                        {/if}
 
-                    <label for="bondQuality">{$_('bond_quality')}</label>
-                    <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control w-auto">
-
-                    <div class="d-flex flex-column gap-2 mt-2">
-                      <div>
-                      <input class="form-check-input me-2" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
-                      <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
-                      </div>
-                      <div>
-                      <input class="form-check-input me-2" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
-                      <label class="form-check-label" for="uniformAtomDiameterCheckbox">{$_('uniform_atom_diameter_checkbox')}</label>
-                      </div>
-                      <div>
-                        <input class="form-check-input me-2" type="checkbox" id="showMultipleBondsCheckbox" bind:checked={showMultipleBonds}>
-                        <label class="form-check-label" for="showMultipleBondsCheckbox">{$_('show_multiple_bonds_checkbox') || 'Show Multiple Bonds'}</label>
+                        {#if selectedGenerator === createBallAndStickMesh}
+                          <div>
+                            <label for="bondDiameterFactor" class="form-label">{$_('bond_diameter_factor')}</label>
+                            <input type="number" id="bondDiameterFactor" bind:value={bondDiameterMultiplicationFactor} step="0.1" min="0.1" class="form-control">
+                          </div>
+                          <div>
+                            <label for="bondQuality" class="form-label">{$_('bond_quality')}</label>
+                            <input type="number" id="bondQuality" bind:value={bondQuality} step="1" min="10" class="form-control">
+                          </div>
+                        {/if}
                       </div>
                     </div>
-                  </td>
-                </tr>
-              {/if}
-              <tr>
-                <td>
-                  <input class="form-check-input me-2" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
-                  <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
+
+                    <div class="col-md-6">
+                      <div class="d-flex flex-column gap-3">
+                        <div class="form-check pt-4">
+                          <input class="form-check-input" type="checkbox" id="hydrogensCheckbox" bind:checked={showHydrogens}>
+                          <label class="form-check-label" for="hydrogensCheckbox">{$_('hydrogens_checbox')}</label>
+                        </div>
+
+                        {#if selectedGenerator === createBallAndStickMesh}
+                          <div class="form-check pt-4">
+                            <input class="form-check-input" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
+                            <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
+                          </div>
+                          <div class="form-check pt-4">
+                            <input class="form-check-input" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
+                            <label class="form-check-label" for="uniformAtomDiameterCheckbox">{$_('uniform_atom_diameter_checkbox')}</label>
+                          </div>
+                          <div class="form-check pt-4">
+                            <input class="form-check-input" type="checkbox" id="showMultipleBondsCheckbox" bind:checked={showMultipleBonds}>
+                            <label class="form-check-label" for="showMultipleBondsCheckbox">{$_('show_multiple_bonds_checkbox') || 'Show Multiple Bonds'}</label>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  </div>
                 </td>
-                <td>
-                  <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
-                    <span class="material-symbols-outlined">deployed_code_update</span>
-                    {$_('download_whole_model_button')}
-                  </button>
-                  <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 mt-2">
-                    <span class="material-symbols-outlined">download</span>
-                    {$_('download_template_button')}
-                  </button>
+              </tr>
+              
+              <tr>
+                <td colspan="2" class="pt-4">
+                  <div class="d-flex gap-2">
+                    <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
+                      <span class="material-symbols-outlined">deployed_code_update</span>
+                      {$_('download_whole_model_button')}
+                    </button>
+                    <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100">
+                      <span class="material-symbols-outlined">download</span>
+                      {$_('download_template_button')}
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>

@@ -19,7 +19,7 @@
     "error":"Error",
     "error_occurred":"An unexpected error has occurred",
 
-    "search_field":"⌕ Search on PubChem, PDB, CAS...",
+    "search_field":"⌕ Search on PubChem",
     "delete_history": "Delete History",
     "upload_file_button":"Upload File",
     "invalid_file_type":"Invalid File Type. Use .pdb or .sdf",

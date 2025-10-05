@@ -11,7 +11,7 @@
   import { buildLocalizedPath } from '$lib/functions/language';
   import InfoButton from '$lib/buttons/infoButton.svelte';
   import { determineInputType, fetchPubChemDataWithAutocomplete, fetchPDBData } from '$lib/molecules/inputs';
-  import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte'; // <- NOVÝ IMPORT
+  import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte';
 
   // Types
   let inputStr = '';
@@ -39,7 +39,13 @@
 
   let quality = 50;
   let showHydrogens = true;
-  let multiplicationFactor = 1.0;
+  
+  // Proměnné pro každý generátor zvlášť
+  let multiplicationFactorSpheres = 1.0;
+  let multiplicationFactorBallAndStick = 1.0;
+  let multiplicationFactorSticks = 1.0;
+  let multiplicationFactorCubes = 1.0;
+
   let bondDiameterMultiplicationFactor = 0.4;
   let bondQuality = 32;
   let groupBondsSeparately = false;
@@ -57,8 +63,23 @@
   let isFileUploaded: boolean = false;
   let uploadedFileName: string = "";
   
-  // Nová proměnná pro zobrazení popupu
   let showAdvancedSearch = false; 
+
+  // Reaktivní proměnná, která se automaticky mění podle zvoleného generátoru
+  let multiplicationFactor: number;
+  $: {
+    if (selectedGenerator === createSphereMesh) {
+      multiplicationFactor = multiplicationFactorSpheres;
+    } else if (selectedGenerator === createBallAndStickMesh) {
+      multiplicationFactor = multiplicationFactorBallAndStick;
+    } else if (selectedGenerator === createStickMesh) {
+      multiplicationFactor = multiplicationFactorSticks;
+    } else if (selectedGenerator === createCubeMesh) {
+      multiplicationFactor = multiplicationFactorCubes;
+    } else {
+      multiplicationFactor = 1.0; // Pojistka
+    }
+  }
 
   onMount(() => {
     if (browser) {
@@ -70,7 +91,6 @@
   });
 
   async function initialize() {
-
     if (browser) {
       sessionStorage.removeItem('atomCoordinates');
       sessionStorage.removeItem('lastSuccessfulInput');
@@ -79,7 +99,12 @@
     searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
 
     if (browser) {
-      multiplicationFactor = parseFloat(localStorage.getItem('multiplicationFactor') || '1.0');
+      // Načtení specifických hodnot pro každý generátor
+      multiplicationFactorSpheres = parseFloat(localStorage.getItem('multiplicationFactorSpheres') || '1.0');
+      multiplicationFactorBallAndStick = parseFloat(localStorage.getItem('multiplicationFactorBallAndStick') || '1.0');
+      multiplicationFactorSticks = parseFloat(localStorage.getItem('multiplicationFactorSticks') || '1.0');
+      multiplicationFactorCubes = parseFloat(localStorage.getItem('multiplicationFactorCubes') || '1.0');
+
       bondDiameterMultiplicationFactor = parseFloat(localStorage.getItem('bondDiameterMultiplicationFactor') || '0.4');
       bondQuality = parseInt(localStorage.getItem('bondQuality') || '32', 10);
       quality = parseInt(localStorage.getItem('quality') || '50', 10);
@@ -105,7 +130,7 @@
         prevAtomCoordinates = atomCoordinates;
         lastSuccessfulInput = storedInput || '';
         inputStr = lastSuccessfulInput;
-        isReloadMode = atomCoordinates.length > 0; // Set reload mode if there's a model
+        isReloadMode = atomCoordinates.length > 0;
       }
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
@@ -116,7 +141,7 @@
       animate();
 
       if (atomCoordinates.length > 0) {
-        redrawModel(atomCoordinates); // Redraw existing model on init
+        redrawModel(atomCoordinates);
       }
       
       return () => {
@@ -145,21 +170,17 @@
     );
   }
 
-  // Handle form submission or reload
   async function handleSubmit() {
-    // If input is empty, do nothing. The gear button handles opening the advanced search.
     if (!inputStr.trim() && !isReloadMode) {
       return;
     }
 
-    // If reload mode is active, just redraw the current model with new settings
     if (isReloadMode && inputStr === lastSuccessfulInput) {
       redrawModel(atomCoordinates);
       if (typeof resizeCanvas === "function") resizeCanvas();
       return;
     }
 
-    // --- Start a new search ---
     isFileUploaded = false;
     setTableInfo("", "", "");
     setImage('');
@@ -216,16 +237,15 @@
       sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
 
       redrawModel(atomCoordinates);
-      isReloadMode = true; // Set to true after a successful fetch
+      isReloadMode = true;
       if (typeof resizeCanvas === "function") resizeCanvas();
     } catch (error) {
       console.error("Error fetching/parsing molecule data:", error);
       showMoleculePopup = true;
-      isReloadMode = false; // Failed, so disable reload mode
+      isReloadMode = false;
     }
   }
 
-  // Nová funkce pro zpracování pokročilého vyhledávání
   async function handleAdvancedSearch(event: CustomEvent) {
     const { source, query, content } = event.detail;
 
@@ -235,13 +255,13 @@
 
     if (source === 'pubchem') {
       inputStr = query;
-      isReloadMode = false; // Treat as a new search
+      isReloadMode = false;
       handleSubmit();
     } else if (source === 'cod') {
       try {
         originalContent = content;
-        originalFileExtension = "sdf"; // It's already converted to SDF
-        isFileUploaded = true; // Treat it like a file for naming purposes
+        originalFileExtension = "sdf";
+        isFileUploaded = true;
         uploadedFileName = `COD_${query}`;
 
         atomCoordinates = await parseSDF(content);
@@ -255,11 +275,11 @@
         prevAtomCoordinates = [...atomCoordinates];
         lastSuccessfulFileContent = content;
         lastSuccessfulInput = `COD: ${query}`;
-        inputStr = lastSuccessfulInput; // Update input field to reflect the search
+        inputStr = lastSuccessfulInput;
         sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
 
         redrawModel(atomCoordinates);
-        isReloadMode = true; // Enable reload after success
+        isReloadMode = true;
       } catch (error) {
         console.error("Error processing data from COD:", error);
         showMoleculePopup = true;
@@ -293,7 +313,7 @@
       description: "ZIP of STL models with metadata",
       hydrogens: String(showHydrogens),
       selectedGenerator: modelGenerators.find(g => g.func === selectedGenerator)?.name,
-      multiplicationFactor: multiplicationFactor,
+      multiplicationFactor: multiplicationFactor, // Zde se použije reaktivní proměnná
       ...(selectedGenerator === createBallAndStickMesh
         ? {
             bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
@@ -324,7 +344,7 @@
         coordinates: coords,
         quality: quality,
         showHydrogens: showHydrogens,
-        multiplicationFactor: multiplicationFactor,
+        multiplicationFactor: multiplicationFactor, // Zde se použije reaktivní proměnná
         selectedGenerator: selectedGenerator,
         ...(selectedGenerator === createBallAndStickMesh
           ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately, uniformAtomDiameter, showMultipleBonds }
@@ -356,7 +376,6 @@
 
   function handleHistoryClick(item: string) {
     inputStr = item;
-    // Check if it's a new search or the same as the last successful one
     if (inputStr !== lastSuccessfulInput) {
       isReloadMode = false;
     }
@@ -378,12 +397,12 @@
         return;
       }
       
-      isReloadMode = false; // New file means it's a new action, not a reload
+      isReloadMode = false;
       uploadedFileName = file.name.split('.').slice(0, -1).join('.');
       isFileUploaded = true;
       setTableInfo(file.name, `Uploaded .${fileExtension} file`, "");
       setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
-      inputStr = `File: ${file.name}`; // Update input field
+      inputStr = `File: ${file.name}`;
       
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -401,9 +420,8 @@
             originalFileExtension = 'sdf';
             newAtomCoordinates = await parseSDF(content);
           } else if (fileExtension === 'cif') {
-            // Convert CIF content to SDF format
             const sdfContent = await cifToSdf(content);
-            originalContent = sdfContent; // Save the converted content
+            originalContent = sdfContent;
             originalFileExtension = 'sdf';
             newAtomCoordinates = await parseSDF(sdfContent);
           }
@@ -415,11 +433,11 @@
           atomCoordinates = newAtomCoordinates;
           prevAtomCoordinates = [...atomCoordinates];
           lastSuccessfulFileContent = originalContent;
-          lastSuccessfulInput = inputStr; // Store the "File: ..." string
+          lastSuccessfulInput = inputStr;
           sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
 
           redrawModel(atomCoordinates);
-          isReloadMode = true; // Enable reload after successful upload
+          isReloadMode = true;
         } catch (error) {
           console.error("Error parsing uploaded file:", error);
           showMoleculePopup = true;
@@ -474,7 +492,13 @@
   function resetSettingsToDefault() {
     quality = 50;
     showHydrogens = true;
-    multiplicationFactor = 1.0;
+    
+    // Resetování specifických hodnot
+    multiplicationFactorSpheres = 1.0;
+    multiplicationFactorBallAndStick = 1.0;
+    multiplicationFactorSticks = 1.0;
+    multiplicationFactorCubes = 1.0;
+
     bondDiameterMultiplicationFactor = 0.4;
     bondQuality = 32;
     groupBondsSeparately = false;
@@ -483,7 +507,13 @@
 
     if (browser) {
       localStorage.removeItem('quality');
-      localStorage.removeItem('multiplicationFactor');
+      
+      // Smazání specifických hodnot z localStorage
+      localStorage.removeItem('multiplicationFactorSpheres');
+      localStorage.removeItem('multiplicationFactorBallAndStick');
+      localStorage.removeItem('multiplicationFactorSticks');
+      localStorage.removeItem('multiplicationFactorCubes');
+
       localStorage.removeItem('bondDiameterMultiplicationFactor');
       localStorage.removeItem('bondQuality');
       localStorage.removeItem('groupBondsSeparately');
@@ -499,7 +529,13 @@
 
   $: if (browser && settingsLoaded) {
     localStorage.setItem('quality', String(quality));
-    localStorage.setItem('multiplicationFactor', String(multiplicationFactor));
+    
+    // Uložení specifických hodnot
+    localStorage.setItem('multiplicationFactorSpheres', String(multiplicationFactorSpheres));
+    localStorage.setItem('multiplicationFactorBallAndStick', String(multiplicationFactorBallAndStick));
+    localStorage.setItem('multiplicationFactorSticks', String(multiplicationFactorSticks));
+    localStorage.setItem('multiplicationFactorCubes', String(multiplicationFactorCubes));
+
     localStorage.setItem('bondDiameterMultiplicationFactor', String(bondDiameterMultiplicationFactor));
     localStorage.setItem('bondQuality', String(bondQuality));
     localStorage.setItem('groupBondsSeparately', JSON.stringify(groupBondsSeparately));
@@ -571,7 +607,6 @@
   }
 
   function handleInputChange() {
-    // If user types something different than what's loaded, exit reload mode
     if (inputStr !== lastSuccessfulInput) {
       isReloadMode = false;
     }
@@ -821,12 +856,35 @@
                   <div class="row mt-3">
                     <div class="col-md-6">
                       <div class="d-flex flex-column gap-3">
-                        {#if selectedGenerator === createSphereMesh || selectedGenerator === createCubeMesh || selectedGenerator === createStickMesh || selectedGenerator === createBallAndStickMesh}
+                        
+                        {#if selectedGenerator === createSphereMesh}
                           <div>
-                            <label for="multiplicationFactor" class="form-label">{$_('multiplication_factor')}</label>
-                            <input type="number" id="multiplicationFactor" bind:value={multiplicationFactor} step="0.1" min="0.1" class="form-control">
+                            <label for="multiplicationFactorSpheres" class="form-label">{$_('multiplication_factor')}</label>
+                            <input type="number" id="multiplicationFactorSpheres" bind:value={multiplicationFactorSpheres} step="0.1" min="0.1" class="form-control">
                           </div>
                         {/if}
+                        
+                        {#if selectedGenerator === createBallAndStickMesh}
+                          <div>
+                            <label for="multiplicationFactorBallAndStick" class="form-label">{$_('multiplication_factor')}</label>
+                            <input type="number" id="multiplicationFactorBallAndStick" bind:value={multiplicationFactorBallAndStick} step="0.1" min="0.1" class="form-control">
+                          </div>
+                        {/if}
+
+                        {#if selectedGenerator === createStickMesh}
+                          <div>
+                            <label for="multiplicationFactorSticks" class="form-label">{$_('multiplication_factor')}</label>
+                            <input type="number" id="multiplicationFactorSticks" bind:value={multiplicationFactorSticks} step="0.1" min="0.1" class="form-control">
+                          </div>
+                        {/if}
+                        
+                        {#if selectedGenerator === createCubeMesh}
+                           <div>
+                            <label for="multiplicationFactorCubes" class="form-label">{$_('multiplication_factor')}</label>
+                            <input type="number" id="multiplicationFactorCubes" bind:value={multiplicationFactorCubes} step="0.1" min="0.1" class="form-control">
+                          </div>
+                        {/if}
+
 
                         {#if selectedGenerator === createBallAndStickMesh}
                           <div>

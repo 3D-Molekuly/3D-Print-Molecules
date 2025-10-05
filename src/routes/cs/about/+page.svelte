@@ -4,7 +4,7 @@
 </script>
 
 <style>
-  section.about {
+  section {
     max-width: 800px;
     margin: 0 auto;
     padding: 2rem 1rem;
@@ -65,7 +65,7 @@
 </style>
 
 <section class="about">
-  <h2>O projektu</h2>
+  <h2 style="text-align: center;">O projektu</h2>
 
   <h3>Kdo jsme</h3>
   <p>

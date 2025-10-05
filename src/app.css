@@ -50,3 +50,22 @@ main {
     background-color: #212529;
     color: white;
   }
+
+  /* Ensure about page headings are visible in dark mode */
+  html.dark .about {
+    color: #ffffff !important;
+  }
+
+  html.dark .about h1,
+  html.dark .about h2,
+  html.dark .about h3 {
+    color: #ffffff !important;
+  }
+
+  html.dark .about svg {
+    filter: invert(1);
+  }
+  /* Make the h3 divider visible on dark backgrounds */
+  html.dark .about h3 {
+    border-bottom: 2px solid rgba(255,255,255,0.12) !important;
+  }

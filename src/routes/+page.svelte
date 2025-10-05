@@ -615,9 +615,9 @@
                   }}
                 ></button>
               {:else}
-                <button 
-                  class="btn btn-icon" 
-                  on:click={() => showAdvancedSearch = true} 
+                <button
+                  class="btn btn-icon"
+                  on:click={() => showAdvancedSearch = true}
                   title="Advanced Search"
                   aria-label="Advanced Search"
                 >
@@ -729,6 +729,25 @@
           </tbody>
         </table>
 
+        <!-- SELECT MODEL TYPE - always keep label on left -->
+        <div class="row mb-3 align-items-center">
+          <div class="col-12">
+            <div class="d-flex align-items-center gap-3 flex-nowrap">
+              <label for="model-generator" class="section-label text-nowrap">
+                {$_('select_model_type')}
+              </label>
+              <select
+                class="form-select flex-grow-1"
+                id="model-generator"
+                bind:value={selectedGenerator}>
+                {#each modelGenerators as generator}
+                  <option value={generator.func}>{generator.name}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+        </div>
+
         <div>
           <table class="table table-borderless">
             <thead>
@@ -749,51 +768,51 @@
                 </th>
               </tr>
             </thead>
+
             <tbody class={isCollapsed ? 'collapse' : ''} id="collapseOne">
               <tr>
-                <td>
-                  <label for="qualityRange">
-                    {$_('quality_slider')}
-                    {#if isEditing}
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        bind:value={quality}
-                        on:blur={disableEditing}
-                        class=""
-                        style="width: 3em; text-align: center;">
-                    {:else}
-                      <button
-                        type="button"
-                        on:click={enableEditing}
-                        class="editable-button">
-                        {quality}
-                      </button>
-                    {/if}
-                  </label>
-                  <div class="quality-container">
-                    <input type="range" id="qualityRange" min="0" max="100" bind:value={quality} class="form-range">
-                  </div>
-                </td>
-                <td>
-                  <div class="d-flex align-items-center mb-1">
-                    <label for="model-generator" class="form-label mb-0">{$_('select_model_type')}</label>
+                <td colspan="2">
+                  <!-- QUALITY SLIDER + BIGGER RESET BUTTON -->
+                  <div class="d-flex align-items-center gap-3">
+                    <label for="qualityRange" class="me-2 text-nowrap section-label">
+                      {$_('quality_slider')}
+                      {#if isEditing}
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          bind:value={quality}
+                          on:blur={disableEditing}
+                          style="width: 3em; text-align: center;">
+                      {:else}
+                        <button
+                          type="button"
+                          on:click={enableEditing}
+                          class="editable-button">
+                          {quality}
+                        </button>
+                      {/if}
+                    </label>
+
+                    <input
+                      type="range"
+                      id="qualityRange"
+                      min="0"
+                      max="100"
+                      bind:value={quality}
+                      class="form-range flex-grow-1"
+                    />
+
                     <button
                       type="button"
                       on:click={resetSettingsToDefault}
-                      class="btn btn-sm btn-link p-1 ms-2"
+                      class="btn btn-link btn-lg ms-2 p-2"
                       title={$_('reset_settings_to_default')}
                       aria-label={$_('reset_settings_to_default')}
                     >
-                      <span class="material-symbols-outlined" style="vertical-align: middle;">restart_alt</span>
+                      <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 32px;">restart_alt</span>
                     </button>
                   </div>
-                  <select class="form-select" id="model-generator" bind:value={selectedGenerator}>
-                    {#each modelGenerators as generator}
-                      <option value={generator.func}>{generator.name}</option>
-                    {/each}
-                  </select>
                 </td>
               </tr>
 
@@ -848,7 +867,7 @@
                   </div>
                 </td>
               </tr>
-              
+
               <tr>
                 <td colspan="2" class="pt-4">
                   <div class="d-flex gap-2">
@@ -1157,6 +1176,33 @@ img {
   color: #004499;
   text-decoration: none;
   border-bottom: 1px solid #004499;
+}
+
+/* Keeps select-model label aligned */
+label[for="model-generator"] {
+  min-width: 160px;
+}
+
+/* Slightly bigger hitbox for reset button */
+.btn-link.btn-lg {
+  line-height: 1;
+}
+
+/* Ensure vertical alignment matches headers */
+.section-label {
+  display: flex;
+  align-items: center;
+  height: 2.5rem; /* same visual height as table headers */
+  font-weight: 600;
+}
+
+/* Slight layout polish */
+label[for="model-generator"] {
+  min-width: 160px;
+}
+
+.btn-link.btn-lg {
+  line-height: 1;
 }
 
 /* NOVÉ STYLY pro tlačítko s kolečkem v inputu */

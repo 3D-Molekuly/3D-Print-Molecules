@@ -281,9 +281,14 @@
       return;
     }
     updateFileName();
-
     const metadata: Record<string, any> = {
       author: "3D Printing Molecules WEB APP",
+      moleculeName: tableInfo.firstItem || null,
+      moleculeId: tableInfo.secondItem || null,
+      moleculeDescription: tableInfo.thirdItem || null,
+      moleculeImage: imageUrl || null,
+      isFileUploaded: isFileUploaded,
+      uploadedFileName: isFileUploaded ? uploadedFileName : null,
       quality: quality,
       description: "ZIP of STL models with metadata",
       hydrogens: String(showHydrogens),

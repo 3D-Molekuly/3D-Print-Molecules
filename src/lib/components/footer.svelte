@@ -17,7 +17,7 @@
 
       <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
         <li class="ms-2">
-            <a class="text-muted" href="mailto:jakub.vavra456@student.cuni.cz?subject=3D%20Printing%20Molecules%20-%20Bug%20Report">{$_('bug_report')}</a>
+            <a class="text-muted" href="mailto:3dmolekuly@vscht.cz?subject=3D%20Printing%20Molecules%20-%20Bug%20Report">{$_('bug_report')}</a>
         </li>
         <li class="ms-2">
           <a class="text-muted" href="https://github.com/KubiV/3D-Print-Molecules-WEB">
@@ -27,11 +27,6 @@
         <li class="ms-2">
             <a class="text-muted" href="https://www.vscht.cz">
                 <img src={vscht} alt="VSCHT Logo" class="text-muted" width="24" height="24">
-            </a>
-        </li>
-        <li class="ms-2">
-            <a class="text-muted" href="https://www.lf1.cuni.cz">
-                <img src={lf1} alt="1LF Logo" class="text-muted" width="24" height="24">
             </a>
         </li>
     </ul>

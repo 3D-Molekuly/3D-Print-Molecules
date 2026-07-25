@@ -1,6 +1,6 @@
 # 3D Print Molecules WEB
 
-A web application for visualizing and preparing molecular structures for multicolour 3D printing.
+A web application for visualizing and preparing molecular structures for multicolour 3D printing. Easily prepare your molecule for printing.
 
 ## Description
 

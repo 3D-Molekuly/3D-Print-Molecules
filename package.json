@@ -41,8 +41,7 @@
 		"remark-rehype": "^11.1.1",
 		"svelte-i18n": "^4.0.0",
 		"three": "^0.168.0",
-		"unified": "^11.0.5",
-		"vercel": "^28.18.5"
+		"unified": "^11.0.5"
 	},
 	"description": "Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).",
 	"main": "svelte.config.js",

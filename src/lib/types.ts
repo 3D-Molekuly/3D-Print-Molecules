@@ -7,11 +7,11 @@ export interface CreateAtomsParams {
     showHydrogens: boolean;
     multiplicationFactor: number;
     selectedGenerator: (params: any) => any; // vyřešit později
-    bondDiameterMultiplicationFactor: number;
-    bondQuality: number;
-    groupBondsSeparately: boolean;
-    uniformAtomDiameter: boolean;
-    showMultipleBonds: boolean;
+    bondDiameterMultiplicationFactor?: number;
+    bondQuality?: number;
+    groupBondsSeparately?: boolean;
+    uniformAtomDiameter?: boolean;
+    showMultipleBonds?: boolean;
 }
 
 export interface SelectedGeneratorParams {

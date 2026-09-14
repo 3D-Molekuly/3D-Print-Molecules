@@ -13,9 +13,8 @@
 	import { getCurrentUrl } from '$lib/functions/utils';
 
 	let currentUrl: string = '';
-	let jsonLd: string = '';
 
-	const localizedMeta = {
+	$: localizedMeta = {
 		title: $_('og_title'),
 		description: $_('og_description'),
 		keywords: $_('meta_keywords'),
@@ -23,8 +22,7 @@
 		url: currentUrl,
 	};
 
-	const generateJsonLd = () => {
-		return JSON.stringify({
+	$: jsonLd = JSON.stringify({
 		"@context": "https://schema.org",
 		"@type": "SoftwareApplication",
 		"name": localizedMeta.title || "Default App",
@@ -41,13 +39,11 @@
 			"name": localizedMeta.author || "Default Author"
 		},
 		"url": localizedMeta.url || "",
-		});
-	};
+	});
 
 	onMount(() => {
 	  currentUrl = getCurrentUrl();
-	  localizedMeta.url = currentUrl;
-      jsonLd = generateJsonLd();
+	  // @ts-ignore
 	  import('bootstrap/dist/js/bootstrap.bundle.min.js');
 
 	  // Inside +layout.svelte or wherever you're registering the service worker

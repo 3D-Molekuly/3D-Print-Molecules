@@ -6,9 +6,10 @@
   import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
-  import type { AtomCoordinate, CreateAtomsParams } from '$lib/molecules/molecularDataParser';
+  import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
+  import type { CreateAtomsParams } from '$lib/types';
   import { cifToSdf } from '$lib/utils/cifToSdf';
-  import { buildLocalizedPath } from '$lib/functions/language';
+  import { buildLocalizedPath, currentLocale } from '$lib/functions/language';
   import InfoButton from '$lib/buttons/infoButton.svelte';
   import { determineInputType, fetchPubChemDataWithAutocomplete, fetchPDBData } from '$lib/molecules/inputs';
   import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte';
@@ -1020,7 +1021,7 @@
   <div>
     {@html $_('infobox_slicer_multipartobject')} <img src="/assets/multipartobject.svg" alt="warningWindowMulticolorObject">
   </div>
-  <a href={buildLocalizedPath('/tutorials')}>{@html $_('infobox_moreinfo')}</a>
+  <a href={buildLocalizedPath('/tutorials', $currentLocale)}>{@html $_('infobox_moreinfo')}</a>
 </InfoButton>
 
 <style>

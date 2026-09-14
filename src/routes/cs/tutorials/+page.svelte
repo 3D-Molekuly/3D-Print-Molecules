@@ -255,6 +255,61 @@
       transform: rotate(90deg);
     }
   }
+
+  /* --- STYLY PRO PRINTABLES SEKCI --- */
+  .printables-container {
+    background: #fff8f5;
+    border: 1px solid #ffd8c7;
+    color: #333;
+    text-align: center;
+  }
+  .printables-container h3 {
+    color: #fa6831;
+    border-bottom: 2px solid #ffe4d6;
+  }
+  .printables-desc {
+    font-size: 1.05rem;
+    max-width: 620px;
+    margin: 0 auto 1.5rem auto;
+    color: #444;
+  }
+  .printables-btn-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .printables-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    background-color: #fa6831;
+    color: #ffffff !important;
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding: 0.75rem 1.75rem;
+    border-radius: 8px;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(250, 104, 49, 0.25);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+  .printables-btn:hover {
+    background-color: #e0531c;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(250, 104, 49, 0.35);
+  }
+  .printables-logo {
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .printables-btn .external-arrow {
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+  }
+  .printables-btn:hover .external-arrow {
+    transform: translate(2px, -2px);
+  }
 </style>
 
 <section class="tutorial">
@@ -362,5 +417,28 @@
       a následně potvrď volbou <strong>„ANO“ (YES)</strong>.
     </p>
     <img src="/assets/multipartobject.svg" alt="Dialog importu do sliceru" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
+  </div>
+
+  <!-- SEKCE PRINTABLES -->
+  <div class="step-container printables-container">
+    <h3>Vyzkoušej již hotové modely na Printables</h3>
+    <p class="printables-desc">
+      Hledáš inspiraci nebo si chceš rovnou vytisknout oblíbené molekuly bez nutnosti nastavování? Prozkoumej naši sbírku hotových, ověřených 3D modelů molekul přímo na Printables.
+    </p>
+    <div class="printables-btn-wrapper">
+      <a
+        href="https://www.printables.com/@3DPMol_5381976/models"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="printables-btn"
+      >
+        <svg class="printables-logo" viewBox="0 0 24 24" fill="currentColor" width="28" height="28" aria-hidden="true">
+          <title>Printables</title>
+          <path d="M3.678 4.8 12 9.6v9.6l8.322-4.8V4.8L12 0ZM12 19.2l-8.322-4.8V24Z"/>
+        </svg>
+        <span>Printables</span>
+        <span class="external-arrow">↗</span>
+      </a>
+    </div>
   </div>
 </section>

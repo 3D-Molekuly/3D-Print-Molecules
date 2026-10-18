@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { inject } from '@vercel/analytics';
-	inject();
-
+	import { dev, browser } from '$app/environment';
 	import { _ } from 'svelte-i18n';
 	import 'bootstrap/dist/css/bootstrap.min.css';
 	import '../app.css';
@@ -11,6 +10,10 @@
 
 	import { onMount } from 'svelte';
 	import { getCurrentUrl } from '$lib/functions/utils';
+
+	if (browser) {
+		try { inject(); } catch (_) {}
+	}
 
 	let currentUrl: string = '';
 
@@ -46,8 +49,22 @@
 	  // @ts-ignore
 	  import('bootstrap/dist/js/bootstrap.bundle.min.js');
 
-	  // Inside +layout.svelte or wherever you're registering the service worker
-	  if ('serviceWorker' in navigator) {
+	  if (dev) {
+		if ('serviceWorker' in navigator) {
+			navigator.serviceWorker.getRegistrations().then((registrations) => {
+				for (const registration of registrations) {
+					registration.unregister();
+				}
+			});
+		}
+		if ('caches' in window) {
+			caches.keys().then((names) => {
+				for (const name of names) {
+					caches.delete(name);
+				}
+			});
+		}
+	  } else if ('serviceWorker' in navigator) {
 		navigator.serviceWorker
 			.register('/service-worker.js')
 			.then((registration) => {
@@ -56,7 +73,7 @@
 			.catch((error) => {
 			console.error('Service Worker registration failed: ', error);
 			});
-		}
+	  }
 	});
 
   </script>

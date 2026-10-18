@@ -1,11 +1,12 @@
-// src/lib/i18n/index.ts
 import { browser } from '$app/environment'
-import { init, register } from 'svelte-i18n'
+import { init, addMessages } from 'svelte-i18n'
+import en from '../translations/en.json'
+import cs from '../translations/cs.json'
 
 const defaultLocale = 'en'
 
-register('en', () => import('../translations/en.json'))
-register('cs', () => import('../translations/cs.json'))
+addMessages('en', en)
+addMessages('cs', cs)
 
 let initial = defaultLocale;
 if (browser) {

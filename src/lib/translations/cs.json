@@ -38,7 +38,9 @@
     "hydrogens_checbox": "Vodíky",
     "download_whole_model_button": "Jedno STL",
     "download_template_button": "Stáhnout Předlohu",
-    "download_model_button": "Stáhnout Model",
+    "download_model_button": "Stáhnout 3MF (Barevný model)",
+    "download_model_button_3mf": "Stáhnout 3MF (Barevný model)",
+    "download_model_button_zip": "Stáhnout ZIP (STL záloha)",
 
     "reset_settings_to_default":"Obnovit výchozí nastavení",
     "multiplication_factor":"Násobící faktor",
@@ -54,6 +56,6 @@
     "infobox_tittle":"Nápověda",
     "infobox_helptext": "Tato aplikace je navržena tak, aby vám pomohla s vícebarevným 3D tiskem molekulárních struktur.",
     "infobox_appusage": "<h6>Jak používat tuto aplikaci?</h6><ul><li>Hledejte/importujte svá molekulární data (.sdf)</li><li>Načtěte data</li><li>Stáhněte model</li></ul>",
-    "infobox_slicer_multipartobject": "<h6>Jak importovat do sliceru?</h6>Pro <b>vícebarevný</b> tisk molekul zajistěte, aby slicer zobrazil zprávu ‘<i>Multi-part object detected/An object with multiple parts was detected,</i>’ a poté potvrďte výběrem ‘<b style='font-weight: 900;'>ANO</b>.’",
+    "infobox_slicer_multipartobject": "<h6>Jak importovat do sliceru?</h6>Soubor <b>.3mf</b> jednoduše otevřete ve sliceru (Bambu Studio, PrusaSlicer, OrcaSlicer) – načte se rovnou jako barevný vícedílný model se zachovanými barvami.<br><br>Pokud používáte <b>ZIP s STL</b> soubory, při importu do sliceru potvrďte dialog ‘<i>Multi-part object detected / Byl detekován objekt s více částmi</i>’ volbou ‘<b style='font-weight: 900;'>ANO</b>.’",
     "infobox_moreinfo": "Více informací"
 }

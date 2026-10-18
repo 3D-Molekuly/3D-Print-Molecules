@@ -3,7 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules3';
+  import { setupThreeJS, exportModelAs3MF, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createCubeMesh, createStickMesh, takeScreenshot } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
@@ -311,10 +311,42 @@
       isFileUploaded: isFileUploaded,
       uploadedFileName: isFileUploaded ? uploadedFileName : null,
       quality: quality,
+      description: "3MF multicolor model with metadata",
+      hydrogens: String(showHydrogens),
+      selectedGenerator: modelGenerators.find(g => g.func === selectedGenerator)?.name,
+      multiplicationFactor: multiplicationFactor,
+      ...(selectedGenerator === createBallAndStickMesh
+        ? {
+            bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
+            bondQuality: bondQuality,
+            groupBondsSeparately: groupBondsSeparately,
+            showMultipleBonds: showMultipleBonds
+          }
+        : {})
+    };
+
+    exportModelAs3MF(fileName, metadata);
+  }
+
+  async function downloadModelZip() {
+    if (atomCoordinates.length === 0) {
+      showMoleculePopup = true;
+      return;
+    }
+    updateFileName();
+    const metadata: Record<string, any> = {
+      author: "3D Printing Molecules WEB APP",
+      moleculeName: tableInfo.firstItem || null,
+      moleculeId: tableInfo.secondItem || null,
+      moleculeDescription: tableInfo.thirdItem || null,
+      moleculeImage: imageUrl || null,
+      isFileUploaded: isFileUploaded,
+      uploadedFileName: isFileUploaded ? uploadedFileName : null,
+      quality: quality,
       description: "ZIP of STL models with metadata",
       hydrogens: String(showHydrogens),
       selectedGenerator: modelGenerators.find(g => g.func === selectedGenerator)?.name,
-      multiplicationFactor: multiplicationFactor, // Zde se použije reaktivní proměnná
+      multiplicationFactor: multiplicationFactor,
       ...(selectedGenerator === createBallAndStickMesh
         ? {
             bondDiameterMultiplicationFactor: bondDiameterMultiplicationFactor,
@@ -930,15 +962,19 @@
               <tr>
                 <td colspan="2" class="pt-4">
                   <div class="d-flex gap-2">
-                    <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100">
+                    <button on:click={downloadWholeModel} class="btn btn-info btn-lg w-100 d-flex align-items-center justify-content-center gap-2">
                       <span class="material-symbols-outlined">deployed_code_update</span>
                       {$_('download_whole_model_button')}
                     </button>
-                    <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100">
+                    <button on:click={downloadSourceFile} class="btn btn-secondary btn-lg w-100 d-flex align-items-center justify-content-center gap-2">
                       <span class="material-symbols-outlined">download</span>
                       {$_('download_template_button')}
                     </button>
                   </div>
+                  <button on:click={downloadModelZip} class="btn btn-outline-secondary w-100 mt-2 d-flex align-items-center justify-content-center gap-2">
+                    <span class="material-symbols-outlined" style="display: inline-flex; align-items: center; justify-content: center; line-height: 1;">folder_zip</span>
+                    <span>{$_('download_model_button_zip')}</span>
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -946,9 +982,9 @@
         </div>
         <br>
 
-        <button on:click={downloadModel} class="btn btn-success btn-lg w-100">
+        <button on:click={downloadModel} class="btn btn-success btn-lg w-100 shadow-sm d-flex align-items-center justify-content-center gap-2">
           <span class="material-symbols-outlined">deployed_code_update</span>
-          {$_('download_model_button')}
+          {$_('download_model_button_3mf')}
         </button>
       </div>
 

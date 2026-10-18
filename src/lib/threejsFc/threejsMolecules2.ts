@@ -2,6 +2,7 @@ import * as THREE from "three";
 import JSZip from "jszip";
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
 import type { CreateAtomsParams, SelectedGeneratorParams, AtomWithBonds } from '$lib/types';
 
@@ -519,7 +520,7 @@ export function exportBinary() {
 
 export function exportBinaryAsZip(
     fileName: string,
-    metadata: Record<string, string | number>
+    metadata: Record<string, any>
 ) {
     if (!group || group.children.length === 0) {
         console.warn("No mesh available for export.");
@@ -559,6 +560,274 @@ export function exportBinaryAsZip(
     }).catch((error) => {
         console.error("Error creating ZIP:", error);
     });
+}
+
+function escapeXml(unsafe: string): string {
+    return unsafe.replace(/[<>&'"]/g, (c) => {
+        switch (c) {
+            case '<': return '&lt;';
+            case '>': return '&gt;';
+            case '&': return '&amp;';
+            case '\'': return '&apos;';
+            case '"': return '&quot;';
+            default: return c;
+        }
+    });
+}
+
+function roundCoord(val: number): string {
+    return Number(val.toFixed(5)).toString();
+}
+
+interface GroupGeometryData {
+    name: string;
+    colorHex: string;
+    vertices: number[];
+    indices: number[];
+}
+
+export async function exportModelAs3MF(
+    fileName: string,
+    metadata?: Record<string, any>
+): Promise<void> {
+    if (!group || group.children.length === 0) {
+        console.warn("No mesh available for export.");
+        return;
+    }
+
+    group.updateMatrixWorld(true);
+
+    const groupDataList: GroupGeometryData[] = [];
+
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    group.children.forEach((child, index) => {
+        if (!(child instanceof THREE.Group || child instanceof THREE.Mesh)) {
+            return;
+        }
+
+        const groupName = child.name || `Group_${index}`;
+        let groupColor = "#808080";
+
+        child.traverse((obj) => {
+            if (obj instanceof THREE.Mesh && obj.material) {
+                const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+                if (mat && 'color' in mat && mat.color instanceof THREE.Color) {
+                    groupColor = `#${mat.color.getHexString().toUpperCase()}`;
+                }
+            }
+        });
+
+        const vertices: number[] = [];
+        const indices: number[] = [];
+        const v = new THREE.Vector3();
+
+        child.traverse((obj) => {
+            if (obj instanceof THREE.Mesh && obj.geometry) {
+                let cleanGeom: THREE.BufferGeometry = obj.geometry.clone();
+                cleanGeom.deleteAttribute('uv');
+                cleanGeom.deleteAttribute('normal');
+                cleanGeom = mergeVertices(cleanGeom, 1e-4);
+
+                const positionAttribute = cleanGeom.getAttribute('position') as THREE.BufferAttribute | undefined;
+                if (!positionAttribute) {
+                    cleanGeom.dispose();
+                    return;
+                }
+
+                const indexAttribute = cleanGeom.index;
+                const worldMatrix = obj.matrixWorld;
+                const baseVertexOffset = vertices.length / 3;
+
+                for (let i = 0; i < positionAttribute.count; i++) {
+                    v.fromBufferAttribute(positionAttribute, i);
+                    v.applyMatrix4(worldMatrix);
+                    vertices.push(v.x, v.y, v.z);
+
+                    if (v.x < minX) minX = v.x;
+                    if (v.y < minY) minY = v.y;
+                    if (v.z < minZ) minZ = v.z;
+                    if (v.x > maxX) maxX = v.x;
+                    if (v.y > maxY) maxY = v.y;
+                    if (v.z > maxZ) maxZ = v.z;
+                }
+
+                if (indexAttribute !== null) {
+                    for (let i = 0; i < indexAttribute.count; i++) {
+                        indices.push(indexAttribute.getX(i) + baseVertexOffset);
+                    }
+                } else {
+                    for (let i = 0; i < positionAttribute.count; i++) {
+                        indices.push(i + baseVertexOffset);
+                    }
+                }
+
+                cleanGeom.dispose();
+            }
+        });
+
+        if (indices.length > 0 && vertices.length > 0) {
+            groupDataList.push({
+                name: groupName,
+                colorHex: groupColor,
+                vertices,
+                indices
+            });
+        }
+    });
+
+    if (groupDataList.length === 0) {
+        console.warn("No geometry found to export in 3MF.");
+        return;
+    }
+
+    const contentTypesXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
+  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
+  <Default Extension="config" ContentType="text/xml" />
+  <Default Extension="txt" ContentType="text/plain" />
+</Types>`;
+
+    const relsXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" />
+</Relationships>`;
+
+    let baseMaterialsXml = '    <basematerials id="1">\n';
+    let colorGroupXml = '    <m:colorgroup id="2">\n';
+    groupDataList.forEach((data) => {
+        baseMaterialsXml += `      <base name="${escapeXml(data.name)}" displaycolor="${data.colorHex}FF" />\n`;
+        colorGroupXml += `      <m:color color="${data.colorHex}FF" />\n`;
+    });
+    baseMaterialsXml += '    </basematerials>\n';
+    colorGroupXml += '    </m:colorgroup>\n';
+
+    const objectId = 3;
+    const vertexLines: string[] = [];
+    const triangleLines: string[] = [];
+    const volumeConfigs: string[] = [];
+
+    let globalVertexOffset = 0;
+    let globalTriangleOffset = 0;
+
+    groupDataList.forEach((data, i) => {
+        const numVertices = data.vertices.length / 3;
+        const numTriangles = data.indices.length / 3;
+        const firstTriangleId = globalTriangleOffset;
+        const lastTriangleId = globalTriangleOffset + numTriangles - 1;
+
+        for (let vIdx = 0; vIdx < data.vertices.length; vIdx += 3) {
+            vertexLines.push(
+                `          <vertex x="${roundCoord(data.vertices[vIdx])}" y="${roundCoord(data.vertices[vIdx + 1])}" z="${roundCoord(data.vertices[vIdx + 2])}" />`
+            );
+        }
+
+        for (let tIdx = 0; tIdx < data.indices.length; tIdx += 3) {
+            const v1 = data.indices[tIdx] + globalVertexOffset;
+            const v2 = data.indices[tIdx + 1] + globalVertexOffset;
+            const v3 = data.indices[tIdx + 2] + globalVertexOffset;
+            triangleLines.push(
+                `          <triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="1" p1="${i}" />`
+            );
+        }
+
+        volumeConfigs.push(`    <volume firstid="${firstTriangleId}" lastid="${lastTriangleId}">
+      <metadata type="volume" key="name" value="${escapeXml(data.name)}"/>
+      <metadata type="volume" key="volume_type" value="ModelPart"/>
+      <metadata type="volume" key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
+      <metadata type="volume" key="source_object_id" value="${objectId}"/>
+      <metadata type="volume" key="source_volume_id" value="${i}"/>
+      <metadata type="volume" key="extruder" value="${i + 1}"/>
+      <mesh edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
+    </volume>`);
+
+        globalVertexOffset += numVertices;
+        globalTriangleOffset += numTriangles;
+    });
+
+    const centerX = isFinite(minX) && isFinite(maxX) ? (minX + maxX) / 2 : 0;
+    const centerY = isFinite(minY) && isFinite(maxY) ? (minY + maxY) / 2 : 0;
+    const offsetX = roundCoord(100 - centerX);
+    const offsetY = roundCoord(100 - centerY);
+    const offsetZ = roundCoord(isFinite(minZ) ? -minZ : 0);
+
+    const modelXml = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02" xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">
+  <metadata name="slic3rpe:Version3mf">1</metadata>
+  <metadata name="Title">${escapeXml(fileName)}</metadata>
+  <metadata name="Application">3D-Print-Molecules-WEB</metadata>
+  <resources>
+${baseMaterialsXml}${colorGroupXml}    <object id="${objectId}" name="${escapeXml(fileName)}" type="model" pid="1" pindex="0">
+      <mesh>
+        <vertices>
+${vertexLines.join('\n')}
+        </vertices>
+        <triangles>
+${triangleLines.join('\n')}
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="${objectId}" transform="1 0 0 0 1 0 0 0 1 ${offsetX} ${offsetY} ${offsetZ}" printable="1" />
+  </build>
+</model>`;
+
+    const slic3rPeModelConfig = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="${objectId}" instances_count="1">
+    <metadata type="object" key="name" value="${escapeXml(fileName)}"/>
+${volumeConfigs.join('\n')}
+  </object>
+</config>`;
+
+    const colorList = groupDataList.map(d => d.colorHex).join(';');
+    const nozzleDiameters = groupDataList.map(() => '0.4').join(',');
+    const filamentDiameters = groupDataList.map(() => '1.75').join(',');
+
+    const slic3rPeConfig = `; generated by 3D-Print-Molecules-WEB
+; extruder_colour = ${colorList}
+; filament_colour = ${colorList}
+; nozzle_diameter = ${nozzleDiameters}
+; filament_diameter = ${filamentDiameters}
+; single_extruder_multi_material = 1
+`;
+
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", contentTypesXml);
+    zip.folder("_rels")!.file(".rels", relsXml);
+    zip.folder("3D")!.file("3dmodel.model", modelXml);
+
+    const metadataFolder = zip.folder("Metadata")!;
+    metadataFolder.file("Slic3r_PE_model.config", slic3rPeModelConfig);
+    metadataFolder.file("Slic3r_PE.config", slic3rPeConfig);
+
+    if (metadata) {
+        const metadataContent = Object.entries(metadata)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join("\n");
+        zip.file("metadata.txt", metadataContent);
+    }
+
+    try {
+        const content = await zip.generateAsync({
+            type: "blob",
+            mimeType: "application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+            compression: "DEFLATE",
+            compressionOptions: { level: 6 }
+        });
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(content);
+        link.download = `${fileName}.3mf`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        console.log("3MF was successfully created:", fileName);
+    } catch (error) {
+        console.error("Error creating 3MF:", error);
+    }
 }
 
 export function exportModelAsSTL(fileName: string) {

@@ -56,7 +56,7 @@ The web application provides an intuitive interface for working with molecular s
 
 2. **Adjust Model Settings**
    - Use the settings panel on the right side to customize your model
-   - Export to ZIP, where you can find all STLs
+   - Export directly to **.3MF** (with predefined colors and multi-part assembly) or **ZIP** (containing separate STLs)
 
 ![Model Settings Panel](./images/model_settings.png)
 
@@ -67,9 +67,10 @@ The web application provides an intuitive interface for working with molecular s
      - Include hydrogen atoms
 
 3. **Prepare for 3D Printing**
-   - Once satisfied with the visualization, click "Download Model"
-   - Import to your Slicer Software
-   - Confirm ‘Multi-part object detected/An object with multiple parts was detected,’
+   - Once satisfied with the visualization, click "Download 3MF (Color Model)" or "Download ZIP (STL Backup)"
+   - Import to your Slicer Software (Bambu Studio, PrusaSlicer, OrcaSlicer)
+   - With **.3MF**, colors and multi-part objects are automatically recognized and assigned
+   - With **ZIP (STLs)**, confirm ‘Multi-part object detected/An object with multiple parts was detected’
    - Adjust the following 3D printing parameters:
      - Model scale
      - Support structure options

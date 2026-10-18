@@ -38,7 +38,9 @@
     "hydrogens_checbox":"Hydrogens",
     "download_whole_model_button": "One STL File",
     "download_template_button":"Download Template",
-    "download_model_button":"Download Model",
+    "download_model_button":"Download 3MF (Color Model)",
+    "download_model_button_3mf":"Download 3MF (Color Model)",
+    "download_model_button_zip":"Download ZIP (STL Backup)",
 
     "reset_settings_to_default":"Reset Settings to Default",
     "multiplication_factor":"Multiplication Factor",
@@ -54,6 +56,6 @@
     "infobox_tittle":"Help",
     "infobox_helptext":"This app is designed to assist you in multicolor 3D printing of molecular structures.",
     "infobox_appusage":"<h6>How to use this app?</h6><ul><li>Search for/Import your molecular data (.sdf)</li><li>Fetch the data</li><li>Download the model</li></ul>",
-    "infobox_slicer_multipartobject":"<h6>How to import to slicer?</h6>For <b>multicolor</b> molecule printing, ensure the slicer shows the message ‘<i>Multi-part object detected/An object with multiple parts was detected,</i>’ then confirm by selecting ‘<b style='font-weight: 900;'>YES</b>.’",
+    "infobox_slicer_multipartobject":"<h6>How to import to slicer?</h6>Simply open the <b>.3mf</b> file in your slicer (Bambu Studio, PrusaSlicer, OrcaSlicer) – it opens directly as a colored multi-part model with colors preserved.<br><br>If using <b>ZIP with STL</b> files, ensure the slicer shows ‘<i>Multi-part object detected</i>’ and confirm with ‘<b style='font-weight: 900;'>YES</b>.’",
     "infobox_moreinfo":"More info"
 }

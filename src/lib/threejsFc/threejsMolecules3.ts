@@ -861,21 +861,26 @@ function createPartLabelSprite(
 ): THREE.Sprite | null {
     if (typeof document === 'undefined') return null;
     const canvasEl = document.createElement('canvas');
-    canvasEl.width = 384;
-    canvasEl.height = 160;
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return null;
 
+    const fontSpec = 'bold 64px sans-serif';
+    ctx.font = fontSpec;
+    const measuredWidth = ctx.measureText(text).width;
+
+    canvasEl.height = 112;
+    canvasEl.width = Math.max(144, Math.ceil(measuredWidth + 52));
+
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-    // Pill background
-    ctx.fillStyle = 'rgba(20, 24, 32, 0.85)';
+    // Compact pill background fitted tightly to text width
+    ctx.fillStyle = 'rgba(20, 24, 32, 0.78)';
     ctx.strokeStyle = colorHex || '#ffffff';
-    ctx.lineWidth = 8;
-    const r = 36;
-    const x = 12,
-        y = 20,
-        w = canvasEl.width - 24,
-        h = canvasEl.height - 40;
+    ctx.lineWidth = 6;
+    const r = 26;
+    const x = 8,
+        y = 8,
+        w = canvasEl.width - 16,
+        h = canvasEl.height - 16;
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + w - r, y);
@@ -891,10 +896,10 @@ function createPartLabelSprite(
     ctx.stroke();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 68px sans-serif';
+    ctx.font = fontSpec;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvasEl.width / 2, canvasEl.height / 2 + 2, canvasEl.width - 56);
+    ctx.fillText(text, canvasEl.width / 2, canvasEl.height / 2 + 2);
 
     const texture = new THREE.CanvasTexture(canvasEl);
     texture.needsUpdate = true;
@@ -904,8 +909,8 @@ function createPartLabelSprite(
         transparent: true
     });
     const sprite = new THREE.Sprite(material);
-    const spriteH = customHeight ?? 0.31;
-    const spriteW = spriteH * (384 / 160);
+    const spriteH = customHeight ?? 0.20;
+    const spriteW = spriteH * (canvasEl.width / canvasEl.height);
     sprite.scale.set(spriteW, spriteH, 1);
     sprite.renderOrder = 999;
     return sprite;
@@ -1342,7 +1347,7 @@ export function captureGluedSpheresGuidePhotos(
 
     const savedMeshPositions: { mesh: THREE.Mesh; pos: THREE.Vector3 }[] = [];
     const photoExplodedFactor =
-        config.explodedFactor && config.explodedFactor > 0.05 ? config.explodedFactor : 0.35;
+        config.explodedFactor && config.explodedFactor > 0.05 ? config.explodedFactor : 0.42;
     const [cx0, cy0, cz0] = result.centroidMm;
 
     const PHOTO_WIDTH = 1600;
@@ -1369,8 +1374,8 @@ export function captureGluedSpheresGuidePhotos(
         const center = bsphere.center;
         const radius = Math.max(bsphere.radius, 0.5);
 
-        // Temporarily enable 3D part ID labels scaled proportionally to the molecule bounding sphere
-        const customSpriteHeight = Math.max(0.18, radius * 0.20);
+        // Temporarily enable compact 3D part ID labels (~3x smaller so atoms remain clearly visible)
+        const customSpriteHeight = Math.max(0.06, radius * 0.068);
         rebuildPartLabelSprites(
             result,
             {

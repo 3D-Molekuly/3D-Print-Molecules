@@ -3,6 +3,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+	worker: {
+		format: 'es'
+	},
 	server: {
 		port: 3000,
 		host: true

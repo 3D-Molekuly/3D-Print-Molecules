@@ -11,7 +11,9 @@ import type {
     GeneratorResult,
     MovingJointsConfig,
     MovingJointsStats,
-    PlannedMovingBondEntry
+    PlannedMovingBondEntry,
+    GluedSpheresConfig,
+    GluedSpheresStats
 } from '$lib/types';
 import {
     JOINT_PRESETS,
@@ -24,6 +26,19 @@ import {
     type CollisionBond,
     type JointParams
 } from '$lib/geometry/jointGeometry';
+import {
+    arrangeElementPartsOnPlate,
+    computeGluedSpheres,
+    generateAssemblyGuideTxt,
+    orientPartGeometryForPlate,
+    partMeshDataToBufferGeometry,
+    type ComputeGluedSpheresResult,
+    type GluedSpherePartMeshData
+} from '$lib/geometry/gluedSpheres';
+import type {
+    GluedSpheresWorkerRequest,
+    GluedSpheresWorkerResponse
+} from '$lib/geometry/gluedSpheresWorker';
 
 const exporter = new STLExporter();
 
@@ -33,9 +48,22 @@ let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
 let currentExportScale = 1;
 let lastMovingJointsStats: MovingJointsStats | null = null;
+let lastGluedSpheresResult: ComputeGluedSpheresResult | null = null;
+let lastGluedSpheresConfig: GluedSpheresConfig | null = null;
+let gluedSpheresWorker: Worker | null = null;
+let latestGluedWorkerRequestId = 0;
+let partLabelSpritesGroup: THREE.Group | null = null;
 
 export function getLastMovingJointsStats(): MovingJointsStats | null {
     return lastMovingJointsStats;
+}
+
+export function getLastGluedSpheresStats(): GluedSpheresStats | null {
+    return lastGluedSpheresResult?.stats ?? null;
+}
+
+export function getLastGluedSpheresResult(): ComputeGluedSpheresResult | null {
+    return lastGluedSpheresResult;
 }
 
 export function getCurrentGroup(): THREE.Group | null {
@@ -287,6 +315,12 @@ export function buildMoleculeGroup(params: CreateAtomsParams): {
     const isMovingJoints = selectedGenerator === createBallAndStickMovingJointsMesh;
     const isBallAndStick =
         selectedGenerator === createBallAndStickMesh || isMovingJoints;
+
+    if (selectedGenerator !== createGluedSphereMesh) {
+        lastGluedSpheresResult = null;
+        lastGluedSpheresConfig = null;
+        clearPartLabelSprites();
+    }
 
     const resolvedMmPerUnit = mmPerUnit ?? movingJoints?.mmPerUnit ?? (isMovingJoints ? 20 : 10);
 
@@ -796,14 +830,393 @@ export const createBallAndStickMovingJointsMesh = (
     return createBallAndStickMesh(params);
 };
 
+/**
+ * Generator identifier for style "Spheres – rozložené pro lepení".
+ */
+export const createGluedSphereMesh = (
+    params: SelectedGeneratorParams
+): GeneratorResult => {
+    return createSphereMesh(params);
+};
+
+function clearPartLabelSprites(): void {
+    if (partLabelSpritesGroup) {
+        if (scene) {
+            scene.remove(partLabelSpritesGroup);
+        }
+        partLabelSpritesGroup.traverse((obj) => {
+            if (obj instanceof THREE.Sprite) {
+                if (obj.material.map) obj.material.map.dispose();
+                obj.material.dispose();
+            }
+        });
+        partLabelSpritesGroup = null;
+    }
+}
+
+function createPartLabelSprite(
+    text: string,
+    colorHex: string,
+    customHeight?: number
+): THREE.Sprite | null {
+    if (typeof document === 'undefined') return null;
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = 384;
+    canvasEl.height = 160;
+    const ctx = canvasEl.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    // Pill background
+    ctx.fillStyle = 'rgba(20, 24, 32, 0.85)';
+    ctx.strokeStyle = colorHex || '#ffffff';
+    ctx.lineWidth = 8;
+    const r = 36;
+    const x = 12,
+        y = 20,
+        w = canvasEl.width - 24,
+        h = canvasEl.height - 40;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 68px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvasEl.width / 2, canvasEl.height / 2 + 2, canvasEl.width - 56);
+
+    const texture = new THREE.CanvasTexture(canvasEl);
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({
+        map: texture,
+        depthTest: false,
+        transparent: true
+    });
+    const sprite = new THREE.Sprite(material);
+    const spriteH = customHeight ?? 0.31;
+    const spriteW = spriteH * (384 / 160);
+    sprite.scale.set(spriteW, spriteH, 1);
+    sprite.renderOrder = 999;
+    return sprite;
+}
+
+function rebuildPartLabelSprites(
+    result: ComputeGluedSpheresResult,
+    config: GluedSpheresConfig,
+    customSpriteHeight?: number
+): void {
+    clearPartLabelSprites();
+    if (!scene || !config.showPartLabels) return;
+
+    const labelsGroup = new THREE.Group();
+    labelsGroup.name = 'GluedSpheresPartLabels';
+    const mmPerUnit = config.mmPerUnit || 10;
+    const ef = config.explodedFactor || 0;
+    const [cx0, cy0, cz0] = result.centroidMm;
+
+    for (const part of result.parts) {
+        const sprite = createPartLabelSprite(part.partName, part.colorHex, customSpriteHeight);
+        if (!sprite) continue;
+        const dx = part.centerMm[0] - cx0;
+        const dy = part.centerMm[1] - cy0;
+        const dz = part.centerMm[2] - cz0;
+        sprite.position.set(
+            (part.centerMm[0] + dx * ef) / mmPerUnit,
+            (part.centerMm[1] + dy * ef) / mmPerUnit,
+            (part.centerMm[2] + dz * ef) / mmPerUnit
+        );
+        sprite.userData = {
+            centerMm: part.centerMm,
+            centroidMm: result.centroidMm
+        };
+        labelsGroup.add(sprite);
+    }
+
+    partLabelSpritesGroup = labelsGroup;
+    scene.add(labelsGroup);
+}
+
+/**
+ * Builds the Three.js Group hierarchy from a ComputeGluedSpheresResult.
+ * Meshes inside the group have geometry in exact mm, while `builtGroup.scale` is `1 / mmPerUnit`
+ * for the 3D viewport and `currentExportScale = 1` for 1:1 mm exports.
+ */
+export function buildGroupFromGluedSpheresResult(
+    result: ComputeGluedSpheresResult,
+    config: GluedSpheresConfig
+): THREE.Group {
+    const builtGroup = new THREE.Group();
+    const atomGroups: Record<string, THREE.Group> = {};
+    const ef = config.explodedFactor || 0;
+    const [cx0, cy0, cz0] = result.centroidMm;
+
+    for (const part of result.parts) {
+        const geom = partMeshDataToBufferGeometry(part);
+        const mat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(part.colorHex)
+        });
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.name = part.partName;
+        mesh.castShadow = true;
+        mesh.userData = {
+            isGluedSpherePart: true,
+            partName: part.partName,
+            atomType: part.atomType,
+            centerMm: part.centerMm,
+            centroidMm: result.centroidMm
+        };
+
+        const dx = part.centerMm[0] - cx0;
+        const dy = part.centerMm[1] - cy0;
+        const dz = part.centerMm[2] - cz0;
+        mesh.position.set(dx * ef, dy * ef, dz * ef);
+
+        if (!atomGroups[part.atomType]) {
+            const grp = new THREE.Group();
+            grp.name = `Group_${part.atomType}`;
+            atomGroups[part.atomType] = grp;
+            builtGroup.add(grp);
+        }
+        atomGroups[part.atomType].add(mesh);
+    }
+
+    const mmPerUnit = config.mmPerUnit || 10;
+    builtGroup.scale.setScalar(1 / mmPerUnit);
+    builtGroup.updateMatrixWorld(true);
+
+    currentExportScale = 1;
+    group = builtGroup;
+    lastGluedSpheresResult = result;
+    lastGluedSpheresConfig = { ...config };
+    lastMovingJointsStats = null;
+
+    return builtGroup;
+}
+
+/**
+ * Updates Exploded View (0..1) and 3D part ID labels in real time without re-running CSG.
+ */
+export function updateGluedSpheresPreviewOptions(
+    explodedFactor: number,
+    showPartLabels: boolean,
+    exportMode?: GluedSpheresConfig['exportMode'],
+    plateSpacing?: number
+): void {
+    if (!lastGluedSpheresConfig || !lastGluedSpheresResult || !group) return;
+    lastGluedSpheresConfig = {
+        ...lastGluedSpheresConfig,
+        explodedFactor,
+        showPartLabels,
+        ...(exportMode !== undefined ? { exportMode } : {}),
+        ...(plateSpacing !== undefined ? { plateSpacing } : {})
+    };
+
+    const [cx0, cy0, cz0] = lastGluedSpheresResult.centroidMm;
+    group.traverse((obj) => {
+        if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
+            const centerMm = obj.userData.centerMm as [number, number, number];
+            obj.position.set(
+                (centerMm[0] - cx0) * explodedFactor,
+                (centerMm[1] - cy0) * explodedFactor,
+                (centerMm[2] - cz0) * explodedFactor
+            );
+        }
+    });
+    group.updateMatrixWorld(true);
+
+    rebuildPartLabelSprites(lastGluedSpheresResult, lastGluedSpheresConfig);
+}
+
+/**
+ * Runs the Glued Spheres CSG calculation in a Web Worker (or directly in non-worker environments),
+ * updates the Three.js scene, and reports progress.
+ */
+export async function computeAndRenderGluedSpheresAsync(
+    params: CreateAtomsParams,
+    callbacks?: {
+        onProgress?: (completed: number, total: number) => void;
+        onComplete?: (stats: GluedSpheresStats) => void;
+        onError?: (message: string) => void;
+    }
+): Promise<ComputeGluedSpheresResult | null> {
+    const config: GluedSpheresConfig = params.gluedSpheres ?? {
+        mode: 'radical',
+        priorityOrder: ['C', 'N', 'O', 'H'],
+        gap: 0,
+        pegHolesEnabled: false,
+        pegHoleDiameter: 1.9,
+        pegHoleDepth: 3.0,
+        exportMode: 'assembled',
+        plateSpacing: 3.0,
+        explodedFactor: 0,
+        showPartLabels: false,
+        mmPerUnit: params.mmPerUnit ?? 10
+    };
+
+    const requestId = ++latestGluedWorkerRequestId;
+
+    const applyResultToScene = (result: ComputeGluedSpheresResult) => {
+        if (scene) {
+            if (group) {
+                scene.remove(group);
+            }
+            clearPartLabelSprites();
+        }
+        const builtGroup = buildGroupFromGluedSpheresResult(result, config);
+        if (scene) {
+            scene.add(builtGroup);
+            if (builtGroup.children.length > 0 && camera) {
+                camera.position.set(0, 0, 10);
+                camera.lookAt(0, 0, 0);
+            }
+            rebuildPartLabelSprites(result, config);
+        }
+        callbacks?.onComplete?.(result.stats);
+    };
+
+    if (typeof Worker !== 'undefined') {
+        return new Promise<ComputeGluedSpheresResult | null>((resolve) => {
+            try {
+                if (gluedSpheresWorker) {
+                    gluedSpheresWorker.terminate();
+                    gluedSpheresWorker = null;
+                }
+                gluedSpheresWorker = new Worker(
+                    new URL('../geometry/gluedSpheresWorker.ts', import.meta.url),
+                    { type: 'module' }
+                );
+
+                gluedSpheresWorker.onmessage = (
+                    event: MessageEvent<GluedSpheresWorkerResponse>
+                ) => {
+                    const msg = event.data;
+                    if (msg.requestId !== latestGluedWorkerRequestId) {
+                        return;
+                    }
+                    if (msg.type === 'progress') {
+                        callbacks?.onProgress?.(msg.completed, msg.total);
+                    } else if (msg.type === 'result') {
+                        applyResultToScene(msg.result);
+                        resolve(msg.result);
+                    } else if (msg.type === 'error') {
+                        console.error('[GluedSpheresWorker] Error:', msg.message);
+                        callbacks?.onError?.(msg.message);
+                        resolve(null);
+                    }
+                };
+
+                gluedSpheresWorker.onerror = (err) => {
+                    console.error('[GluedSpheresWorker] Uncaught worker error:', err);
+                    callbacks?.onError?.(err.message || 'Web Worker error');
+                    resolve(null);
+                };
+
+                const payload: GluedSpheresWorkerRequest = {
+                    requestId,
+                    coordinates: params.coordinates,
+                    quality: params.quality,
+                    showHydrogens: params.showHydrogens,
+                    multiplicationFactor: params.multiplicationFactor,
+                    uniformAtomDiameter: params.uniformAtomDiameter,
+                    config
+                };
+                gluedSpheresWorker.postMessage(payload);
+            } catch (err) {
+                // Fallback if Worker construction fails
+                computeGluedSpheres(params.coordinates, {
+                    quality: params.quality,
+                    showHydrogens: params.showHydrogens,
+                    multiplicationFactor: params.multiplicationFactor,
+                    uniformAtomDiameter: params.uniformAtomDiameter,
+                    config,
+                    onProgress: callbacks?.onProgress
+                })
+                    .then((res) => {
+                        if (requestId === latestGluedWorkerRequestId) {
+                            applyResultToScene(res);
+                        }
+                        resolve(res);
+                    })
+                    .catch((e) => {
+                        callbacks?.onError?.(e instanceof Error ? e.message : String(e));
+                        resolve(null);
+                    });
+            }
+        });
+    }
+
+    try {
+        const result = await computeGluedSpheres(params.coordinates, {
+            quality: params.quality,
+            showHydrogens: params.showHydrogens,
+            multiplicationFactor: params.multiplicationFactor,
+            uniformAtomDiameter: params.uniformAtomDiameter,
+            config,
+            onProgress: callbacks?.onProgress
+        });
+        if (requestId === latestGluedWorkerRequestId) {
+            applyResultToScene(result);
+        }
+        return result;
+    } catch (e) {
+        callbacks?.onError?.(e instanceof Error ? e.message : String(e));
+        return null;
+    }
+}
+
+/**
+ * Validates that all generated Glued Spheres parts are watertight 2-manifolds before export.
+ */
+export function validateGluedSpheresManifold(
+    result: ComputeGluedSpheresResult | null = lastGluedSpheresResult,
+    locale?: 'cs' | 'en'
+): { valid: boolean; errors: string[] } {
+    if (!result) return { valid: true, errors: [] };
+    const isEn = (locale ?? lastGluedSpheresConfig?.locale) === 'en';
+    const errors: string[] = [];
+    for (const part of result.parts) {
+        if (!part.isManifold || part.status !== 'NoError') {
+            errors.push(
+                isEn
+                    ? `Part ${part.partName} is not manifold (status: ${part.status})`
+                    : `Díl ${part.partName} není manifold (status: ${part.status})`
+            );
+        }
+    }
+    return { valid: errors.length === 0, errors };
+}
+
 function withExportScale<T>(fn: () => T): T {
     if (!group) return fn();
     const prevScale = group.scale.clone();
+    const savedPositions: { mesh: THREE.Mesh; pos: THREE.Vector3 }[] = [];
+    if (lastGluedSpheresResult) {
+        group.traverse((obj) => {
+            if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
+                savedPositions.push({ mesh: obj, pos: obj.position.clone() });
+                obj.position.set(0, 0, 0);
+            }
+        });
+    }
     group.scale.setScalar(currentExportScale);
     group.updateMatrixWorld(true);
     try {
         return fn();
     } finally {
+        for (const item of savedPositions) {
+            item.mesh.position.copy(item.pos);
+        }
         group.scale.copy(prevScale);
         group.updateMatrixWorld(true);
     }
@@ -897,35 +1310,344 @@ export function exportBinary() {
     });
 }
 
-export function exportBinaryAsZip(
-    fileName: string,
+/**
+ * Renders 4 reference PNG images of the slightly exploded model (with 3D part ID labels enabled)
+ * at a standard 4:3 landscape resolution (1600x1200 px, independent of the UI viewport canvas size)
+ * from different camera angles (front, back, side, isometric) to accompany the assembly guide in the ZIP.
+ * Restores the exact original scene, mesh positions, labels, camera, and renderer state afterwards.
+ */
+export function captureGluedSpheresGuidePhotos(
+    result: ComputeGluedSpheresResult,
+    config: GluedSpheresConfig,
+    localeOverride?: 'cs' | 'en'
+): { fileName: string; base64Data: string }[] {
+    if (!renderer || !scene || !camera || !group) {
+        return [];
+    }
+
+    const isEn = (localeOverride ?? config.locale) === 'en';
+    const photos: { fileName: string; base64Data: string }[] = [];
+
+    const savedSize = renderer.getSize(new THREE.Vector2());
+    const savedPixelRatio = renderer.getPixelRatio();
+    const savedCamPos = camera.position.clone();
+    const savedCamQuat = camera.quaternion.clone();
+    const savedCamUp = camera.up.clone();
+    const savedCamAspect = camera.aspect;
+    const savedCamFov = camera.fov;
+    const savedCamNear = camera.near;
+    const savedCamFar = camera.far;
+    const savedClearColor = renderer.getClearColor(new THREE.Color()).clone();
+    const savedClearAlpha = renderer.getClearAlpha();
+
+    const savedMeshPositions: { mesh: THREE.Mesh; pos: THREE.Vector3 }[] = [];
+    const photoExplodedFactor =
+        config.explodedFactor && config.explodedFactor > 0.05 ? config.explodedFactor : 0.35;
+    const [cx0, cy0, cz0] = result.centroidMm;
+
+    const PHOTO_WIDTH = 1600;
+    const PHOTO_HEIGHT = 1200; // Standard 4:3 landscape aspect ratio
+    const PHOTO_FOV = 45;
+
+    try {
+        group.traverse((obj) => {
+            if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
+                savedMeshPositions.push({ mesh: obj, pos: obj.position.clone() });
+                const centerMm = obj.userData.centerMm as [number, number, number];
+                obj.position.set(
+                    (centerMm[0] - cx0) * photoExplodedFactor,
+                    (centerMm[1] - cy0) * photoExplodedFactor,
+                    (centerMm[2] - cz0) * photoExplodedFactor
+                );
+            }
+        });
+        group.updateMatrixWorld(true);
+
+        const bbox = new THREE.Box3().setFromObject(group);
+        const bsphere = new THREE.Sphere();
+        bbox.getBoundingSphere(bsphere);
+        const center = bsphere.center;
+        const radius = Math.max(bsphere.radius, 0.5);
+
+        // Temporarily enable 3D part ID labels scaled proportionally to the molecule bounding sphere
+        const customSpriteHeight = Math.max(0.18, radius * 0.20);
+        rebuildPartLabelSprites(
+            result,
+            {
+                ...config,
+                explodedFactor: photoExplodedFactor,
+                showPartLabels: true
+            },
+            customSpriteHeight
+        );
+
+        const halfFovRad = (PHOTO_FOV * Math.PI) / 360;
+        const camDist = (radius * 1.25) / Math.tan(halfFovRad);
+
+        renderer.setPixelRatio(1);
+        renderer.setSize(PHOTO_WIDTH, PHOTO_HEIGHT, false);
+        renderer.setClearColor(0xffffff, 1);
+
+        camera.aspect = PHOTO_WIDTH / PHOTO_HEIGHT;
+        camera.fov = PHOTO_FOV;
+        camera.near = Math.max(0.05, camDist * 0.08);
+        camera.far = Math.max(100, camDist * 4);
+        camera.updateProjectionMatrix();
+
+        const views: { fileName: string; offset: [number, number, number] }[] = [
+            {
+                fileName: isEn ? '1_front_view.png' : '1_predni_pohled.png',
+                offset: [0, 0, camDist]
+            },
+            {
+                fileName: isEn ? '2_back_view.png' : '2_zadni_pohled.png',
+                offset: [0, 0, -camDist]
+            },
+            {
+                fileName: isEn ? '3_side_view.png' : '3_bocni_pohled.png',
+                offset: [camDist, 0, 0]
+            },
+            {
+                fileName: isEn ? '4_isometric_view.png' : '4_izometricky_pohled.png',
+                offset: [camDist * 0.62, camDist * 0.52, camDist * 0.62]
+            }
+        ];
+
+        const prefix = 'data:image/png;base64,';
+        for (const v of views) {
+            camera.position.set(
+                center.x + v.offset[0],
+                center.y + v.offset[1],
+                center.z + v.offset[2]
+            );
+            camera.up.set(0, 1, 0);
+            camera.lookAt(center);
+            camera.updateMatrixWorld(true);
+
+            renderer.render(scene, camera);
+            const dataUrl = renderer.domElement.toDataURL('image/png');
+            if (dataUrl && dataUrl.startsWith(prefix)) {
+                photos.push({
+                    fileName: v.fileName,
+                    base64Data: dataUrl.slice(prefix.length)
+                });
+            }
+        }
+    } catch (err) {
+        console.warn('[GluedSpheres] Failed to capture guide photos:', err);
+    } finally {
+        for (const item of savedMeshPositions) {
+            item.mesh.position.copy(item.pos);
+        }
+        group.updateMatrixWorld(true);
+        rebuildPartLabelSprites(result, config);
+
+        renderer.setPixelRatio(savedPixelRatio);
+        renderer.setSize(savedSize.x, savedSize.y, false);
+        renderer.setClearColor(savedClearColor, savedClearAlpha);
+
+        camera.aspect = savedCamAspect;
+        camera.fov = savedCamFov;
+        camera.near = savedCamNear;
+        camera.far = savedCamFar;
+        camera.updateProjectionMatrix();
+
+        camera.position.copy(savedCamPos);
+        camera.up.copy(savedCamUp);
+        camera.quaternion.copy(savedCamQuat);
+        camera.updateMatrixWorld(true);
+
+        renderer.render(scene, camera);
+    }
+
+    return photos;
+}
+
+function resolveStructureImageUrl(
     metadata: Record<string, string | number | boolean | null | undefined>
+): string | null {
+    const rawUrl = typeof metadata.moleculeImage === 'string' ? metadata.moleculeImage.trim() : '';
+    if (
+        rawUrl &&
+        !rawUrl.includes('openmoji.org') &&
+        !rawUrl.includes('cod-logo.png') &&
+        rawUrl.startsWith('http')
+    ) {
+        return rawUrl;
+    }
+    if (
+        !metadata.isFileUploaded &&
+        metadata.moleculeId &&
+        /^\d+$/.test(String(metadata.moleculeId).trim())
+    ) {
+        return `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${String(metadata.moleculeId).trim()}/PNG`;
+    }
+    return null;
+}
+
+async function fetchStructureImageForGuide(
+    url: string,
+    isEn: boolean
+): Promise<{ fileName: string; bytes: Uint8Array } | null> {
+    if (typeof fetch === 'undefined') return null;
+    try {
+        let response: Response | null = null;
+        if (url.includes('pubchem.ncbi.nlm.nih.gov') && !url.includes('image_size=')) {
+            response = await fetch(`${url}?image_size=large`).catch(() => null);
+        }
+        if (!response || !response.ok) {
+            response = await fetch(url);
+        }
+        if (!response.ok) return null;
+        const buf = await response.arrayBuffer();
+        if (buf.byteLength === 0) return null;
+        const lower = url.toLowerCase();
+        const ext = lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'jpg' : 'png';
+        const fileName = isEn ? `0_molecule_structure.${ext}` : `0_struktura_molekuly.${ext}`;
+        return { fileName, bytes: new Uint8Array(buf) };
+    } catch (err) {
+        console.warn('[GluedSpheres] Could not fetch structure image for guide:', err);
+        return null;
+    }
+}
+
+/**
+ * Builds the JSZip archive for the "Spheres – rozložené pro lepení" style:
+ * - exportMode === 'assembled': `<Element>/<Element>_<id>.stl` in absolute mm coordinates
+ * - exportMode === 'plate': `plate_<Element>.stl` with parts rotated largest cut face down (-Z), minZ = 0, arranged in a grid
+ * - `navod.txt` / `assembly_guide.txt` + `navod_foto/*.png` / `guide_photos/*.png` + `metadata.txt`
+ */
+export function buildGluedSpheresZip(
+    result: ComputeGluedSpheresResult,
+    config: GluedSpheresConfig,
+    metadata: Record<string, string | number | boolean | null | undefined>,
+    localeOverride?: 'cs' | 'en',
+    structureImage?: { fileName: string; bytes: Uint8Array } | null
+): JSZip {
+    const zip = new JSZip();
+    const locale = localeOverride ?? config.locale ?? 'cs';
+    const isEn = locale === 'en';
+
+    if (config.exportMode === 'plate') {
+        const partsByElement = new Map<string, GluedSpherePartMeshData[]>();
+        for (const part of result.parts) {
+            let list = partsByElement.get(part.atomType);
+            if (!list) {
+                list = [];
+                partsByElement.set(part.atomType, list);
+            }
+            list.push(part);
+        }
+
+        for (const [atomType, elementParts] of partsByElement.entries()) {
+            const { group: plateGroup, partTransforms } = arrangeElementPartsOnPlate(
+                elementParts,
+                config.plateSpacing
+            );
+            const stlDataView = exporter.parse(plateGroup, { binary: true }) as DataView;
+            zip.file(`plate_${atomType}.stl`, new Uint8Array(stlDataView.buffer as ArrayBuffer));
+            for (const pt of partTransforms) {
+                pt.geometry.dispose();
+            }
+        }
+    } else {
+        // 'assembled': each part as `<Element>/<Element>_<id>.stl` in absolute coordinates
+        const dummyMat = new THREE.MeshStandardMaterial();
+        for (const part of result.parts) {
+            const geom = partMeshDataToBufferGeometry(part);
+            const mesh = new THREE.Mesh(geom, dummyMat);
+            mesh.updateMatrixWorld(true);
+            const stlDataView = exporter.parse(mesh, { binary: true }) as DataView;
+            zip.file(
+                `${part.atomType}/${part.partName}.stl`,
+                new Uint8Array(stlDataView.buffer as ArrayBuffer)
+            );
+            geom.dispose();
+        }
+        dummyMat.dispose();
+    }
+
+    const guideFileName = isEn ? 'assembly_guide.txt' : 'navod.txt';
+    const guidePhotosFolder = isEn ? 'guide_photos' : 'navod_foto';
+
+    if (structureImage) {
+        zip.file(`${guidePhotosFolder}/${structureImage.fileName}`, structureImage.bytes);
+    }
+
+    const guideContent = generateAssemblyGuideTxt(
+        result.parts,
+        result.stats,
+        config,
+        locale,
+        structureImage?.fileName ?? null
+    );
+    zip.file(guideFileName, guideContent);
+
+    const guidePhotos = captureGluedSpheresGuidePhotos(result, config, locale);
+    for (const photo of guidePhotos) {
+        zip.file(`${guidePhotosFolder}/${photo.fileName}`, photo.base64Data, { base64: true });
+    }
+
+    const metadataContent = Object.entries(metadata)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('\n');
+    zip.file('metadata.txt', metadataContent);
+
+    return zip;
+}
+
+export async function exportBinaryAsZip(
+    fileName: string,
+    metadata: Record<string, string | number | boolean | null | undefined>,
+    locale?: 'cs' | 'en'
 ) {
     if (!group || group.children.length === 0) {
         console.warn('No mesh available for export.');
         return;
     }
 
-    const zip = new JSZip();
+    let zip: JSZip;
 
-    withExportScale(() => {
-        group!.children.forEach((child, index) => {
-            if (child instanceof THREE.Group) {
-                const result = exporter.parse(child, { binary: true }) as DataView;
-                const groupName = child.name || `Group_${index}`;
-                console.log(`Exporting group: ${groupName}`);
-                zip.file(
-                    `${groupName}.stl`,
-                    new Blob([result.buffer as ArrayBuffer], { type: 'application/octet-stream' })
-                );
-            }
+    if (lastGluedSpheresResult && lastGluedSpheresConfig) {
+        const validation = validateGluedSpheresManifold(lastGluedSpheresResult, locale);
+        if (!validation.valid) {
+            console.error('Manifold validation failed before ZIP export:', validation.errors);
+            return;
+        }
+        const effectiveLocale = locale ?? lastGluedSpheresConfig.locale ?? 'cs';
+        const structureUrl = resolveStructureImageUrl(metadata);
+        const structureImage = structureUrl
+            ? await fetchStructureImageForGuide(structureUrl, effectiveLocale === 'en')
+            : null;
+        zip = buildGluedSpheresZip(
+            lastGluedSpheresResult,
+            lastGluedSpheresConfig,
+            metadata,
+            effectiveLocale,
+            structureImage
+        );
+    } else {
+        zip = new JSZip();
+
+        withExportScale(() => {
+            group!.children.forEach((child, index) => {
+                if (child instanceof THREE.Group) {
+                    const result = exporter.parse(child, { binary: true }) as DataView;
+                    const groupName = child.name || `Group_${index}`;
+                    console.log(`Exporting group: ${groupName}`);
+                    zip.file(
+                        `${groupName}.stl`,
+                        new Blob([result.buffer as ArrayBuffer], { type: 'application/octet-stream' })
+                    );
+                }
+            });
         });
-    });
 
-    const metadataContent = Object.entries(metadata)
-        .map(([key, value]) => `${key}: ${value}`)
-        .join('\n');
-    zip.file('metadata.txt', metadataContent);
+        const metadataContent = Object.entries(metadata)
+            .map(([key, value]) => `${key}: ${value}`)
+            .join('\n');
+        zip.file('metadata.txt', metadataContent);
+    }
 
     zip.generateAsync({ type: 'blob' })
         .then((content) => {
@@ -1000,7 +1722,8 @@ function encodeExtruderPaintColor(zeroBasedSlot: number): string {
 
 export async function generateModel3MFBlob(
     fileName: string,
-    metadata?: Record<string, string | number | boolean | null | undefined>
+    metadata?: Record<string, string | number | boolean | null | undefined>,
+    locale?: 'cs' | 'en'
 ): Promise<Blob | null> {
     if (!group || group.children.length === 0) {
         console.warn('No mesh available for export.');
@@ -1016,83 +1739,157 @@ export async function generateModel3MFBlob(
         maxY = -Infinity,
         maxZ = -Infinity;
 
-    withExportScale(() => {
-        group!.children.forEach((child, index) => {
-            if (!(child instanceof THREE.Group || child instanceof THREE.Mesh)) {
-                return;
-            }
+    if (lastGluedSpheresResult && lastGluedSpheresConfig) {
+        const validation = validateGluedSpheresManifold(lastGluedSpheresResult, locale);
+        if (!validation.valid) {
+            console.error('Manifold validation failed before 3MF export:', validation.errors);
+            return null;
+        }
 
-            const groupName = child.name || `Group_${index}`;
-            let groupColor = '#808080';
-
-            child.traverse((obj) => {
-                if (obj instanceof THREE.Mesh && obj.material) {
-                    const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
-                    if (mat && 'color' in mat && mat.color instanceof THREE.Color) {
-                        groupColor = `#${mat.color.getHexString().toUpperCase()}`;
-                    }
-                }
-            });
-
-            const vertices: number[] = [];
-            const indices: number[] = [];
+        if (lastGluedSpheresConfig.exportMode === 'plate') {
+            const { partTransforms } = arrangeElementPartsOnPlate(
+                lastGluedSpheresResult.parts,
+                lastGluedSpheresConfig.plateSpacing
+            );
+            const partByName = new Map(
+                lastGluedSpheresResult.parts.map((p) => [p.partName, p])
+            );
             const v = new THREE.Vector3();
-
-            child.traverse((obj) => {
-                if (obj instanceof THREE.Mesh && obj.geometry) {
-                    let cleanGeom: THREE.BufferGeometry = obj.geometry.clone();
-                    cleanGeom.deleteAttribute('uv');
-                    cleanGeom.deleteAttribute('normal');
-                    cleanGeom.applyMatrix4(obj.matrixWorld);
-                    cleanGeom = mergeVertices(cleanGeom, 1e-4);
-
-                    const positionAttribute = cleanGeom.getAttribute('position') as
-                        | THREE.BufferAttribute
-                        | undefined;
-                    if (!positionAttribute) {
-                        cleanGeom.dispose();
-                        return;
-                    }
-
-                    const indexAttribute = cleanGeom.index;
-                    const baseVertexOffset = vertices.length / 3;
-
-                    for (let i = 0; i < positionAttribute.count; i++) {
-                        v.fromBufferAttribute(positionAttribute, i);
-                        vertices.push(v.x, v.y, v.z);
-
-                        if (v.x < minX) minX = v.x;
-                        if (v.y < minY) minY = v.y;
-                        if (v.z < minZ) minZ = v.z;
-                        if (v.x > maxX) maxX = v.x;
-                        if (v.y > maxY) maxY = v.y;
-                        if (v.z > maxZ) maxZ = v.z;
-                    }
-
-                    if (indexAttribute !== null) {
-                        for (let i = 0; i < indexAttribute.count; i++) {
-                            indices.push(indexAttribute.getX(i) + baseVertexOffset);
-                        }
-                    } else {
-                        for (let i = 0; i < positionAttribute.count; i++) {
-                            indices.push(i + baseVertexOffset);
-                        }
-                    }
-
-                    cleanGeom.dispose();
+            for (const pt of partTransforms) {
+                const partMeta = partByName.get(pt.partName)!;
+                const posAttr = pt.geometry.getAttribute('position') as THREE.BufferAttribute;
+                const idxAttr = pt.geometry.index;
+                const vertices: number[] = [];
+                const indices: number[] = [];
+                for (let i = 0; i < posAttr.count; i++) {
+                    v.fromBufferAttribute(posAttr, i);
+                    vertices.push(v.x, v.y, v.z);
+                    if (v.x < minX) minX = v.x;
+                    if (v.y < minY) minY = v.y;
+                    if (v.z < minZ) minZ = v.z;
+                    if (v.x > maxX) maxX = v.x;
+                    if (v.y > maxY) maxY = v.y;
+                    if (v.z > maxZ) maxZ = v.z;
                 }
-            });
-
-            if (indices.length > 0 && vertices.length > 0) {
+                if (idxAttr) {
+                    for (let i = 0; i < idxAttr.count; i++) {
+                        indices.push(idxAttr.getX(i));
+                    }
+                } else {
+                    for (let i = 0; i < posAttr.count; i++) {
+                        indices.push(i);
+                    }
+                }
                 groupDataList.push({
-                    name: groupName,
-                    colorHex: groupColor,
+                    name: pt.partName,
+                    colorHex: partMeta.colorHex.toUpperCase(),
+                    vertices,
+                    indices
+                });
+                pt.geometry.dispose();
+            }
+        } else {
+            for (const part of lastGluedSpheresResult.parts) {
+                const vertices = Array.from(part.positions);
+                const indices = Array.from(part.indices);
+                for (let i = 0; i < vertices.length; i += 3) {
+                    const vx = vertices[i];
+                    const vy = vertices[i + 1];
+                    const vz = vertices[i + 2];
+                    if (vx < minX) minX = vx;
+                    if (vy < minY) minY = vy;
+                    if (vz < minZ) minZ = vz;
+                    if (vx > maxX) maxX = vx;
+                    if (vy > maxY) maxY = vy;
+                    if (vz > maxZ) maxZ = vz;
+                }
+                groupDataList.push({
+                    name: part.partName,
+                    colorHex: part.colorHex.toUpperCase(),
                     vertices,
                     indices
                 });
             }
+        }
+    } else {
+        withExportScale(() => {
+            group!.children.forEach((child, index) => {
+                if (!(child instanceof THREE.Group || child instanceof THREE.Mesh)) {
+                    return;
+                }
+
+                const groupName = child.name || `Group_${index}`;
+                let groupColor = '#808080';
+
+                child.traverse((obj) => {
+                    if (obj instanceof THREE.Mesh && obj.material) {
+                        const mat = Array.isArray(obj.material) ? obj.material[0] : obj.material;
+                        if (mat && 'color' in mat && mat.color instanceof THREE.Color) {
+                            groupColor = `#${mat.color.getHexString().toUpperCase()}`;
+                        }
+                    }
+                });
+
+                const vertices: number[] = [];
+                const indices: number[] = [];
+                const v = new THREE.Vector3();
+
+                child.traverse((obj) => {
+                    if (obj instanceof THREE.Mesh && obj.geometry) {
+                        let cleanGeom: THREE.BufferGeometry = obj.geometry.clone();
+                        cleanGeom.deleteAttribute('uv');
+                        cleanGeom.deleteAttribute('normal');
+                        cleanGeom.applyMatrix4(obj.matrixWorld);
+                        cleanGeom = mergeVertices(cleanGeom, 1e-4);
+
+                        const positionAttribute = cleanGeom.getAttribute('position') as
+                            | THREE.BufferAttribute
+                            | undefined;
+                        if (!positionAttribute) {
+                            cleanGeom.dispose();
+                            return;
+                        }
+
+                        const indexAttribute = cleanGeom.index;
+                        const baseVertexOffset = vertices.length / 3;
+
+                        for (let i = 0; i < positionAttribute.count; i++) {
+                            v.fromBufferAttribute(positionAttribute, i);
+                            vertices.push(v.x, v.y, v.z);
+
+                            if (v.x < minX) minX = v.x;
+                            if (v.y < minY) minY = v.y;
+                            if (v.z < minZ) minZ = v.z;
+                            if (v.x > maxX) maxX = v.x;
+                            if (v.y > maxY) maxY = v.y;
+                            if (v.z > maxZ) maxZ = v.z;
+                        }
+
+                        if (indexAttribute !== null) {
+                            for (let i = 0; i < indexAttribute.count; i++) {
+                                indices.push(indexAttribute.getX(i) + baseVertexOffset);
+                            }
+                        } else {
+                            for (let i = 0; i < positionAttribute.count; i++) {
+                                indices.push(i + baseVertexOffset);
+                            }
+                        }
+
+                        cleanGeom.dispose();
+                    }
+                });
+
+                if (indices.length > 0 && vertices.length > 0) {
+                    groupDataList.push({
+                        name: groupName,
+                        colorHex: groupColor,
+                        vertices,
+                        indices
+                    });
+                }
+            });
         });
-    });
+    }
 
     if (groupDataList.length === 0) {
         console.warn('No geometry found to export in 3MF.');
@@ -1174,7 +1971,115 @@ export async function generateModel3MFBlob(
     const offsetY = roundCoord(100 - centerY);
     const offsetZ = roundCoord(isFinite(minZ) ? -minZ : 0);
 
-    const modelXml = `<?xml version="1.0" encoding="UTF-8"?>
+    let modelXml: string;
+    let slic3rPeModelConfig: string;
+    let paletteColors: string[];
+
+    if (lastGluedSpheresResult && lastGluedSpheresConfig) {
+        // Deduplicate colors by element so filament slots correspond to unique elements
+        // while each part is exported as its own separate <object name="C_12"> in 3MF
+        const uniqueColors: string[] = [];
+        const colorToSlot = new Map<string, number>();
+        for (const data of groupDataList) {
+            if (!colorToSlot.has(data.colorHex)) {
+                colorToSlot.set(data.colorHex, uniqueColors.length);
+                uniqueColors.push(data.colorHex);
+            }
+        }
+        paletteColors = uniqueColors;
+
+        let gluedColorGroupXml = '    <m:colorgroup id="1">\n';
+        let gluedBaseMaterialsXml = '    <basematerials id="2">\n';
+        uniqueColors.forEach((hex, idx) => {
+            gluedColorGroupXml += `      <m:color color="${hex}FF" />\n`;
+            gluedBaseMaterialsXml += `      <base name="Color_${idx + 1}" displaycolor="${hex}FF" />\n`;
+        });
+        gluedColorGroupXml += '    </m:colorgroup>\n';
+        gluedBaseMaterialsXml += '    </basematerials>\n';
+
+        const objectBlocks: string[] = [];
+        const buildItemBlocks: string[] = [];
+        const configObjectBlocks: string[] = [];
+
+        groupDataList.forEach((data, i) => {
+            const objId = 3 + i;
+            const slotIdx = colorToSlot.get(data.colorHex) ?? 0;
+            const paintHex = encodeExtruderPaintColor(slotIdx);
+            const paintAttr = paintHex
+                ? ` paint_color="${paintHex}" slic3rpe:mmu_segmentation="${paintHex}"`
+                : '';
+
+            const objVerts: string[] = [];
+            for (let vIdx = 0; vIdx < data.vertices.length; vIdx += 3) {
+                objVerts.push(
+                    `          <vertex x="${roundCoord(data.vertices[vIdx])}" y="${roundCoord(data.vertices[vIdx + 1])}" z="${roundCoord(data.vertices[vIdx + 2])}" />`
+                );
+            }
+
+            const objTris: string[] = [];
+            for (let tIdx = 0; tIdx < data.indices.length; tIdx += 3) {
+                const v1 = data.indices[tIdx];
+                const v2 = data.indices[tIdx + 1];
+                const v3 = data.indices[tIdx + 2];
+                objTris.push(
+                    `          <triangle v1="${v1}" v2="${v2}" v3="${v3}" pid="1" p1="${slotIdx}"${paintAttr} />`
+                );
+            }
+
+            objectBlocks.push(`    <object id="${objId}" name="${escapeXml(data.name)}" type="model" pid="1" pindex="${slotIdx}">
+      <mesh>
+        <vertices>
+${objVerts.join('\n')}
+        </vertices>
+        <triangles>
+${objTris.join('\n')}
+        </triangles>
+      </mesh>
+    </object>`);
+
+            buildItemBlocks.push(
+                `    <item objectid="${objId}" transform="1 0 0 0 1 0 0 0 1 ${offsetX} ${offsetY} ${offsetZ}" printable="1" />`
+            );
+
+            const numTriangles = data.indices.length / 3;
+            configObjectBlocks.push(`  <object id="${objId}" instances_count="1">
+    <metadata type="object" key="name" value="${escapeXml(data.name)}"/>
+    <metadata type="object" key="extruder" value="${slotIdx + 1}"/>
+    <volume firstid="0" lastid="${Math.max(0, numTriangles - 1)}">
+      <metadata type="volume" key="name" value="${escapeXml(data.name)}"/>
+      <metadata type="volume" key="volume_type" value="ModelPart"/>
+      <metadata type="volume" key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
+      <metadata type="volume" key="source_object_id" value="${objId}"/>
+      <metadata type="volume" key="source_volume_id" value="0"/>
+      <metadata type="volume" key="extruder" value="${slotIdx + 1}"/>
+      <mesh edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
+    </volume>
+  </object>`);
+        });
+
+        modelXml = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">
+  <metadata name="Application">BambuStudio-01.10.00.89</metadata>
+  <metadata name="BambuStudio:3mfVersion">1</metadata>
+  <metadata name="slic3rpe:Version3mf">1</metadata>
+  <metadata name="slic3rpe:MmPaintingVersion">1</metadata>
+  <metadata name="Title">${escapeXml(fileName)}</metadata>
+  <resources>
+${gluedColorGroupXml}${gluedBaseMaterialsXml}${objectBlocks.join('\n')}
+  </resources>
+  <build>
+${buildItemBlocks.join('\n')}
+  </build>
+</model>`;
+
+        slic3rPeModelConfig = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+${configObjectBlocks.join('\n')}
+</config>`;
+    } else {
+        paletteColors = groupDataList.map((d) => d.colorHex);
+
+        modelXml = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">
   <metadata name="Application">BambuStudio-01.10.00.89</metadata>
   <metadata name="BambuStudio:3mfVersion">1</metadata>
@@ -1198,17 +2103,18 @@ ${triangleLines.join('\n')}
   </build>
 </model>`;
 
-    const slic3rPeModelConfig = `<?xml version="1.0" encoding="UTF-8"?>
+        slic3rPeModelConfig = `<?xml version="1.0" encoding="UTF-8"?>
 <config>
   <object id="${objectId}" instances_count="1">
     <metadata type="object" key="name" value="${escapeXml(fileName)}"/>
 ${volumeConfigs.join('\n')}
   </object>
 </config>`;
+    }
 
-    const colorList = groupDataList.map((d) => d.colorHex).join(';');
-    const nozzleDiameters = groupDataList.map(() => '0.4').join(',');
-    const filamentDiameters = groupDataList.map(() => '1.75').join(',');
+    const colorList = paletteColors.join(';');
+    const nozzleDiameters = paletteColors.map(() => '0.4').join(',');
+    const filamentDiameters = paletteColors.map(() => '1.75').join(',');
 
     const slic3rPeConfig = `; generated by 3D-Print-Molecules-WEB
 ; extruder_colour = ${colorList}
@@ -1220,9 +2126,9 @@ ${volumeConfigs.join('\n')}
 
     const projectSettingsJson = JSON.stringify(
         {
-            filament_colour: groupDataList.map((d) => d.colorHex),
-            filament_type: groupDataList.map(() => 'PLA'),
-            filament_settings_id: groupDataList.map(() => 'Bambu PLA Basic @BBL X1C'),
+            filament_colour: paletteColors,
+            filament_type: paletteColors.map(() => 'PLA'),
+            filament_settings_id: paletteColors.map(() => 'Bambu PLA Basic @BBL X1C'),
             printer_settings_id: 'Bambu Lab X1 Carbon 0.4 nozzle',
             print_settings_id: '0.20mm Standard @BBL X1C',
             version: '01.10.00.89'
@@ -1240,6 +2146,20 @@ ${volumeConfigs.join('\n')}
     metadataFolder.file('Slic3r_PE_model.config', slic3rPeModelConfig);
     metadataFolder.file('Slic3r_PE.config', slic3rPeConfig);
     metadataFolder.file('project_settings.config', projectSettingsJson);
+
+    if (lastGluedSpheresResult && lastGluedSpheresConfig) {
+        const effectiveLocale = locale ?? lastGluedSpheresConfig.locale ?? 'cs';
+        const guideFileName = effectiveLocale === 'en' ? 'assembly_guide.txt' : 'navod.txt';
+        zip.file(
+            guideFileName,
+            generateAssemblyGuideTxt(
+                lastGluedSpheresResult.parts,
+                lastGluedSpheresResult.stats,
+                lastGluedSpheresConfig,
+                effectiveLocale
+            )
+        );
+    }
 
     if (metadata) {
         const metadataContent = Object.entries(metadata)
@@ -1263,9 +2183,10 @@ ${volumeConfigs.join('\n')}
 
 export async function exportModelAs3MF(
     fileName: string,
-    metadata?: Record<string, string | number | boolean | null | undefined>
+    metadata?: Record<string, string | number | boolean | null | undefined>,
+    locale?: 'cs' | 'en'
 ): Promise<void> {
-    const content = await generateModel3MFBlob(fileName, metadata);
+    const content = await generateModel3MFBlob(fileName, metadata, locale);
     if (!content) return;
 
     const link = document.createElement('a');

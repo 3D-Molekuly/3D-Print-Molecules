@@ -3,12 +3,13 @@
   import { _ } from 'svelte-i18n';
   import { onMount } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportModelAs3MF, generateModel3MFBlob, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createBallAndStickMesh, createBallAndStickMovingJointsMesh, createCubeMesh, createStickMesh, downloadTestJointSTL, takeScreenshot } from '$lib/threejsFc/threejsMolecules3';
+  import { setupThreeJS, exportModelAs3MF, generateModel3MFBlob, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createGluedSphereMesh, createBallAndStickMesh, createBallAndStickMovingJointsMesh, createCubeMesh, createStickMesh, downloadTestJointSTL, takeScreenshot, computeAndRenderGluedSpheresAsync, updateGluedSpheresPreviewOptions, validateGluedSpheresManifold } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
   import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
-  import type { CreateAtomsParams, JointPresetId, ModelStyleId, MovingJointsStats } from '$lib/types';
+  import type { CreateAtomsParams, JointPresetId, ModelStyleId, MovingJointsStats, GluedSpheresMode, GluedSpheresExportMode, GluedSpheresStats } from '$lib/types';
   import { JOINT_PRESETS, checkJointParams, jointLevels, paramsForRod, type JointParams } from '$lib/geometry/jointGeometry';
+  import { getDefaultPriorityOrder, LARGE_MOLECULE_ATOM_THRESHOLD } from '$lib/geometry/gluedSpheres';
   import { cifToSdf } from '$lib/utils/cifToSdf';
   import { buildLocalizedPath, currentLocale } from '$lib/functions/language';
   import InfoButton from '$lib/buttons/infoButton.svelte';
@@ -33,6 +34,7 @@
 
   const modelGenerators: { id: ModelStyleId; name: string; func: CreateAtomsParams['selectedGenerator'] }[] = [
     { id: 'spheres', name: 'Spheres', func: createSphereMesh },
+    { id: 'spheres-glued', name: 'Spheres SPLIT FOR GLUING (BETA)', func: createGluedSphereMesh },
     { id: 'ball-and-stick', name: 'Ball-and-Stick', func: createBallAndStickMesh },
     { id: 'ball-and-stick-moving-joints', name: 'Ball-and-Stick MOVING JOINTS (BETA)', func: createBallAndStickMovingJointsMesh },
     { id: 'sticks', name: 'Sticks', func: createStickMesh },
@@ -62,6 +64,23 @@
   let jointSkipTerminal = true;
   let jointsInRings = true;
 
+  // Nastavení pro styl Spheres – rozložené pro lepení
+  let gluedMode: GluedSpheresMode = 'radical';
+  let gluedPriorityOrder: string[] = ['C', 'N', 'O', 'H'];
+  let gluedMergeSameElement = true;
+  let gluedGap = 0;
+  let gluedPegHolesEnabled = false;
+  let gluedPegHoleDiameter = 1.9;
+  let gluedPegHoleDepth = 3.0;
+  let gluedExportMode: GluedSpheresExportMode = 'assembled';
+  let gluedPlateSpacing = 3.0;
+  let gluedExplodedPercent = 0;
+  let gluedShowPartLabels = false;
+  let gluedSpheresStats: GluedSpheresStats | null = null;
+  let gluedWorkerProgress = { running: false, completed: 0, total: 0 };
+  let gluedExportError: string | null = null;
+  let isGluedMenuCollapsed = typeof window !== 'undefined' && localStorage.getItem('gluedMenuCollapsed') === 'true';
+
   // Proměnné měřítka modelu (mm / Å) pro každý generátor zvlášť (výchozí: 10 pro spheres a ostatní, 20 pro moving joints)
   let jointMmPerUnitSpheres = 10;
   let jointMmPerUnitBallAndStick = 10;
@@ -84,8 +103,60 @@
   
   let showAdvancedSearch = false; 
 
+  $: isGluedSpheresStyle = selectedGenerator === createGluedSphereMesh;
+  $: isSpheresBasedStyle = selectedGenerator === createSphereMesh || isGluedSpheresStyle;
   $: isMovingJointsStyle = selectedGenerator === createBallAndStickMovingJointsMesh;
   $: isBallAndStickStyle = selectedGenerator === createBallAndStickMesh || isMovingJointsStyle;
+
+  // Synchronize priority order with elements present in the current molecule
+  $: if (atomCoordinates.length > 0) {
+    const activeCoords = showHydrogens
+      ? atomCoordinates
+      : atomCoordinates.filter((c) => c.atomType !== 'H');
+    const defaultElements = getDefaultPriorityOrder(activeCoords.map((c) => c.atomType));
+    const merged = [
+      ...gluedPriorityOrder.filter((el) => defaultElements.includes(el)),
+      ...defaultElements.filter((el) => !gluedPriorityOrder.includes(el))
+    ];
+    if (
+      merged.length > 0 &&
+      (merged.length !== gluedPriorityOrder.length ||
+        merged.some((el, idx) => el !== gluedPriorityOrder[idx]))
+    ) {
+      gluedPriorityOrder = merged;
+    }
+  }
+
+  // Real-time update of Exploded View and Part ID labels without re-running CSG
+  $: if (browser && isGluedSpheresStyle) {
+    updateGluedSpheresPreviewOptions(
+      gluedExplodedPercent / 100,
+      gluedShowPartLabels,
+      gluedExportMode,
+      gluedPlateSpacing
+    );
+  }
+
+  function movePriorityElement(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= gluedPriorityOrder.length) return;
+    const next = [...gluedPriorityOrder];
+    const [item] = next.splice(index, 1);
+    next.splice(target, 0, item);
+    gluedPriorityOrder = next;
+  }
+
+  function toggleGluedMenuCollapse() {
+    isGluedMenuCollapsed = !isGluedMenuCollapsed;
+    if (browser) {
+      localStorage.setItem('gluedMenuCollapsed', isGluedMenuCollapsed.toString());
+    }
+    setTimeout(() => {
+      if (typeof resizeCanvas === 'function') {
+        resizeCanvas();
+      }
+    }, 350);
+  }
   $: rawJointWarnings = checkJointParams(jointParams);
   $: jointWarnings = rawJointWarnings.map((w) => {
     if ($currentLocale !== 'en') return w;
@@ -130,7 +201,7 @@
   // Reaktivní proměnná, která se automaticky mění podle zvoleného generátoru
   let multiplicationFactor: number;
   $: {
-    if (selectedGenerator === createSphereMesh) {
+    if (isSpheresBasedStyle) {
       multiplicationFactor = multiplicationFactorSpheres;
     } else if (isBallAndStickStyle) {
       multiplicationFactor = multiplicationFactorBallAndStick;
@@ -148,7 +219,7 @@
   $: {
     if (isMovingJointsStyle) {
       jointMmPerUnit = jointMmPerUnitMovingJoints;
-    } else if (selectedGenerator === createSphereMesh) {
+    } else if (isSpheresBasedStyle) {
       jointMmPerUnit = jointMmPerUnitSpheres;
     } else if (selectedGenerator === createBallAndStickMesh) {
       jointMmPerUnit = jointMmPerUnitBallAndStick;
@@ -192,6 +263,37 @@
       showHydrogens = JSON.parse(localStorage.getItem('showHydrogens') || 'true');
       uniformAtomDiameter = JSON.parse(localStorage.getItem('uniformAtomDiameter') || 'false');
       showMultipleBonds = JSON.parse(localStorage.getItem('showMultipleBonds') || 'false');
+
+      const savedGluedMode = localStorage.getItem('gluedMode');
+      if (savedGluedMode === 'radical' || savedGluedMode === 'priority') {
+        gluedMode = savedGluedMode;
+      }
+      const savedGluedMergeSameElement = localStorage.getItem('gluedMergeSameElement');
+      if (savedGluedMergeSameElement !== null) {
+        gluedMergeSameElement = JSON.parse(savedGluedMergeSameElement);
+      }
+      const savedGluedGap = parseFloat(localStorage.getItem('gluedGap') || '0');
+      if (!isNaN(savedGluedGap)) gluedGap = Math.max(0, Math.min(0.3, savedGluedGap));
+      const savedGluedPegHoles = localStorage.getItem('gluedPegHolesEnabled');
+      if (savedGluedPegHoles !== null) gluedPegHolesEnabled = JSON.parse(savedGluedPegHoles);
+      const savedGluedPegHoleDiameter = parseFloat(localStorage.getItem('gluedPegHoleDiameter') || '1.9');
+      if (!isNaN(savedGluedPegHoleDiameter) && savedGluedPegHoleDiameter > 0) {
+        gluedPegHoleDiameter = savedGluedPegHoleDiameter;
+      }
+      const savedGluedPegHoleDepth = parseFloat(localStorage.getItem('gluedPegHoleDepth') || '3.0');
+      if (!isNaN(savedGluedPegHoleDepth) && savedGluedPegHoleDepth > 0) {
+        gluedPegHoleDepth = savedGluedPegHoleDepth;
+      }
+      const savedGluedExportMode = localStorage.getItem('gluedExportMode');
+      if (savedGluedExportMode === 'assembled' || savedGluedExportMode === 'plate') {
+        gluedExportMode = savedGluedExportMode;
+      }
+      const savedGluedPlateSpacing = parseFloat(localStorage.getItem('gluedPlateSpacing') || '3.0');
+      if (!isNaN(savedGluedPlateSpacing) && savedGluedPlateSpacing >= 0) {
+        gluedPlateSpacing = savedGluedPlateSpacing;
+      }
+      const savedGluedShowLabels = localStorage.getItem('gluedShowPartLabels');
+      if (savedGluedShowLabels !== null) gluedShowPartLabels = JSON.parse(savedGluedShowLabels);
 
       const savedPreset = localStorage.getItem('jointPreset');
       if (savedPreset === 'fdm' || savedPreset === 'sla') {
@@ -250,6 +352,8 @@
     try {
       const storedCoordinates = sessionStorage.getItem('atomCoordinates');
       const storedInput = sessionStorage.getItem('lastSuccessfulInput');
+      const storedTableInfo = sessionStorage.getItem('tableInfo');
+      const storedImageUrl = sessionStorage.getItem('imageUrl');
       
       if (storedCoordinates) {
         atomCoordinates = JSON.parse(storedCoordinates);
@@ -257,6 +361,14 @@
         lastSuccessfulInput = storedInput || '';
         inputStr = lastSuccessfulInput;
         isReloadMode = atomCoordinates.length > 0;
+        if (storedTableInfo) {
+          try {
+            tableInfo = JSON.parse(storedTableInfo);
+          } catch {}
+        }
+        if (storedImageUrl) {
+          imageUrl = storedImageUrl;
+        }
       }
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
@@ -280,10 +392,16 @@
 
   function setTableInfo(firstItem: string, secondItem: string, thirdItem: string) {
     tableInfo = { firstItem, secondItem, thirdItem };
+    if (browser) {
+      sessionStorage.setItem('tableInfo', JSON.stringify(tableInfo));
+    }
   }
 
   function setImage(url: string) {
     imageUrl = url;
+    if (browser) {
+      sessionStorage.setItem('imageUrl', url);
+    }
   }
 
   function areCoordinatesEqual(coords1: AtomCoordinate[], coords2: AtomCoordinate[]): boolean {
@@ -531,8 +649,32 @@
             jointSkipTerminal: jointSkipTerminal,
             jointsInRings: jointsInRings
           }
+        : {}),
+      ...(isGluedSpheresStyle
+        ? {
+            gluedMode: gluedMode,
+            gluedPriorityOrder: gluedPriorityOrder.join(','),
+            gluedMergeSameElement: gluedMergeSameElement,
+            gluedGap: gluedGap,
+            gluedPegHolesEnabled: gluedPegHolesEnabled,
+            gluedPegHoleDiameter: gluedPegHoleDiameter,
+            gluedPegHoleDepth: gluedPegHoleDepth,
+            gluedExportMode: gluedExportMode,
+            gluedPlateSpacing: gluedPlateSpacing
+          }
         : {})
     };
+  }
+
+  function verifyGluedSpheresBeforeExport(): boolean {
+    if (!isGluedSpheresStyle) return true;
+    const validation = validateGluedSpheresManifold(undefined, $currentLocale);
+    if (!validation.valid) {
+      gluedExportError = `${$_('glued_spheres_export_error_prefix')} ${validation.errors.join(', ')}`;
+      return false;
+    }
+    gluedExportError = null;
+    return true;
   }
 
   async function downloadModel() {
@@ -540,8 +682,9 @@
       showMoleculePopup = true;
       return;
     }
+    if (!verifyGluedSpheresBeforeExport()) return;
     updateFileName();
-    exportModelAs3MF(fileName, getModelMetadata());
+    exportModelAs3MF(fileName, getModelMetadata(), $currentLocale);
   }
 
   async function openInSlicer(slicerId = selectedSlicerId) {
@@ -550,12 +693,13 @@
       showMoleculePopup = true;
       return;
     }
+    if (!verifyGluedSpheresBeforeExport()) return;
     if (isOpeningSlicer) return;
 
     updateFileName();
     isOpeningSlicer = true;
     try {
-      const blob = await generateModel3MFBlob(fileName, getModelMetadata());
+      const blob = await generateModel3MFBlob(fileName, getModelMetadata(), $currentLocale);
       if (!blob) return;
 
       const id = `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
@@ -604,10 +748,11 @@
       showMoleculePopup = true;
       return;
     }
+    if (!verifyGluedSpheresBeforeExport()) return;
     updateFileName();
     const metadata = getModelMetadata("ZIP of STL models with metadata");
 
-    exportBinaryAsZip(fileName, metadata);
+    exportBinaryAsZip(fileName, metadata, $currentLocale);
   }
 
   async function downloadWholeModel() {
@@ -615,6 +760,7 @@
       showMoleculePopup = true;
       return;
     }
+    if (!verifyGluedSpheresBeforeExport()) return;
     updateFileName();
     exportModelAsSTL(fileName);
   }
@@ -622,6 +768,7 @@
   function redrawModel(coords: AtomCoordinate[]) {
     if (coords.length === 0) return;
     sessionStorage.setItem('atomCoordinates', JSON.stringify(coords));
+    gluedExportError = null;
     if (typeof createAtoms === "function") {
       const params: CreateAtomsParams = {
         coordinates: coords,
@@ -632,6 +779,26 @@
         mmPerUnit: jointMmPerUnit,
         ...(isBallAndStickStyle
           ? { bondDiameterMultiplicationFactor, bondQuality, groupBondsSeparately, uniformAtomDiameter, showMultipleBonds }
+          : {}),
+        ...(isGluedSpheresStyle
+          ? {
+              uniformAtomDiameter,
+              gluedSpheres: {
+                mode: gluedMode,
+                priorityOrder: [...gluedPriorityOrder],
+                mergeSameElement: gluedMergeSameElement,
+                gap: gluedGap,
+                pegHolesEnabled: gluedPegHolesEnabled,
+                pegHoleDiameter: gluedPegHoleDiameter,
+                pegHoleDepth: gluedPegHoleDepth,
+                exportMode: gluedExportMode,
+                plateSpacing: gluedPlateSpacing,
+                explodedFactor: gluedExplodedPercent / 100,
+                showPartLabels: gluedShowPartLabels,
+                mmPerUnit: jointMmPerUnit,
+                locale: $currentLocale
+              }
+            }
           : {}),
         ...(isMovingJointsStyle
           ? {
@@ -646,7 +813,30 @@
             }
           : {})
       };
-      movingJointsStats = createAtoms(params);
+      if (isGluedSpheresStyle) {
+        movingJointsStats = null;
+        const activeCount = showHydrogens
+          ? coords.length
+          : coords.filter((c) => c.atomType !== 'H').length;
+        gluedWorkerProgress = { running: true, completed: 0, total: activeCount };
+        computeAndRenderGluedSpheresAsync(params, {
+          onProgress: (completed, total) => {
+            gluedWorkerProgress = { running: true, completed, total };
+          },
+          onComplete: (stats) => {
+            gluedWorkerProgress = { running: false, completed: stats.totalAtoms, total: stats.totalAtoms };
+            gluedSpheresStats = stats;
+          },
+          onError: (errMsg) => {
+            gluedWorkerProgress = { running: false, completed: 0, total: 0 };
+            gluedExportError = errMsg;
+          }
+        });
+      } else {
+        gluedWorkerProgress = { running: false, completed: 0, total: 0 };
+        gluedSpheresStats = null;
+        movingJointsStats = createAtoms(params);
+      }
     } else {
       console.error("createAtoms function not initialized");
     }
@@ -812,6 +1002,21 @@
     jointMmPerUnitSticks = 10;
     jointMmPerUnitCubes = 10;
 
+    gluedMode = 'radical';
+    gluedPriorityOrder = atomCoordinates.length > 0
+      ? getDefaultPriorityOrder(atomCoordinates.map((c) => c.atomType))
+      : ['C', 'N', 'O', 'H'];
+    gluedMergeSameElement = true;
+    gluedGap = 0;
+    gluedPegHolesEnabled = false;
+    gluedPegHoleDiameter = 1.9;
+    gluedPegHoleDepth = 3.0;
+    gluedExportMode = 'assembled';
+    gluedPlateSpacing = 3.0;
+    gluedExplodedPercent = 0;
+    gluedShowPartLabels = false;
+    gluedExportError = null;
+
     if (browser) {
       localStorage.removeItem('quality');
       
@@ -838,6 +1043,15 @@
       localStorage.removeItem('jointSkipTerminal');
       localStorage.removeItem('jointsInRings');
       localStorage.removeItem('jointMmPerUnit');
+      localStorage.removeItem('gluedMode');
+      localStorage.removeItem('gluedMergeSameElement');
+      localStorage.removeItem('gluedGap');
+      localStorage.removeItem('gluedPegHolesEnabled');
+      localStorage.removeItem('gluedPegHoleDiameter');
+      localStorage.removeItem('gluedPegHoleDepth');
+      localStorage.removeItem('gluedExportMode');
+      localStorage.removeItem('gluedPlateSpacing');
+      localStorage.removeItem('gluedShowPartLabels');
     }
 
     if (atomCoordinates.length > 0) {
@@ -870,6 +1084,15 @@
     localStorage.setItem('jointPreferT', String(jointPreferT));
     localStorage.setItem('jointSkipTerminal', JSON.stringify(jointSkipTerminal));
     localStorage.setItem('jointsInRings', JSON.stringify(jointsInRings));
+    localStorage.setItem('gluedMode', gluedMode);
+    localStorage.setItem('gluedMergeSameElement', JSON.stringify(gluedMergeSameElement));
+    localStorage.setItem('gluedGap', String(gluedGap));
+    localStorage.setItem('gluedPegHolesEnabled', JSON.stringify(gluedPegHolesEnabled));
+    localStorage.setItem('gluedPegHoleDiameter', String(gluedPegHoleDiameter));
+    localStorage.setItem('gluedPegHoleDepth', String(gluedPegHoleDepth));
+    localStorage.setItem('gluedExportMode', gluedExportMode);
+    localStorage.setItem('gluedPlateSpacing', String(gluedPlateSpacing));
+    localStorage.setItem('gluedShowPartLabels', JSON.stringify(gluedShowPartLabels));
   }
 
   let isEditing = false;
@@ -1123,7 +1346,7 @@
                     <option value={generator.func}>{generator.name}</option>
                   {/each}
                 </select>
-                {#if isMovingJointsStyle}
+                {#if isMovingJointsStyle || isGluedSpheresStyle}
                   <span class="beta-badge" title="Beta feature">BETA</span>
                 {/if}
               </div>
@@ -1224,7 +1447,7 @@
                                 max="50"
                                 step="0.5"
                               />
-                            {:else if selectedGenerator === createSphereMesh}
+                            {:else if isSpheresBasedStyle}
                               <input
                                 type="number"
                                 id="jointMmPerUnit"
@@ -1279,7 +1502,7 @@
                           </div>
                         </div>
 
-                        {#if selectedGenerator === createSphereMesh}
+                        {#if isSpheresBasedStyle}
                           <div>
                             <label for="multiplicationFactorSpheres" class="form-label mb-1">{$_('multiplication_factor')}</label>
                             <input type="number" id="multiplicationFactorSpheres" bind:value={multiplicationFactorSpheres} step="0.1" min="0.1" class="form-control">
@@ -1333,10 +1556,14 @@
                             <input class="form-check-input" type="checkbox" id="groupBondsSeparatelyCheckBox" bind:checked={groupBondsSeparately}>
                             <label class="form-check-label" for="groupBondsSeparatelyCheckBox">{$_('bonds_checbox')}</label>
                           </div>
+                        {/if}
+                        {#if isBallAndStickStyle || isGluedSpheresStyle}
                           <div class="form-check mb-0">
                             <input class="form-check-input" type="checkbox" id="uniformAtomDiameterCheckbox" bind:checked={uniformAtomDiameter}>
                             <label class="form-check-label" for="uniformAtomDiameterCheckbox">{$_('uniform_atom_diameter_checkbox')}</label>
                           </div>
+                        {/if}
+                        {#if isBallAndStickStyle}
                           <div class="form-check mb-0">
                             <input class="form-check-input" type="checkbox" id="showMultipleBondsCheckbox" bind:checked={showMultipleBonds}>
                             <label class="form-check-label" for="showMultipleBondsCheckbox">{$_('show_multiple_bonds_checkbox') || 'Show Multiple Bonds'}</label>
@@ -1725,6 +1952,351 @@
                       </div>
                     </div>
                   {/if}
+
+                  {#if isGluedSpheresStyle}
+                    <div class="moving-joints-panel mt-4 p-3 rounded border">
+                      <!-- BETA Banner -->
+                      <div class="moving-joints-beta-banner alert d-flex align-items-start gap-3 p-3 mb-3 shadow-sm rounded" role="alert">
+                        <span class="material-symbols-outlined beta-banner-icon flex-shrink-0" style="font-size: 28px; line-height: 1;">science</span>
+                        <div class="flex-grow-1">
+                          <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                            <strong class="beta-banner-title">{$_('glued_spheres_beta_banner_title')}</strong>
+                            <span class="beta-badge">BETA</span>
+                          </div>
+                          <p class="mb-0 small beta-banner-desc">
+                            {$_('glued_spheres_beta_banner_text')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        class="moving-joints-header-btn w-100 d-flex align-items-center justify-content-between p-0 border-0 bg-transparent text-start"
+                        on:click={toggleGluedMenuCollapse}
+                        aria-expanded={!isGluedMenuCollapsed}
+                        aria-controls="collapseGluedSpheres"
+                      >
+                        <span class="fw-bold d-flex align-items-center gap-2">
+                          <span class="material-symbols-outlined">extension</span>
+                          {$_('glued_spheres_settings_title')}
+                          <span class="beta-badge">BETA</span>
+                        </span>
+                        <span class="material-symbols-outlined google-font-darkmode" style="font-size: 28px; line-height: 1;">
+                          {isGluedMenuCollapsed ? 'arrow_drop_down' : 'arrow_drop_up'}
+                        </span>
+                      </button>
+
+                      <div class={isGluedMenuCollapsed ? 'collapse' : 'mt-3 pt-3 border-top'} id="collapseGluedSpheres">
+                        <div class="row g-3">
+                          <!-- Režim řezání (A: Radikální roviny / B: Odečítání podle priority) -->
+                          <div class="col-md-6">
+                            <label for="gluedModeSelect" class="form-label mb-1">{$_('glued_spheres_mode_label')}</label>
+                            <select
+                              id="gluedModeSelect"
+                              class="form-select"
+                              bind:value={gluedMode}
+                              on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                            >
+                              <option value="radical">{$_('glued_spheres_mode_radical')}</option>
+                              <option value="priority">{$_('glued_spheres_mode_priority')}</option>
+                            </select>
+                          </div>
+
+                          <!-- Režim exportu (Složeno / Rozloženo na podložku) -->
+                          <div class="col-md-6">
+                            <label for="gluedExportModeSelect" class="form-label mb-1">{$_('glued_spheres_export_mode_label')}</label>
+                            <select
+                              id="gluedExportModeSelect"
+                              class="form-select"
+                              bind:value={gluedExportMode}
+                            >
+                              <option value="assembled">{$_('glued_spheres_export_assembled')}</option>
+                              <option value="plate">{$_('glued_spheres_export_plate')}</option>
+                            </select>
+                          </div>
+
+                          <!-- Pořadí priorit prvků (jen Režim B) -->
+                          {#if gluedMode === 'priority'}
+                            <div class="col-md-12">
+                              <span class="form-label d-block mb-1">{$_('glued_spheres_priority_label')}</span>
+                              <small class="text-muted d-block mb-2">{$_('glued_spheres_priority_help')}</small>
+                              <div class="d-flex flex-wrap gap-2 align-items-center">
+                                {#each gluedPriorityOrder as el, idx (el)}
+                                  <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded border bg-body">
+                                    <span class="badge bg-secondary">{idx + 1}.</span>
+                                    <strong class="mx-1">{el}</strong>
+                                    <button
+                                      type="button"
+                                      class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                      disabled={idx === 0}
+                                      title={$_('glued_spheres_move_up')}
+                                      aria-label={$_('glued_spheres_move_up')}
+                                      on:click={() => {
+                                        movePriorityElement(idx, -1);
+                                        if (atomCoordinates.length > 0) redrawModel(atomCoordinates);
+                                      }}
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      class="btn btn-sm btn-outline-secondary py-0 px-1"
+                                      disabled={idx === gluedPriorityOrder.length - 1}
+                                      title={$_('glued_spheres_move_down')}
+                                      aria-label={$_('glued_spheres_move_down')}
+                                      on:click={() => {
+                                        movePriorityElement(idx, 1);
+                                        if (atomCoordinates.length > 0) redrawModel(atomCoordinates);
+                                      }}
+                                    >
+                                      ↓
+                                    </button>
+                                  </div>
+                                {/each}
+                              </div>
+                            </div>
+                          {/if}
+
+                          <!-- Tolerance / mezera (gap, 0 - 0.3 mm) -->
+                          <div class="col-md-6">
+                            <label for="gluedGapRange" class="form-label mb-1 d-flex justify-content-between">
+                              <span>{$_('glued_spheres_gap_label')}</span>
+                              <span class="fw-semibold">{gluedGap.toFixed(2)} mm</span>
+                            </label>
+                            <div class="d-flex align-items-center gap-2">
+                              <input
+                                type="range"
+                                id="gluedGapRange"
+                                class="form-range flex-grow-1"
+                                min="0"
+                                max="0.30"
+                                step="0.01"
+                                bind:value={gluedGap}
+                                on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                              />
+                              <input
+                                type="number"
+                                id="gluedGapNumber"
+                                class="form-control"
+                                style="width: 5.5rem;"
+                                min="0"
+                                max="0.30"
+                                step="0.01"
+                                bind:value={gluedGap}
+                                on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                              />
+                            </div>
+                            <small class="text-muted d-block mt-1">{$_('glued_spheres_gap_help')}</small>
+                          </div>
+
+                          <!-- Rozestup dílů na podložce (mm) -->
+                          <div class="col-md-6">
+                            <label for="gluedPlateSpacingInput" class="form-label mb-1">{$_('glued_spheres_plate_spacing_label')}</label>
+                            <div class="input-group">
+                              <input
+                                type="number"
+                                id="gluedPlateSpacingInput"
+                                class="form-control"
+                                min="0.5"
+                                max="25"
+                                step="0.5"
+                                bind:value={gluedPlateSpacing}
+                              />
+                              <span class="input-group-text">mm</span>
+                            </div>
+                          </div>
+
+                          <!-- Spojit sousedící atomy stejného prvku do jednoho dílu -->
+                          <div class="col-md-12">
+                            <div class="form-check">
+                              <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="gluedMergeSameElementCheckbox"
+                                bind:checked={gluedMergeSameElement}
+                                on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                              />
+                              <label class="form-check-label" for="gluedMergeSameElementCheckbox">
+                                {$_('glued_spheres_merge_same_element_label')}
+                              </label>
+                            </div>
+                          </div>
+
+                          <!-- Díry pro kolík (jen Režim A) -->
+                          {#if gluedMode === 'radical'}
+                            <div class="col-md-12">
+                              <div class="form-check">
+                                <input
+                                  class="form-check-input"
+                                  type="checkbox"
+                                  id="gluedPegHolesCheckbox"
+                                  bind:checked={gluedPegHolesEnabled}
+                                  on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                                />
+                                <label class="form-check-label" for="gluedPegHolesCheckbox">
+                                  {$_('glued_spheres_peg_holes_label')}
+                                </label>
+                              </div>
+                            </div>
+
+                            {#if gluedPegHolesEnabled}
+                              <div class="col-md-6">
+                                <label for="gluedPegDiameterInput" class="form-label mb-1">{$_('glued_spheres_peg_diameter_label')}</label>
+                                <div class="input-group input-group-sm">
+                                  <input
+                                    type="number"
+                                    id="gluedPegDiameterInput"
+                                    class="form-control"
+                                    min="1.0"
+                                    max="5.0"
+                                    step="0.05"
+                                    bind:value={gluedPegHoleDiameter}
+                                    on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                                  />
+                                  <span class="input-group-text">mm</span>
+                                </div>
+                              </div>
+
+                              <div class="col-md-6">
+                                <label for="gluedPegDepthInput" class="form-label mb-1">{$_('glued_spheres_peg_depth_label')}</label>
+                                <div class="input-group input-group-sm">
+                                  <input
+                                    type="number"
+                                    id="gluedPegDepthInput"
+                                    class="form-control"
+                                    min="1.0"
+                                    max="15.0"
+                                    step="0.5"
+                                    bind:value={gluedPegHoleDepth}
+                                    on:change={() => { if (atomCoordinates.length > 0) redrawModel(atomCoordinates); }}
+                                  />
+                                  <span class="input-group-text">mm</span>
+                                </div>
+                              </div>
+                            {/if}
+                          {/if}
+
+                          <!-- Náhled: Exploded view posuvník (0–100 %) a popisky ID dílů -->
+                          <div class="col-md-6">
+                            <label for="gluedExplodedRange" class="form-label mb-1 d-flex justify-content-between">
+                              <span>{$_('glued_spheres_exploded_label')}</span>
+                              <span class="fw-semibold">{gluedExplodedPercent}%</span>
+                            </label>
+                            <input
+                              type="range"
+                              id="gluedExplodedRange"
+                              class="form-range w-100"
+                              min="0"
+                              max="100"
+                              step="1"
+                              bind:value={gluedExplodedPercent}
+                            />
+                            <small class="text-muted d-block mt-1">{$_('glued_spheres_exploded_help')}</small>
+                          </div>
+
+                          <div class="col-md-6 d-flex align-items-center">
+                            <div class="form-check mt-2">
+                              <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="gluedShowLabelsCheckbox"
+                                bind:checked={gluedShowPartLabels}
+                              />
+                              <label class="form-check-label" for="gluedShowLabelsCheckbox">
+                                {$_('glued_spheres_show_labels_label')}
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Průběh výpočtu ve Web Workeru -->
+                        {#if gluedWorkerProgress.running}
+                          <div class="alert alert-info py-2 px-3 mt-3 mb-0 small" role="status">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                              <span>{$_('glued_spheres_progress_prefix')}</span>
+                              <strong>{gluedWorkerProgress.completed} / {gluedWorkerProgress.total} {$_('glued_spheres_progress_atoms')}</strong>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                              <div
+                                class="progress-bar progress-bar-striped progress-bar-animated"
+                                role="progressbar"
+                                style="width: {gluedWorkerProgress.total > 0 ? Math.round((gluedWorkerProgress.completed / gluedWorkerProgress.total) * 100) : 0}%;"
+                              ></div>
+                            </div>
+                          </div>
+                        {/if}
+
+                        <!-- Upozornění na velkou molekulu (>2000 atomů) -->
+                        {#if atomCoordinates.length > LARGE_MOLECULE_ATOM_THRESHOLD || gluedSpheresStats?.largeMoleculeWarning}
+                          <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small" role="alert">
+                            {$_('glued_spheres_large_molecule_warning')}
+                          </div>
+                        {/if}
+
+                        <!-- Chyba při kontrole manifold před exportem -->
+                        {#if gluedExportError}
+                          <div class="alert alert-danger py-2 px-3 mt-3 mb-0 small" role="alert">
+                            {gluedExportError}
+                          </div>
+                        {/if}
+
+                        <!-- Statistika vygenerovaných dílů -->
+                        {#if gluedSpheresStats}
+                          <div class="joint-stats-box mt-3 p-2 rounded border small">
+                            <div>
+                              {$_('glued_spheres_stats_parts_prefix')} <strong>{gluedSpheresStats.generatedPartsCount}</strong> / <strong>{gluedSpheresStats.totalAtoms}</strong> {$_('glued_spheres_stats_parts_suffix')}
+                            </div>
+                          </div>
+
+                          <!-- Panel varování: pohlcené atomy, díly < 2 mm, přeskočené díry, duplicitní atomy, non-manifold -->
+                          {#if gluedSpheresStats.swallowedAtoms.length > 0 || gluedSpheresStats.smallParts.length > 0 || gluedSpheresStats.skippedPegHoles.length > 0 || gluedSpheresStats.duplicateAtoms.length > 0 || gluedSpheresStats.nonManifoldParts.length > 0}
+                            <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small" role="alert">
+                              <strong>{$_('glued_spheres_warnings_title')}</strong>
+                              <ul class="mb-0 ps-3 mt-1">
+                                {#if gluedSpheresStats.swallowedAtoms.length > 0}
+                                  <li>
+                                    <strong>{$_('glued_spheres_warning_swallowed')} ({gluedSpheresStats.swallowedAtoms.length}):</strong>
+                                    {gluedSpheresStats.swallowedAtoms.join(', ')}
+                                  </li>
+                                {/if}
+                                {#if gluedSpheresStats.smallParts.length > 0}
+                                  <li>
+                                    <strong>{$_('glued_spheres_warning_small')} ({gluedSpheresStats.smallParts.length}):</strong>
+                                    {gluedSpheresStats.smallParts.join(', ')}
+                                  </li>
+                                {/if}
+                                {#if gluedSpheresStats.skippedPegHoles.length > 0}
+                                  <li>
+                                    <strong>{$_('glued_spheres_warning_skipped_holes')} ({gluedSpheresStats.skippedPegHoles.length}):</strong>
+                                    <details class="mt-1">
+                                      <summary class="cursor-pointer fw-semibold">
+                                        {gluedSpheresStats.skippedPegHoles.length}
+                                      </summary>
+                                      <div class="mt-1 text-muted">
+                                        {gluedSpheresStats.skippedPegHoles.join('; ')}
+                                      </div>
+                                    </details>
+                                  </li>
+                                {/if}
+                                {#if gluedSpheresStats.duplicateAtoms.length > 0}
+                                  <li>
+                                    <strong>{$_('glued_spheres_warning_duplicates')} ({gluedSpheresStats.duplicateAtoms.length}):</strong>
+                                    {gluedSpheresStats.duplicateAtoms.join(', ')}
+                                  </li>
+                                {/if}
+                                {#if gluedSpheresStats.nonManifoldParts.length > 0}
+                                  <li class="text-danger">
+                                    <strong>{$_('glued_spheres_warning_non_manifold')} ({gluedSpheresStats.nonManifoldParts.length}):</strong>
+                                    {gluedSpheresStats.nonManifoldParts.join(', ')}
+                                  </li>
+                                {/if}
+                              </ul>
+                            </div>
+                          {/if}
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
                 </td>
               </tr>
 
@@ -1740,10 +2312,17 @@
                       {$_('download_template_button')}
                     </button>
                   </div>
-                  <button on:click={downloadModelZip} class="btn btn-outline-secondary w-100 mt-2 d-flex align-items-center justify-content-center gap-2">
-                    <span class="material-symbols-outlined" style="display: inline-flex; align-items: center; justify-content: center; line-height: 1;">folder_zip</span>
-                    <span>{$_('download_model_button_zip')}</span>
-                  </button>
+                  {#if isGluedSpheresStyle}
+                    <button on:click={downloadModel} class="btn btn-outline-secondary w-100 mt-2 d-flex align-items-center justify-content-center gap-2">
+                      <span class="material-symbols-outlined" style="display: inline-flex; align-items: center; justify-content: center; line-height: 1;">deployed_code_update</span>
+                      <span>{$_('download_model_button_3mf')}</span>
+                    </button>
+                  {:else}
+                    <button on:click={downloadModelZip} class="btn btn-outline-secondary w-100 mt-2 d-flex align-items-center justify-content-center gap-2">
+                      <span class="material-symbols-outlined" style="display: inline-flex; align-items: center; justify-content: center; line-height: 1;">folder_zip</span>
+                      <span>{$_('download_model_button_zip')}</span>
+                    </button>
+                  {/if}
                 </td>
               </tr>
             </tbody>
@@ -1752,10 +2331,17 @@
         <br>
 
         <div class="d-flex gap-2 align-items-stretch">
-          <button on:click={downloadModel} class="btn btn-success btn-lg flex-grow-1 shadow-sm d-flex align-items-center justify-content-center gap-2">
-            <span class="material-symbols-outlined">deployed_code_update</span>
-            {$_('download_model_button_3mf')}
-          </button>
+          {#if isGluedSpheresStyle}
+            <button on:click={downloadModelZip} class="btn btn-success btn-lg flex-grow-1 shadow-sm d-flex align-items-center justify-content-center gap-2">
+              <span class="material-symbols-outlined">folder_zip</span>
+              {$_('download_model_button_zip')}
+            </button>
+          {:else}
+            <button on:click={downloadModel} class="btn btn-success btn-lg flex-grow-1 shadow-sm d-flex align-items-center justify-content-center gap-2">
+              <span class="material-symbols-outlined">deployed_code_update</span>
+              {$_('download_model_button_3mf')}
+            </button>
+          {/if}
 
           <div class="slicer-dropdown-wrapper" bind:this={slicerWrapperEl}>
             <div class="slicer-split-group shadow-sm">

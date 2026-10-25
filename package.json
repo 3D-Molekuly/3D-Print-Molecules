@@ -11,7 +11,8 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "node -e \"import('vite').then(async ({ createServer }) => { const s = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' }); await s.ssrLoadModule('/src/lib/geometry/movingJoints.test.ts'); await s.close(); })\""
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.3.4",

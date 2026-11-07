@@ -1,41 +1,64 @@
-const CACHE_NAME = 'my-pwa-cache-v1';
-const urlsToCache = [
-  '/',
-  '/favicon/manifest.json',
-  '/favicon/web-app-manifest-192x192.png',
-  '/favicon/web-app-manifest-512x512.png',
-  '/periodic_table.json'
+/// <reference types="@sveltejs/kit" />
+import { build, files, version } from '$service-worker';
+
+const CACHE = `cache-${version}`;
+
+const ASSETS = [
+	...build,
+	...files
 ];
 
-// Instalace service workeru
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(urlsToCache);
-    })
-  );
+self.addEventListener('install', (event) => {
+	self.skipWaiting();
+
+	async function addFilesToCache() {
+		const cache = await caches.open(CACHE);
+		await cache.addAll(ASSETS);
+	}
+
+	event.waitUntil(addFilesToCache());
 });
 
-// Aktivace service workeru
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(cacheNames =>
-      Promise.all(
-        cacheNames.map(cache => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
-        })
-      )
-    )
-  );
+self.addEventListener('activate', (event) => {
+	async function deleteOldCaches() {
+		for (const key of await caches.keys()) {
+			if (key !== CACHE) {
+				await caches.delete(key);
+			}
+		}
+	}
+
+	event.waitUntil(deleteOldCaches().then(() => self.clients.claim()));
 });
 
-// Zachytávání fetch událostí
-self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
-  );
+self.addEventListener('fetch', (event) => {
+	if (event.request.method !== 'GET') return;
+
+	const url = new URL(event.request.url);
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+	// For navigation (HTML): ALWAYS network first to ensure fresh HTML and matching asset hashes
+	if (event.request.mode === 'navigate') {
+		event.respondWith(
+			fetch(event.request).catch(async () => {
+				const cached = await caches.match(event.request);
+				if (cached) return cached;
+				throw new Error('Offline and page not cached');
+			})
+		);
+		return;
+	}
+
+	// For immutable assets & static files: cache first with network fallback
+	if (ASSETS.includes(url.pathname)) {
+		event.respondWith(
+			caches.match(event.request).then((response) => response || fetch(event.request))
+		);
+		return;
+	}
+
+	// For all other GET requests: network first with cache fallback
+	event.respondWith(
+		fetch(event.request).catch(() => caches.match(event.request))
+	);
 });

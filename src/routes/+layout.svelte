@@ -44,15 +44,9 @@
 					}
 				});
 			}
-		} else if ('serviceWorker' in navigator) {
-			navigator.serviceWorker
-				.register('/service-worker.js')
-				.then((registration) => {
-					console.log('Service Worker registered: ', registration);
-				})
-				.catch((error) => {
-					console.error('Service Worker registration failed: ', error);
-				});
+		} else if ('caches' in window) {
+			// Clear legacy service worker cache if still present in client
+			caches.delete('my-pwa-cache-v1').catch(() => {});
 		}
 	});
 </script>

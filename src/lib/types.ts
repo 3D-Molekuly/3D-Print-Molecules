@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
 import type { JointParams, MovingBond } from '$lib/geometry/jointGeometry';
 
+export type MoleculeSource = 'pubchem' | 'pdb' | 'ccd' | 'cactus' | 'cod' | 'file';
+
 export type ModelStyleId =
     | 'spheres'
     | 'spheres-glued'

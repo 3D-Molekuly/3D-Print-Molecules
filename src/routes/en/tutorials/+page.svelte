@@ -79,7 +79,7 @@
     line-height: 1.6;
     /* color: #333; Removed to support dark mode for text outside of boxes */
   }
-  .tutorial h2 {
+  .tutorial h1 {
     font-size: 2.5rem;
     margin-bottom: 1rem;
     text-align: center;
@@ -118,7 +118,7 @@
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   }
-  .step-container h3 {
+  .step-container h2 {
     font-size: 1.5rem;
     margin-top: 0;
     color: #0070f3;
@@ -233,7 +233,8 @@
     object-fit: contain;
     margin-bottom: 1rem;
   }
-  .gallery-preview h4 {
+  .gallery-preview h3 {
+    font-size: 1.25rem;
     margin: 0 0 0.5rem 0;
     color: #333;
   }
@@ -256,6 +257,138 @@
     }
   }
 
+  /* --- STYLES FOR SHARING TILE --- */
+  .share-tutorial-mockup {
+    background: #ffffff;
+    border: 1px solid #dce6f2;
+    border-radius: 10px;
+    padding: 1.25rem 1.25rem 1rem 1.25rem;
+    margin: 1.25rem 0 1rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.65rem;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
+  }
+  .share-mockup-popover {
+    width: 100%;
+    max-width: 440px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 0.65rem 0.75rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+    position: relative;
+  }
+  .share-mockup-popover::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    right: 17px;
+    width: 12px;
+    height: 12px;
+    background: #ffffff;
+    border-right: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    transform: rotate(45deg);
+  }
+  .share-mockup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 0.4rem;
+  }
+  .share-mockup-close {
+    color: #94a3b8;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .share-mockup-input-row {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f8fafc;
+  }
+  .share-mockup-url {
+    flex: 1;
+    padding: 0.35rem 0.55rem;
+    font-family: monospace;
+    font-size: 0.76rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .share-mockup-copy {
+    background: #e8f5e9;
+    color: #198754;
+    border-left: 1px solid #cbd5e1;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+  .share-mockup-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .share-mockup-download {
+    background: #198754;
+    color: #ffffff;
+    border-radius: 7px;
+    padding: 0.55rem 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+    min-width: 160px;
+    justify-content: center;
+  }
+  .share-mockup-slice {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    padding: 0.55rem 0.85rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .share-mockup-square-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 7px;
+    background: #198754;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(25, 135, 84, 0.3);
+    flex-shrink: 0;
+  }
+  .share-mockup-square-btn .material-symbols-outlined,
+  .share-mockup-download .material-symbols-outlined,
+  .share-mockup-copy .material-symbols-outlined {
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
   /* --- STYLES FOR PRINTABLES SECTION --- */
   .printables-container {
     background: #fff8f5;
@@ -263,7 +396,7 @@
     color: #333;
     text-align: center;
   }
-  .printables-container h3 {
+  .printables-container h2 {
     color: #fa6831;
     border-bottom: 2px solid #ffe4d6;
   }
@@ -277,20 +410,25 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
   }
-  .printables-btn {
+  .printables-btn,
+  .makerworld-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.75rem;
-    background-color: #fa6831;
-    color: #ffffff !important;
     font-size: 1.2rem;
     font-weight: 700;
     padding: 0.75rem 1.75rem;
     border-radius: 8px;
     text-decoration: none;
-    box-shadow: 0 4px 12px rgba(250, 104, 49, 0.25);
     transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+  .printables-btn {
+    background-color: #fa6831;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(250, 104, 49, 0.25);
   }
   .printables-btn:hover {
     background-color: #e0531c;
@@ -298,22 +436,37 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(250, 104, 49, 0.35);
   }
+  .makerworld-btn {
+    background-color: #ffffff;
+    color: #111111 !important;
+    border: 1px solid #dcdcdc;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+  .makerworld-btn:hover {
+    background-color: #f5f5f5;
+    color: #111111 !important;
+    border-color: #c8c8c8;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+  }
   .printables-logo {
     display: inline-block;
     flex-shrink: 0;
   }
-  .printables-btn .external-arrow {
+  .printables-btn .external-arrow,
+  .makerworld-btn .external-arrow {
     font-size: 1.1rem;
     line-height: 1;
     transition: transform 0.2s ease;
   }
-  .printables-btn:hover .external-arrow {
+  .printables-btn:hover .external-arrow,
+  .makerworld-btn:hover .external-arrow {
     transform: translate(2px, -2px);
   }
 </style>
 
 <section class="tutorial">
-  <h2>How to Use 3D Printing Molecules</h2>
+  <h1>How to Use 3D Printing Molecules</h1>
   <p style="text-align: center; margin-bottom: 1.5rem;">
     Preparing a molecule model for 3D printing has never been easier. The entire process can be summarized in three quick steps:
   </p>
@@ -329,7 +482,7 @@
 
   <!-- Step 1 -->
   <div class="step-container">
-    <h3>Step 1: Select a Molecule</h3>
+    <h2>Step 1: Select a Molecule</h2>
     <p>First, tell the program which substance you want to model. You can use automatic import or upload your own data.</p>
     <img src={step1Img} alt="UI screenshot showing search" class="tutorial-img">
     <p class="image-caption">Fig. 1: PubChem search interface</p>
@@ -341,17 +494,17 @@
 
   <!-- Step 2 -->
   <div class="step-container">
-    <h3>Step 2: Display Interface</h3>
+    <h2>Step 2: Display Interface</h2>
     <p>After loading the data, the model settings will become available. The first step is selecting the molecule representation.</p>
-    <img src={step2Img} alt="UI screenshot with expanded menu" class="tutorial-img">
+    <img src={step2Img} alt="UI screenshot with expanded menu" loading="lazy" class="tutorial-img">
     <p class="image-caption">Fig. 2: UI showing the representation dropdown menu</p>
   </div>
 
   <!-- Step 3 -->
   <div class="step-container">
-    <h3>Step 3: Choose Representation Type</h3>
+    <h2>Step 3: Choose Representation Type</h2>
     <p>Choose the look that best suits your needs for education or 3D printing.</p>
-    <img src={step3Img} alt="Molecule representation selection" class="tutorial-img" style="max-width: 400px; display: block; margin: 1rem auto;">
+    <img src={step3Img} alt="Molecule representation selection" loading="lazy" class="tutorial-img" style="max-width: 400px; display: block; margin: 1rem auto;">
     <p class="image-caption">Fig. 3: Dropdown menu options</p>
     <ul class="legend-list">
       <li><span class="legend-number">3</span><div><strong>Select Model Type:</strong> Select the desired look (Spheres, Ball-and-Stick, Sticks, or our secret <span class="easter-egg">Minecraft</span> mode).</div></li>
@@ -360,7 +513,7 @@
 
   <!-- Step 4 and Interactive Gallery -->
   <div class="step-container">
-    <h3>Step 4: Parameter Settings and Export</h3>
+    <h2>Step 4: Parameter Settings and Export</h2>
     <p>Adjust the details and proportions of the model for optimal printing. Hover over the individual options below to see how the parameters visually change the result.</p>
     
     <!-- INTERACTIVE GALLERY -->
@@ -380,14 +533,14 @@
       </div>
       
       <div class="gallery-preview">
-        <img src={activeOption.img} alt={activeOption.name} />
-        <h4>{activeOption.name}</h4>
+        <img src={activeOption.img} alt={activeOption.name} loading="lazy" />
+        <h3>{activeOption.name}</h3>
         <p>{activeOption.desc}</p>
       </div>
     </div>
     <!-- END OF GALLERY -->
 
-    <img src={step4Img} alt="Ball-and-stick parameters example" class="tutorial-img" style="margin-top: 2rem;">
+    <img src={step4Img} alt="Ball-and-stick parameters example" loading="lazy" class="tutorial-img" style="margin-top: 2rem;">
     <p class="image-caption">Fig. 4: Model parameters and export options</p>
     
     <ul class="legend-list">
@@ -399,31 +552,71 @@
 
   <!-- Step 5 -->
   <div class="step-container">
-    <h3>Step 5: Apply Changes (Reload)</h3>
+    <h2>Step 5: Apply Changes (Reload)</h2>
     <p>The image shows a more complex model (ATP). Remember that after any adjustment in the <em>Model Settings</em> section, the preview does not update automatically.</p>
-    <img src={step5Img} alt="Updating the model using the Reload button" class="tutorial-img">
+    <img src={step5Img} alt="Updating the model using the Reload button" loading="lazy" class="tutorial-img">
     <p class="image-caption">Fig. 5: ATP model and the yellow Reload button</p>
     <ul class="legend-list">
       <li><span class="legend-number">7</span><div><strong>Reload Button:</strong> Whenever you adjust the settings, always click this yellow button first. This applies the changes to the 3D preview.</div></li>
     </ul>
   </div>
 
+  <!-- SHARING MODEL AND SETTINGS -->
+  <div class="step-container">
+    <h2>Sharing Models and Settings via URL</h2>
+    <p>You can easily share your prepared molecule along with its exact parameter settings with colleagues or students, or bookmark it using a shareable URL link.</p>
+
+    <div class="share-tutorial-mockup" aria-label="Illustration of the Share button and floating URL popup">
+      <div class="share-mockup-popover">
+        <div class="share-mockup-header">
+          <span>Shareable link</span>
+          <span class="share-mockup-close" aria-hidden="true">✕</span>
+        </div>
+        <div class="share-mockup-input-row">
+          <div class="share-mockup-url">https://3dmolekuly.vscht.cz/?source=pubchem&amp;mol=caffeine&amp;style=ball-and-stick&amp;q=50</div>
+          <div class="share-mockup-copy">
+            <span class="material-symbols-outlined" aria-hidden="true">check</span>
+            Copied!
+          </div>
+        </div>
+      </div>
+
+      <div class="share-mockup-actions">
+        <div class="share-mockup-download">
+          <span class="material-symbols-outlined" aria-hidden="true">deployed_code_update</span>
+          Download Model (.3mf)
+        </div>
+        <div class="share-mockup-slice">
+          Slice ▾
+        </div>
+        <div class="share-mockup-square-btn" title="Share">
+          <span class="material-symbols-outlined" aria-hidden="true">check</span>
+        </div>
+      </div>
+    </div>
+    <p class="image-caption">Fig. 6: Square Share icon button and floating popup with the URL link</p>
+
+    <ul class="legend-list">
+      <li><span class="legend-number">8</span><div><strong>Share Button:</strong> Click the square share icon button (next to the <em>Slice</em> button). The URL is copied to your clipboard, the button turns green, and a popup appears directly above it displaying the full link. The URL encodes the database source (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), the molecule name or code, the selected display type, and all configured parameters, so opening the link automatically applies all settings and renders the model. When working with an uploaded local file (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), the link shares purely the display type and configured values (<code>source=file</code>), pre-configuring everything for anyone uploading their own file.</div></li>
+    </ul>
+  </div>
+
   <!-- SLICER IMPORT INFO -->
   <div class="step-container" style="background: #eef5ff; border: 1px solid #cce0ff; color: #333;">
-    <h3>How to import to slicer?</h3>
+    <h2>How to import to slicer?</h2>
     <p style="font-size: 1.1rem; text-align: center;">
       For <strong>multicolor</strong> molecule printing, ensure the slicer shows the message <br>
       <em>‘Multi-part object detected / An object with multiple parts was detected,’</em> <br>
       then confirm by selecting <strong>‘YES.’</strong>
     </p>
-    <img src="/assets/multipartobject.svg" alt="Slicer import dialog" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
+    <img src="/assets/multipartobject.svg" alt="Slicer import dialog" loading="lazy" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
   </div>
 
-  <!-- PRINTABLES SECTION -->
+  <!-- PRINTABLES AND MAKERWORLD SECTION -->
   <div class="step-container printables-container">
-    <h3>Try Ready-to-Print Models on Printables</h3>
+    <h2>Try Ready-to-Print Models on Printables and MakerWorld</h2>
     <p class="printables-desc">
-      Looking for inspiration or want to print popular molecules directly without tweaking settings? Explore our collection of verified, ready-to-print 3D molecule models directly on Printables.
+      Looking for inspiration or want to print popular molecules directly without tweaking settings? Explore our collection of verified, ready-to-print 3D molecule models directly on Printables and MakerWorld.
     </p>
     <div class="printables-btn-wrapper">
       <a
@@ -437,6 +630,19 @@
           <path d="M3.678 4.8 12 9.6v9.6l8.322-4.8V4.8L12 0ZM12 19.2l-8.322-4.8V24Z"/>
         </svg>
         <span>Printables</span>
+        <span class="external-arrow">↗</span>
+      </a>
+      <a
+        href="https://makerworld.com/en/@3DPMol"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="makerworld-btn"
+      >
+        <svg class="printables-logo" viewBox="19 10 168 167" fill="currentColor" width="28" height="28" aria-hidden="true">
+          <title>MakerWorld</title>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M23 31 L66 14 L103 28 L140 14 L183 31 L183 156 L140 173 L103 159 L66 173 L23 156 Z M67 21 L102 36 L102 86 L67 71 Z M140 21 L176 36 L176 86 L140 71 Z M31 94 L66 79 L101 94 L66 109 Z M105 94 L140 79 L175 94 L140 109 Z M30 102 L66 117 L66 167 L30 152 Z M104 102 L140 117 L140 167 L104 152 Z"/>
+        </svg>
+        <span>MakerWorld</span>
         <span class="external-arrow">↗</span>
       </a>
     </div>

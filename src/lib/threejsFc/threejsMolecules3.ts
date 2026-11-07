@@ -42,10 +42,51 @@ import type {
 
 const exporter = new STLExporter();
 
+export interface ModelBoundsMm {
+    widthMm: number;
+    depthMm: number;
+    heightMm: number;
+    exceedsStandardPlate: boolean;
+}
+
+export interface ElementGroupInfo {
+    key: string;
+    atomType: string;
+    colorHex: string;
+    count: number;
+    visible: boolean;
+}
+
+export interface HoveredAtomInfo {
+    atomType: string;
+    colorHex: string;
+    atomId?: number;
+    partName?: string;
+    dimensionMm?: number;
+    isCube?: boolean;
+}
+
+const LIGHT_CANVAS_CLEAR = 0xffffff;
+const DARK_CANVAS_CLEAR = 0x212529;
+const STANDARD_PLATE_WIDTH_MM = 250;
+const STANDARD_PLATE_DEPTH_MM = 210;
+const STANDARD_MAX_HEIGHT_MM = 220;
+
 let group: THREE.Group | null = null;
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
+let orbitControls: OrbitControls | null = null;
+let buildPlateGroup: THREE.Group | null = null;
+let buildPlateVisible = false;
+let isCanvasDark = false;
+let lastMmPerUnit = 10;
+let hasFramedMolecule = false;
+let isUserOrbiting = false;
+const hiddenGroupKeys = new Set<string>();
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+
 let currentExportScale = 1;
 let lastMovingJointsStats: MovingJointsStats | null = null;
 let lastGluedSpheresResult: ComputeGluedSpheresResult | null = null;
@@ -336,6 +377,7 @@ export function buildMoleculeGroup(params: CreateAtomsParams): {
           };
 
     currentExportScale = mmPerUnit !== undefined ? mmPerUnit : isMovingJoints ? effectiveMovingJoints.mmPerUnit : 1;
+    lastMmPerUnit = resolvedMmPerUnit;
     let stats: MovingJointsStats | null = null;
 
     if (filteredCoordinates.length > 0) {
@@ -375,11 +417,15 @@ export function buildMoleculeGroup(params: CreateAtomsParams): {
             stats = planned.stats;
         }
 
+        const isCube = selectedGenerator === createCubeMesh;
+        const isSticks = selectedGenerator === createStickMesh;
+
         centeredCoordinates.forEach((atom) => {
             const { atomType, centeredX, centeredY, centeredZ, CPKHexColor } = atom;
 
             const size = getAtomBaseSize(atom, isBallAndStick, uniformAtomDiameter);
             const color = CPKHexColor ? parseInt(CPKHexColor.replace('#', '0x')) : 0x000000;
+            const colorHex = '#' + new THREE.Color(color).getHexString();
 
             const { atomMesh, bondMeshes } = selectedGenerator({
                 x: centeredX!,
@@ -399,21 +445,59 @@ export function buildMoleculeGroup(params: CreateAtomsParams): {
                 movingBondsMap
             });
 
+            const baseDimensionUnits = isCube
+                ? size * multiplicationFactor
+                : isSticks
+                  ? 2 * 0.2 * multiplicationFactor
+                  : isBallAndStick
+                    ? 2 * size * multiplicationFactor * 0.4
+                    : 2 * size * multiplicationFactor;
+
+            atomMesh.userData = {
+                ...atomMesh.userData,
+                isAtomMesh: true,
+                atomType,
+                atomId: atom.id,
+                colorHex,
+                baseDimensionUnits,
+                isCube
+            };
+
             if (!atomGroups[atomType]) {
                 const groupForType = new THREE.Group();
                 groupForType.name = `Group_${atomType}`;
+                groupForType.userData = {
+                    legendKey: atomType,
+                    atomType,
+                    colorHex,
+                    count: 0
+                };
                 atomGroups[atomType] = groupForType;
                 builtGroup.add(groupForType);
             }
 
+            atomGroups[atomType].userData.count = (atomGroups[atomType].userData.count ?? 0) + 1;
             atomGroups[atomType].add(atomMesh);
 
-            if (groupBondsSeparately && bondsGroup) {
-                bondsGroup.add(...bondMeshes.children);
-            } else {
-                atomGroups[atomType].add(...bondMeshes.children);
+            if (bondMeshes.children.length > 0) {
+                if (groupBondsSeparately && bondsGroup) {
+                    bondsGroup.add(...bondMeshes.children);
+                } else {
+                    atomGroups[atomType].add(...bondMeshes.children);
+                }
             }
         });
+
+        if (groupBondsSeparately && bondsGroup && bondsGroup.children.length > 0) {
+            bondsGroup.userData = {
+                legendKey: 'Bonds',
+                atomType: 'Bonds',
+                colorHex: '#808080',
+                count: bondsGroup.children.length
+            };
+        } else if (bondsGroup && bondsGroup.children.length === 0) {
+            builtGroup.remove(bondsGroup);
+        }
 
         // Coloring logic: apply element's shared material to all meshes in its group
         if (!groupBondsSeparately) {
@@ -454,14 +538,403 @@ export function buildMoleculeGroup(params: CreateAtomsParams): {
     return { group: builtGroup, stats };
 }
 
-export function setupThreeJS(canvas: HTMLCanvasElement) {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-    // Add alpha: true for transparency support
-    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, preserveDrawingBuffer: true });
+const BASE_CAMERA_FOV_DEG = 75;
 
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    renderer.setClearColor(0xffffff); // scene background for display remains white
+function applyResponsiveCameraProjection(
+    cam: THREE.PerspectiveCamera,
+    width: number,
+    height: number
+) {
+    const aspect = width / height;
+    cam.aspect = aspect;
+
+    // Preserve horizontal FOV on portrait containers (aspect < 1) so taller sidebars
+    // never zoom/clip the molecule horizontally.
+    if (aspect < 1) {
+        const baseFovRad = THREE.MathUtils.degToRad(BASE_CAMERA_FOV_DEG);
+        const verticalFovRad = 2 * Math.atan(Math.tan(baseFovRad / 2) / aspect);
+        cam.fov = THREE.MathUtils.radToDeg(verticalFovRad);
+    } else {
+        cam.fov = BASE_CAMERA_FOV_DEG;
+    }
+
+    cam.updateProjectionMatrix();
+}
+
+function withAllGroupsTemporarilyVisible<T>(targetGroup: THREE.Group, fn: () => T): T {
+    const savedVisibility: { obj: THREE.Object3D; visible: boolean }[] = [];
+    for (const child of targetGroup.children) {
+        if (!child.visible) {
+            savedVisibility.push({ obj: child, visible: child.visible });
+            child.visible = true;
+        }
+    }
+    try {
+        return fn();
+    } finally {
+        for (const entry of savedVisibility) {
+            entry.obj.visible = entry.visible;
+        }
+    }
+}
+
+function computeUnexplodedGroupBox(targetGroup: THREE.Group): THREE.Box3 | null {
+    if (targetGroup.children.length === 0) return null;
+    return withAllGroupsTemporarilyVisible(targetGroup, () => {
+        const savedPositions: { mesh: THREE.Mesh; pos: THREE.Vector3 }[] = [];
+        if (lastGluedSpheresResult) {
+            targetGroup.traverse((obj) => {
+                if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
+                    savedPositions.push({ mesh: obj, pos: obj.position.clone() });
+                    obj.position.set(0, 0, 0);
+                }
+            });
+            targetGroup.updateMatrixWorld(true);
+        }
+        try {
+            const box = new THREE.Box3().setFromObject(targetGroup);
+            return box.isEmpty() ? null : box;
+        } finally {
+            if (savedPositions.length > 0) {
+                for (const item of savedPositions) {
+                    item.mesh.position.copy(item.pos);
+                }
+                targetGroup.updateMatrixWorld(true);
+            }
+        }
+    });
+}
+
+function applyHiddenGroupsToCurrentGroup(): void {
+    if (group) {
+        for (const child of group.children) {
+            const key = child.userData?.legendKey as string | undefined;
+            if (key) {
+                child.visible = !hiddenGroupKeys.has(key);
+            }
+        }
+    }
+    if (partLabelSpritesGroup) {
+        for (const sprite of partLabelSpritesGroup.children) {
+            const atomType = sprite.userData?.atomType as string | undefined;
+            if (atomType) {
+                sprite.visible = !hiddenGroupKeys.has(atomType);
+            }
+        }
+    }
+}
+
+function disposeBuildPlateHelper(): void {
+    if (!buildPlateGroup) return;
+    if (scene) {
+        scene.remove(buildPlateGroup);
+    }
+    buildPlateGroup.traverse((obj) => {
+        if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments || obj instanceof THREE.LineLoop) {
+            obj.geometry.dispose();
+            if (Array.isArray(obj.material)) {
+                obj.material.forEach((m) => m.dispose());
+            } else {
+                obj.material.dispose();
+            }
+        }
+    });
+    buildPlateGroup = null;
+}
+
+function rebuildBuildPlateHelper(): void {
+    disposeBuildPlateHelper();
+    if (!scene || !buildPlateVisible) return;
+
+    const mmPerUnit = Math.max(0.1, lastMmPerUnit);
+    const plateW = STANDARD_PLATE_WIDTH_MM / mmPerUnit;
+    const plateD = STANDARD_PLATE_DEPTH_MM / mmPerUnit;
+
+    const box = group ? computeUnexplodedGroupBox(group) : null;
+    const centerX = box ? (box.min.x + box.max.x) * 0.5 : 0;
+    const centerZ = box ? (box.min.z + box.max.z) * 0.5 : 0;
+    const plateY = box ? box.min.y - 0.004 : -1.5;
+
+    const exceedsFootprint = box
+        ? (box.max.x - box.min.x) * mmPerUnit > STANDARD_PLATE_WIDTH_MM + 0.05 ||
+          (box.max.z - box.min.z) * mmPerUnit > STANDARD_PLATE_DEPTH_MM + 0.05
+        : false;
+
+    const helper = new THREE.Group();
+    helper.name = '__BuildPlateHelper__';
+
+    const bedPlaneGeom = new THREE.PlaneGeometry(plateW, plateD);
+    bedPlaneGeom.rotateX(-Math.PI / 2);
+    const bedPlaneMat = new THREE.MeshBasicMaterial({
+        color: isCanvasDark ? 0x2b3035 : 0xf8f9fa,
+        transparent: true,
+        opacity: isCanvasDark ? 0.35 : 0.6,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    const bedMesh = new THREE.Mesh(bedPlaneGeom, bedPlaneMat);
+    bedMesh.renderOrder = -2;
+    helper.add(bedMesh);
+
+    const minorPoints: number[] = [];
+    const majorPoints: number[] = [];
+    const halfW = plateW * 0.5;
+    const halfD = plateD * 0.5;
+    const step10 = 10 / mmPerUnit;
+
+    const xCount = Math.floor(STANDARD_PLATE_WIDTH_MM / 10);
+    for (let i = -xCount / 2; i <= xCount / 2; i++) {
+        const x = i * step10;
+        const target = i % 5 === 0 ? majorPoints : minorPoints;
+        target.push(x, 0.001, -halfD, x, 0.001, halfD);
+    }
+
+    const zCount = Math.floor(STANDARD_PLATE_DEPTH_MM / 10);
+    for (let j = -zCount / 2; j <= zCount / 2; j++) {
+        const z = j * step10;
+        const target = j % 5 === 0 ? majorPoints : minorPoints;
+        target.push(-halfW, 0.001, z, halfW, 0.001, z);
+    }
+
+    if (minorPoints.length > 0) {
+        const minorGeom = new THREE.BufferGeometry();
+        minorGeom.setAttribute('position', new THREE.Float32BufferAttribute(minorPoints, 3));
+        const minorMat = new THREE.LineBasicMaterial({
+            color: isCanvasDark ? 0x495057 : 0xdee2e6,
+            transparent: true,
+            opacity: isCanvasDark ? 0.55 : 0.8
+        });
+        helper.add(new THREE.LineSegments(minorGeom, minorMat));
+    }
+
+    if (majorPoints.length > 0) {
+        const majorGeom = new THREE.BufferGeometry();
+        majorGeom.setAttribute('position', new THREE.Float32BufferAttribute(majorPoints, 3));
+        const majorMat = new THREE.LineBasicMaterial({
+            color: isCanvasDark ? 0x6c757d : 0xadb5bd,
+            transparent: true,
+            opacity: isCanvasDark ? 0.8 : 0.9
+        });
+        helper.add(new THREE.LineSegments(majorGeom, majorMat));
+    }
+
+    const borderPoints = new Float32Array([
+        -halfW, 0.002, -halfD,
+        halfW, 0.002, -halfD,
+        halfW, 0.002, halfD,
+        -halfW, 0.002, halfD
+    ]);
+    const borderGeom = new THREE.BufferGeometry();
+    borderGeom.setAttribute('position', new THREE.BufferAttribute(borderPoints, 3));
+    const borderMat = new THREE.LineBasicMaterial({
+        color: exceedsFootprint ? 0xffc107 : isCanvasDark ? 0x6ea8fe : 0x0d6efd
+    });
+    helper.add(new THREE.LineLoop(borderGeom, borderMat));
+
+    helper.position.set(centerX, plateY, centerZ);
+    buildPlateGroup = helper;
+    scene.add(helper);
+}
+
+function updateCameraClippingPlanes(): void {
+    if (!camera || !group || group.children.length === 0) return;
+    const box = computeUnexplodedGroupBox(group);
+    if (!box) return;
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    const radius = Math.max(sphere.radius, 0.45);
+    const distToCenter = camera.position.distanceTo(sphere.center);
+    camera.near = Math.max(0.02, Math.min(0.1, radius * 0.015));
+    camera.far = Math.max(150, distToCenter + radius * 12);
+    camera.updateProjectionMatrix();
+}
+
+export function resetCameraView(): void {
+    if (!camera || !orbitControls) return;
+    if (!group || group.children.length === 0) {
+        orbitControls.target.set(0, 0, 0);
+        camera.up.set(0, 1, 0);
+        camera.position.set(0, 0, 10);
+        camera.near = 0.1;
+        camera.far = 150;
+        camera.updateProjectionMatrix();
+        orbitControls.update();
+        return;
+    }
+
+    const fullBox = withAllGroupsTemporarilyVisible(group, () =>
+        new THREE.Box3().setFromObject(group!)
+    );
+    if (fullBox.isEmpty()) return;
+
+    const sphere = new THREE.Sphere();
+    fullBox.getBoundingSphere(sphere);
+    const radius = Math.max(sphere.radius, 0.45);
+    const halfFovRad = THREE.MathUtils.degToRad(BASE_CAMERA_FOV_DEG / 2);
+    const fitDistance = (radius * 1.35) / Math.tan(halfFovRad);
+
+    const viewDir = new THREE.Vector3(0.16, 0.12, 0.98).normalize();
+    camera.near = Math.max(0.02, Math.min(0.1, radius * 0.015));
+    camera.far = Math.max(150, fitDistance + radius * 12);
+    camera.up.set(0, 1, 0);
+    orbitControls.target.copy(sphere.center);
+    camera.position.copy(sphere.center).addScaledVector(viewDir, fitDistance);
+    camera.updateProjectionMatrix();
+    orbitControls.update();
+    hasFramedMolecule = true;
+}
+
+export function setAutoRotate(enabled: boolean): void {
+    if (!orbitControls) return;
+    orbitControls.autoRotate = enabled;
+    orbitControls.autoRotateSpeed = 1.8;
+}
+
+export function setCanvasTheme(dark: boolean): void {
+    isCanvasDark = dark;
+    if (renderer) {
+        renderer.setClearColor(isCanvasDark ? DARK_CANVAS_CLEAR : LIGHT_CANVAS_CLEAR, 1);
+    }
+    if (buildPlateVisible) {
+        rebuildBuildPlateHelper();
+    }
+}
+
+export function setBuildPlateVisible(visible: boolean): void {
+    buildPlateVisible = visible;
+    rebuildBuildPlateHelper();
+    if (visible) {
+        updateCameraClippingPlanes();
+    }
+}
+
+export function getModelBoundsMm(): ModelBoundsMm | null {
+    if (!group || group.children.length === 0) return null;
+    const box = computeUnexplodedGroupBox(group);
+    if (!box) return null;
+
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    const widthMm = size.x * lastMmPerUnit;
+    const heightMm = size.y * lastMmPerUnit;
+    const depthMm = size.z * lastMmPerUnit;
+
+    const horizMax = Math.max(widthMm, depthMm);
+    const horizMin = Math.min(widthMm, depthMm);
+    const exceedsStandardPlate =
+        horizMax > STANDARD_PLATE_WIDTH_MM + 0.05 ||
+        horizMin > STANDARD_PLATE_DEPTH_MM + 0.05 ||
+        heightMm > STANDARD_MAX_HEIGHT_MM + 0.05;
+
+    return { widthMm, depthMm, heightMm, exceedsStandardPlate };
+}
+
+export function syncPreviewScaleMmPerUnit(mmPerUnit: number): ModelBoundsMm | null {
+    if (!(mmPerUnit > 0)) return getModelBoundsMm();
+    lastMmPerUnit = mmPerUnit;
+    if (!lastGluedSpheresResult) {
+        currentExportScale = mmPerUnit;
+    }
+    if (buildPlateVisible) {
+        rebuildBuildPlateHelper();
+    }
+    return getModelBoundsMm();
+}
+
+export function getElementGroupsInfo(): ElementGroupInfo[] {
+    if (!group) return [];
+    const items: ElementGroupInfo[] = [];
+    for (const child of group.children) {
+        const key = child.userData?.legendKey as string | undefined;
+        if (!key) continue;
+        items.push({
+            key,
+            atomType: (child.userData?.atomType as string) ?? key,
+            colorHex: (child.userData?.colorHex as string) ?? '#808080',
+            count: (child.userData?.count as number) ?? child.children.length,
+            visible: child.visible
+        });
+    }
+    return items;
+}
+
+export function toggleElementGroupVisibility(key: string): ElementGroupInfo[] {
+    if (hiddenGroupKeys.has(key)) {
+        hiddenGroupKeys.delete(key);
+    } else {
+        hiddenGroupKeys.add(key);
+    }
+    applyHiddenGroupsToCurrentGroup();
+    return getElementGroupsInfo();
+}
+
+export function showAllElementGroups(): ElementGroupInfo[] {
+    hiddenGroupKeys.clear();
+    applyHiddenGroupsToCurrentGroup();
+    return getElementGroupsInfo();
+}
+
+export function pickAtomAtCanvasNormalizedPosition(
+    ndcX: number,
+    ndcY: number
+): HoveredAtomInfo | null {
+    if (!camera || !group || isUserOrbiting || group.children.length === 0) {
+        return null;
+    }
+
+    pointerNdc.set(ndcX, ndcY);
+    raycaster.setFromCamera(pointerNdc, camera);
+
+    const visibleGroups = group.children.filter((c) => c.visible);
+    if (visibleGroups.length === 0) return null;
+
+    const hits = raycaster.intersectObjects(visibleGroups, true);
+    for (const hit of hits) {
+        const ud = hit.object.userData;
+        if (ud?.isGluedSpherePart) {
+            return {
+                atomType: ud.atomType as string,
+                colorHex: (ud.colorHex as string) ?? '#808080',
+                partName: ud.partName as string
+            };
+        }
+        if (ud?.isAtomMesh) {
+            const baseUnits = typeof ud.baseDimensionUnits === 'number' ? ud.baseDimensionUnits : undefined;
+            return {
+                atomType: ud.atomType as string,
+                colorHex: (ud.colorHex as string) ?? '#808080',
+                atomId: ud.atomId as number | undefined,
+                dimensionMm: baseUnits !== undefined ? baseUnits * lastMmPerUnit : undefined,
+                isCube: Boolean(ud.isCube)
+            };
+        }
+    }
+
+    return null;
+}
+
+export function setupThreeJS(canvas: HTMLCanvasElement) {
+    const initWidth = Math.max(1, canvas.clientWidth);
+    const initHeight = Math.max(1, canvas.clientHeight);
+    hasFramedMolecule = false;
+    hiddenGroupKeys.clear();
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(BASE_CAMERA_FOV_DEG, initWidth / initHeight, 0.1, 150);
+    applyResponsiveCameraProjection(camera, initWidth, initHeight);
+
+    // Add alpha: true for transparency support
+    renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        preserveDrawingBuffer: true
+    });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(initWidth, initHeight, false);
+    renderer.setClearColor(isCanvasDark ? DARK_CANVAS_CLEAR : LIGHT_CANVAS_CLEAR, 1);
     renderer.shadowMap.enabled = true;
 
     // Lights setup
@@ -493,24 +966,55 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     scene.add(hemisphereLight);
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.addEventListener('start', () => {
+        isUserOrbiting = true;
+    });
+    controls.addEventListener('end', () => {
+        isUserOrbiting = false;
+    });
+    orbitControls = controls;
 
     const clearScene = () => {
-        const essentialObjects = [ambientLight, directionalLight, backLight, pointLight, hemisphereLight];
+        const essentialObjects: THREE.Object3D[] = [
+            ambientLight,
+            directionalLight,
+            backLight,
+            pointLight,
+            hemisphereLight
+        ];
+        if (buildPlateGroup && buildPlateVisible) {
+            essentialObjects.push(buildPlateGroup);
+        }
         scene!.children = essentialObjects;
     };
 
-    const createAtoms = (params: CreateAtomsParams): MovingJointsStats | null => {
+    const createAtoms = (
+        params: CreateAtomsParams,
+        options?: { resetCamera?: boolean }
+    ): MovingJointsStats | null => {
+        if (options?.resetCamera) {
+            hiddenGroupKeys.clear();
+        }
         clearScene();
 
         const { group: builtGroup, stats } = buildMoleculeGroup(params);
         scene!.add(builtGroup);
+        applyHiddenGroupsToCurrentGroup();
 
         if (builtGroup.children.length > 0) {
-            camera!.position.set(0, 0, 10);
-            camera!.lookAt(0, 0, 0);
+            if (options?.resetCamera || !hasFramedMolecule) {
+                resetCameraView();
+            } else {
+                updateCameraClippingPlanes();
+            }
         }
 
-        console.log('Group created and filled:', builtGroup);
+        if (buildPlateVisible) {
+            rebuildBuildPlateHelper();
+        }
+
         return stats;
     };
 
@@ -525,11 +1029,21 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     function updateCanvasSize() {
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
-        if (renderer && camera) {
-            renderer.setSize(width, height);
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
+        if (width <= 0 || height <= 0 || !renderer || !camera) {
+            return;
         }
+
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        if (renderer.getPixelRatio() !== pixelRatio) {
+            renderer.setPixelRatio(pixelRatio);
+        }
+
+        const currentSize = renderer.getSize(new THREE.Vector2());
+        if (currentSize.x !== width || currentSize.y !== height) {
+            renderer.setSize(width, height, false);
+        }
+
+        applyResponsiveCameraProjection(camera, width, height);
     }
 
     return { animate, updateCanvasSize, createAtoms, clearScene };
@@ -942,9 +1456,13 @@ function rebuildPartLabelSprites(
             (part.centerMm[2] + dz * ef) / mmPerUnit
         );
         sprite.userData = {
+            atomType: part.atomType,
             centerMm: part.centerMm,
             centroidMm: result.centroidMm
         };
+        if (customSpriteHeight === undefined && hiddenGroupKeys.has(part.atomType)) {
+            sprite.visible = false;
+        }
         labelsGroup.add(sprite);
     }
 
@@ -978,6 +1496,7 @@ export function buildGroupFromGluedSpheresResult(
             isGluedSpherePart: true,
             partName: part.partName,
             atomType: part.atomType,
+            colorHex: part.colorHex,
             centerMm: part.centerMm,
             centroidMm: result.centroidMm
         };
@@ -990,9 +1509,17 @@ export function buildGroupFromGluedSpheresResult(
         if (!atomGroups[part.atomType]) {
             const grp = new THREE.Group();
             grp.name = `Group_${part.atomType}`;
+            grp.userData = {
+                legendKey: part.atomType,
+                atomType: part.atomType,
+                colorHex: part.colorHex,
+                count: 0
+            };
             atomGroups[part.atomType] = grp;
             builtGroup.add(grp);
         }
+        atomGroups[part.atomType].userData.count =
+            (atomGroups[part.atomType].userData.count ?? 0) + 1;
         atomGroups[part.atomType].add(mesh);
     }
 
@@ -1000,6 +1527,7 @@ export function buildGroupFromGluedSpheresResult(
     builtGroup.scale.setScalar(1 / mmPerUnit);
     builtGroup.updateMatrixWorld(true);
 
+    lastMmPerUnit = mmPerUnit;
     currentExportScale = 1;
     group = builtGroup;
     lastGluedSpheresResult = result;
@@ -1053,7 +1581,8 @@ export async function computeAndRenderGluedSpheresAsync(
         onProgress?: (completed: number, total: number) => void;
         onComplete?: (stats: GluedSpheresStats) => void;
         onError?: (message: string) => void;
-    }
+    },
+    options?: { resetCamera?: boolean }
 ): Promise<ComputeGluedSpheresResult | null> {
     const config: GluedSpheresConfig = params.gluedSpheres ?? {
         mode: 'radical',
@@ -1072,6 +1601,9 @@ export async function computeAndRenderGluedSpheresAsync(
     const requestId = ++latestGluedWorkerRequestId;
 
     const applyResultToScene = (result: ComputeGluedSpheresResult) => {
+        if (options?.resetCamera) {
+            hiddenGroupKeys.clear();
+        }
         if (scene) {
             if (group) {
                 scene.remove(group);
@@ -1081,11 +1613,19 @@ export async function computeAndRenderGluedSpheresAsync(
         const builtGroup = buildGroupFromGluedSpheresResult(result, config);
         if (scene) {
             scene.add(builtGroup);
+            applyHiddenGroupsToCurrentGroup();
             if (builtGroup.children.length > 0 && camera) {
-                camera.position.set(0, 0, 10);
-                camera.lookAt(0, 0, 0);
+                if (options?.resetCamera || !hasFramedMolecule) {
+                    resetCameraView();
+                } else {
+                    updateCameraClippingPlanes();
+                }
             }
             rebuildPartLabelSprites(result, config);
+            applyHiddenGroupsToCurrentGroup();
+            if (buildPlateVisible) {
+                rebuildBuildPlateHelper();
+            }
         }
         callbacks?.onComplete?.(result.stats);
     };
@@ -1204,41 +1744,48 @@ export function validateGluedSpheresManifold(
 
 function withExportScale<T>(fn: () => T): T {
     if (!group) return fn();
-    const prevScale = group.scale.clone();
-    const savedPositions: { mesh: THREE.Mesh; pos: THREE.Vector3 }[] = [];
-    if (lastGluedSpheresResult) {
-        group.traverse((obj) => {
-            if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
-                savedPositions.push({ mesh: obj, pos: obj.position.clone() });
-                obj.position.set(0, 0, 0);
-            }
-        });
-    }
-    group.scale.setScalar(currentExportScale);
-    group.updateMatrixWorld(true);
-    try {
-        return fn();
-    } finally {
-        for (const item of savedPositions) {
-            item.mesh.position.copy(item.pos);
+    return withAllGroupsTemporarilyVisible(group, () => {
+        const prevScale = group!.scale.clone();
+        const savedPositions: { mesh: THREE.Mesh; pos: THREE.Vector3 }[] = [];
+        if (lastGluedSpheresResult) {
+            group!.traverse((obj) => {
+                if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
+                    savedPositions.push({ mesh: obj, pos: obj.position.clone() });
+                    obj.position.set(0, 0, 0);
+                }
+            });
         }
-        group.scale.copy(prevScale);
-        group.updateMatrixWorld(true);
-    }
+        group!.scale.setScalar(currentExportScale);
+        group!.updateMatrixWorld(true);
+        try {
+            return fn();
+        } finally {
+            for (const item of savedPositions) {
+                item.mesh.position.copy(item.pos);
+            }
+            group!.scale.copy(prevScale);
+            group!.updateMatrixWorld(true);
+        }
+    });
 }
 
 export function exportGroupToSTLBuffer(target: THREE.Object3D, scaleOverride?: number): ArrayBuffer {
     if (scaleOverride !== undefined) {
-        const prevScale = target.scale.clone();
-        target.scale.setScalar(scaleOverride);
-        target.updateMatrixWorld(true);
-        try {
-            const result = exporter.parse(target, { binary: true }) as DataView;
-            return result.buffer as ArrayBuffer;
-        } finally {
-            target.scale.copy(prevScale);
+        const runExport = () => {
+            const prevScale = target.scale.clone();
+            target.scale.setScalar(scaleOverride);
             target.updateMatrixWorld(true);
-        }
+            try {
+                const result = exporter.parse(target, { binary: true }) as DataView;
+                return result.buffer as ArrayBuffer;
+            } finally {
+                target.scale.copy(prevScale);
+                target.updateMatrixWorld(true);
+            }
+        };
+        return target instanceof THREE.Group
+            ? withAllGroupsTemporarilyVisible(target, runExport)
+            : runExport();
     }
     return withExportScale(() => {
         if (!group) {
@@ -1353,8 +1900,19 @@ export function captureGluedSpheresGuidePhotos(
     const PHOTO_WIDTH = 1600;
     const PHOTO_HEIGHT = 1200; // Standard 4:3 landscape aspect ratio
     const PHOTO_FOV = 45;
+    const savedBuildPlateVisible = buildPlateGroup?.visible ?? false;
+    const savedGroupVisibilities: { obj: THREE.Object3D; visible: boolean }[] = [];
 
     try {
+        if (buildPlateGroup) {
+            buildPlateGroup.visible = false;
+        }
+        for (const child of group.children) {
+            if (!child.visible) {
+                savedGroupVisibilities.push({ obj: child, visible: child.visible });
+                child.visible = true;
+            }
+        }
         group.traverse((obj) => {
             if (obj instanceof THREE.Mesh && obj.userData?.isGluedSpherePart) {
                 savedMeshPositions.push({ mesh: obj, pos: obj.position.clone() });
@@ -1444,8 +2002,15 @@ export function captureGluedSpheresGuidePhotos(
         for (const item of savedMeshPositions) {
             item.mesh.position.copy(item.pos);
         }
+        for (const entry of savedGroupVisibilities) {
+            entry.obj.visible = entry.visible;
+        }
+        if (buildPlateGroup) {
+            buildPlateGroup.visible = savedBuildPlateVisible;
+        }
         group.updateMatrixWorld(true);
         rebuildPartLabelSprites(result, config);
+        applyHiddenGroupsToCurrentGroup();
 
         renderer.setPixelRatio(savedPixelRatio);
         renderer.setSize(savedSize.x, savedSize.y, false);
@@ -2221,16 +2786,112 @@ function downloadSTL(data: ArrayBufferLike, filename: string) {
     URL.revokeObjectURL(link.href);
 }
 
+export function buildPhotoDownloadFileName(rawFileName: string): string {
+    const trimmed = (rawFileName || '').trim();
+    const withoutExt = trimmed.replace(/\.png$/i, '');
+    const withoutPrefix = withoutExt.replace(/^Photo_/i, '');
+    const sanitized = withoutPrefix
+        .replace(/[\\/:*?"<>|]+/g, '_')
+        .replace(/\s+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return `Photo_${sanitized || 'molecule'}.png`;
+}
+
+export function dataUrlToPngBlob(dataUrl: string): Blob | null {
+    const commaIndex = dataUrl.indexOf(',');
+    if (commaIndex === -1) return null;
+    const header = dataUrl.slice(0, commaIndex);
+    const payload = dataUrl.slice(commaIndex + 1);
+    if (!header.startsWith('data:image/png') || !payload) {
+        return null;
+    }
+    try {
+        const binary = atob(payload);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: 'image/png' });
+    } catch (err) {
+        console.error('Failed to decode screenshot PNG data URL:', err);
+        return null;
+    }
+}
+
 export function takeScreenshot(): string | null {
     if (!renderer || !scene || !camera) {
         console.warn('Three.js not initialized');
         return null;
     }
-    const originalClearColor = renderer.getClearColor(new THREE.Color()).getHex();
+    if (!group || group.children.length === 0) {
+        console.warn('No molecule geometry available for screenshot');
+        return null;
+    }
+
+    const savedSize = renderer.getSize(new THREE.Vector2());
+    const savedPixelRatio = renderer.getPixelRatio();
+    const savedCamAspect = camera.aspect;
+    const originalClearColor = renderer.getClearColor(new THREE.Color()).clone();
     const originalAlpha = renderer.getClearAlpha();
-    renderer.setClearColor(0x000000, 0);
-    renderer.render(scene, camera);
-    const dataUrl = renderer.domElement.toDataURL('image/png');
-    renderer.setClearColor(originalClearColor, originalAlpha);
-    return dataUrl;
+    const savedBuildPlateVisible = buildPlateGroup?.visible ?? false;
+
+    const MIN_SHORT_SIDE = 1600;
+    const MAX_LONG_SIDE = 2560;
+    let shotW = Math.max(1, Math.round(savedSize.x * savedPixelRatio));
+    let shotH = Math.max(1, Math.round(savedSize.y * savedPixelRatio));
+
+    if (savedSize.x > 0 && savedSize.y > 0) {
+        const minSide = Math.min(shotW, shotH);
+        if (minSide < MIN_SHORT_SIDE) {
+            const upScale = MIN_SHORT_SIDE / minSide;
+            shotW = Math.round(shotW * upScale);
+            shotH = Math.round(shotH * upScale);
+        }
+        const maxSide = Math.max(shotW, shotH);
+        if (maxSide > MAX_LONG_SIDE) {
+            const downScale = MAX_LONG_SIDE / maxSide;
+            shotW = Math.round(shotW * downScale);
+            shotH = Math.round(shotH * downScale);
+        }
+        shotW = Math.max(1, shotW);
+        shotH = Math.max(1, shotH);
+    }
+
+    if (buildPlateGroup) {
+        buildPlateGroup.visible = false;
+    }
+
+    try {
+        if (savedSize.x > 0 && savedSize.y > 0) {
+            renderer.setPixelRatio(1);
+            renderer.setSize(shotW, shotH, false);
+            camera.aspect = shotW / shotH;
+            camera.updateProjectionMatrix();
+        }
+        scene.updateMatrixWorld(true);
+        camera.updateMatrixWorld(true);
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear(true, true, true);
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL('image/png');
+    } finally {
+        if (buildPlateGroup) {
+            buildPlateGroup.visible = savedBuildPlateVisible;
+        }
+        if (savedSize.x > 0 && savedSize.y > 0) {
+            renderer.setPixelRatio(savedPixelRatio);
+            renderer.setSize(savedSize.x, savedSize.y, false);
+            camera.aspect = savedCamAspect;
+            camera.updateProjectionMatrix();
+        }
+        renderer.setClearColor(originalClearColor, originalAlpha);
+        renderer.render(scene, camera);
+    }
+}
+
+export function takeScreenshotBlob(): Blob | null {
+    const dataUrl = takeScreenshot();
+    if (!dataUrl) return null;
+    return dataUrlToPngBlob(dataUrl);
 }

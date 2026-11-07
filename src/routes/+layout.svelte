@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { inject } from '@vercel/analytics';
 	import { dev, browser } from '$app/environment';
-	import { _ } from 'svelte-i18n';
+	import { page } from '$app/stores';
+	import { locale } from 'svelte-i18n';
 	import 'bootstrap/dist/css/bootstrap.min.css';
 	import '../app.css';
 
@@ -9,105 +10,94 @@
 	import Footer from '$lib/components/footer.svelte';
 
 	import { onMount } from 'svelte';
-	import { getCurrentUrl } from '$lib/functions/utils';
+	import { currentLocale, normalizeLocale } from '$lib/functions/language';
+	import { getRouteSeo } from '$lib/seo';
+	import type { LayoutData } from './$types';
+
+	export let data: LayoutData;
 
 	if (browser) {
-		try { inject(); } catch (_) {}
+		try {
+			inject();
+		} catch (_) {}
 	}
 
-	let currentUrl: string = '';
-
-	$: localizedMeta = {
-		title: $_('og_title'),
-		description: $_('og_description'),
-		keywords: $_('meta_keywords'),
-		author: $_('meta_author'),
-		url: currentUrl,
-	};
-
-	$: jsonLd = JSON.stringify({
-		"@context": "https://schema.org",
-		"@type": "SoftwareApplication",
-		"name": localizedMeta.title || "Default App",
-		"description": localizedMeta.description || "Default description",
-		"applicationCategory": "GraphicsApplication",
-		"operatingSystem": "Cross-platform",
-		"offers": {
-			"@type": "Offer",
-			"price": "0.00",
-			"priceCurrency": ""
-		},
-		"author": {
-			"@type": "Organization",
-			"name": localizedMeta.author || "Default Author"
-		},
-		"url": localizedMeta.url || "",
-	});
+	$: resolvedLocale = normalizeLocale($currentLocale || $locale || data?.locale || 'en');
+	$: seo = getRouteSeo($page.url, resolvedLocale);
 
 	onMount(() => {
-	  currentUrl = getCurrentUrl();
-	  // @ts-ignore
-	  import('bootstrap/dist/js/bootstrap.bundle.min.js');
+		// @ts-ignore
+		import('bootstrap/dist/js/bootstrap.bundle.min.js');
 
-	  if (dev) {
-		if ('serviceWorker' in navigator) {
-			navigator.serviceWorker.getRegistrations().then((registrations) => {
-				for (const registration of registrations) {
-					registration.unregister();
-				}
-			});
+		if (dev) {
+			if ('serviceWorker' in navigator) {
+				navigator.serviceWorker.getRegistrations().then((registrations) => {
+					for (const registration of registrations) {
+						registration.unregister();
+					}
+				});
+			}
+			if ('caches' in window) {
+				caches.keys().then((names) => {
+					for (const name of names) {
+						caches.delete(name);
+					}
+				});
+			}
+		} else if ('serviceWorker' in navigator) {
+			navigator.serviceWorker
+				.register('/service-worker.js')
+				.then((registration) => {
+					console.log('Service Worker registered: ', registration);
+				})
+				.catch((error) => {
+					console.error('Service Worker registration failed: ', error);
+				});
 		}
-		if ('caches' in window) {
-			caches.keys().then((names) => {
-				for (const name of names) {
-					caches.delete(name);
-				}
-			});
-		}
-	  } else if ('serviceWorker' in navigator) {
-		navigator.serviceWorker
-			.register('/service-worker.js')
-			.then((registration) => {
-			console.log('Service Worker registered: ', registration);
-			})
-			.catch((error) => {
-			console.error('Service Worker registration failed: ', error);
-			});
-	  }
 	});
-
-  </script>
+</script>
 
 <svelte:head>
-	<title>{$_('app_tittle')}</title>
+	<title>{seo.title}</title>
+	<meta name="color-scheme" content="light dark" />
 
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link href="https://fonts.googleapis.com/css2?family=Handjet:wght@100..900&display=swap" rel="stylesheet" />
+	<meta name="description" content={seo.description} />
+	<meta name="keywords" content={seo.keywords} />
+	<meta name="author" content={seo.author} />
+	<meta name="robots" content={seo.robots} />
 
-	<meta name="description" content="{$_('meta_description')}">
-	<meta name="keywords" content="{$_('meta_keywords')}">
-	<meta name="author" content="{$_('meta_author')}">
-	<meta property="og:title" content="{$_('og_title')}">
-	<meta property="og:description" content="{$_('og_description')}">
-	<meta property="og:url" content={currentUrl}>
-	<meta property="og:image" content="">
+	<link rel="canonical" href={seo.canonicalUrl} />
+	{#each seo.alternates as alt (alt.hreflang)}
+		<link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+	{/each}
 
-	{#if jsonLd}
-		<script type="application/ld+json">{jsonLd}</script>
-	{/if}
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content={seo.siteName} />
+	<meta property="og:locale" content={seo.ogLocale} />
+	<meta property="og:locale:alternate" content={seo.ogLocaleAlternate} />
+	<meta property="og:title" content={seo.ogTitle} />
+	<meta property="og:description" content={seo.ogDescription} />
+	<meta property="og:url" content={seo.ogUrl} />
+	<meta property="og:image" content={seo.ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="800" />
+	<meta property="og:image:alt" content={seo.ogImageAlt} />
+
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={seo.ogTitle} />
+	<meta name="twitter:description" content={seo.ogDescription} />
+	<meta name="twitter:image" content={seo.ogImage} />
+	<meta name="twitter:image:alt" content={seo.ogImageAlt} />
+
+	{@html seo.jsonLdHtml}
 </svelte:head>
 
 <div class="app">
 	<Header />
 
-	<main class="main-content">
+	<main id="main-content" class="main-content">
 		<slot />
 	</main>
 
 	<Footer />
 </div>
-
-<style>
-
-</style>

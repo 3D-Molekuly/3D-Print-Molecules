@@ -5,9 +5,9 @@ import { locale, waitLocale } from 'svelte-i18n'
 import type { LayoutLoad } from './$types'
 import { getLocaleFromPath, normalizeLocale, currentLocale, type SupportedLocale } from '$lib/functions/language'
 
-export const load: LayoutLoad = async ({ url }) => {
+export const load: LayoutLoad = async ({ url, data }) => {
 	const pathLocale = getLocaleFromPath(url.pathname);
-	let targetLocale: SupportedLocale = 'en';
+	let targetLocale: SupportedLocale = data?.locale ?? 'en';
 
 	if (pathLocale) {
 		targetLocale = pathLocale;
@@ -24,6 +24,7 @@ export const load: LayoutLoad = async ({ url }) => {
 	currentLocale.set(targetLocale);
 
 	if (browser) {
+		document.documentElement.lang = targetLocale;
 		localStorage.setItem('language', targetLocale);
 		sessionStorage.setItem('language', targetLocale);
 		document.cookie = `locale=${targetLocale};path=/;max-age=31536000;SameSite=Lax`;

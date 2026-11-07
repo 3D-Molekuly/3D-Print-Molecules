@@ -1,19 +1,65 @@
 <script lang="ts">
   // Imports
   import { _ } from 'svelte-i18n';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { browser } from '$app/environment';
-  import { setupThreeJS, exportModelAs3MF, generateModel3MFBlob, exportBinaryAsZip, exportModelAsSTL, createSphereMesh, createGluedSphereMesh, createBallAndStickMesh, createBallAndStickMovingJointsMesh, createCubeMesh, createStickMesh, downloadTestJointSTL, takeScreenshot, computeAndRenderGluedSpheresAsync, updateGluedSpheresPreviewOptions, validateGluedSpheresManifold } from '$lib/threejsFc/threejsMolecules3';
+  import { replaceState } from '$app/navigation';
+  import {
+    setupThreeJS,
+    exportModelAs3MF,
+    generateModel3MFBlob,
+    exportBinaryAsZip,
+    exportModelAsSTL,
+    createSphereMesh,
+    createGluedSphereMesh,
+    createBallAndStickMesh,
+    createBallAndStickMovingJointsMesh,
+    createCubeMesh,
+    createStickMesh,
+    downloadTestJointSTL,
+    takeScreenshotBlob,
+    buildPhotoDownloadFileName,
+    computeAndRenderGluedSpheresAsync,
+    updateGluedSpheresPreviewOptions,
+    validateGluedSpheresManifold,
+    resetCameraView,
+    setAutoRotate,
+    setCanvasTheme,
+    setBuildPlateVisible,
+    getModelBoundsMm,
+    syncPreviewScaleMmPerUnit,
+    getElementGroupsInfo,
+    toggleElementGroupVisibility,
+    showAllElementGroups,
+    pickAtomAtCanvasNormalizedPosition,
+    type ModelBoundsMm,
+    type ElementGroupInfo,
+    type HoveredAtomInfo
+  } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
-  import { parsePDB, parseSDF } from '$lib/molecules/molecularDataParser';
+  import { parsePDB, parseSDF, computeMolecularFormula } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
-  import type { CreateAtomsParams, JointPresetId, ModelStyleId, MovingJointsStats, GluedSpheresMode, GluedSpheresExportMode, GluedSpheresStats } from '$lib/types';
+  import type { CreateAtomsParams, JointPresetId, ModelStyleId, MoleculeSource, MovingJointsStats, GluedSpheresMode, GluedSpheresExportMode, GluedSpheresStats } from '$lib/types';
   import { JOINT_PRESETS, checkJointParams, jointLevels, paramsForRod, type JointParams } from '$lib/geometry/jointGeometry';
   import { getDefaultPriorityOrder, LARGE_MOLECULE_ATOM_THRESHOLD } from '$lib/geometry/gluedSpheres';
   import { cifToSdf } from '$lib/utils/cifToSdf';
-  import { buildLocalizedPath, currentLocale } from '$lib/functions/language';
+  import { buildLocalizedPath, currentLocale, normalizeLocale } from '$lib/functions/language';
+  import { HOME_FAQ } from '$lib/seo';
+  import { buildShareUrl, hasShareSearchParams, inferMoleculeSourceFromQuery, parseShareSearchParams, type ShareState } from '$lib/functions/shareUrl';
   import InfoButton from '$lib/buttons/infoButton.svelte';
-  import { determineInputType, fetchPubChemDataWithAutocomplete, fetchPDBData } from '$lib/molecules/inputs';
+  import {
+    determineInputType,
+    fetchPubChemDataWithAutocomplete,
+    fetchPDBData,
+    fetchCODEntry,
+    fetchCCDLigandData,
+    fetchCactus3DSdf,
+    parsePdbQuerySpec,
+    formatPdbQuerySpec,
+    type CodLoadedEntry,
+    type CcdLoadedLigand,
+    type CactusLoadedMolecule
+  } from '$lib/molecules/inputs';
   import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte';
 
   // Types
@@ -30,7 +76,21 @@
 
   let atomCoordinates: AtomCoordinate[] = [];
   let prevAtomCoordinates: AtomCoordinate[] = [];
-  let createAtoms: ((params: CreateAtomsParams) => MovingJointsStats | null);
+  let createAtoms:
+    | ((params: CreateAtomsParams, options?: { resetCamera?: boolean }) => MovingJointsStats | null)
+    | undefined;
+
+  // Stav 3D náhledového okna
+  let isFetchingMolecule = false;
+  let autoRotate = false;
+  let showBuildPlate = false;
+  let canvasDark = false;
+  let modelBoundsMm: ModelBoundsMm | null = null;
+  let elementGroups: ElementGroupInfo[] = []
+  let hoveredAtom: HoveredAtomInfo | null = null;
+  let hoverRafId: number | null = null;
+  let pendingHoverCoords: { clientX: number; clientY: number } | null = null;
+  let themeObserver: MutationObserver | null = null;
 
   const modelGenerators: { id: ModelStyleId; name: string; func: CreateAtomsParams['selectedGenerator'] }[] = [
     { id: 'spheres', name: 'Spheres', func: createSphereMesh },
@@ -102,6 +162,19 @@
   let uploadedFileName: string = "";
   
   let showAdvancedSearch = false; 
+
+  // Sdílení modelu a nastavení přes URL
+  let moleculeSource: MoleculeSource | null = null;
+  let moleculeQuery: string = '';
+  let urlSyncReady = false;
+  let openedWithShareParams = false;
+  let shareCopied = false;
+  let showSharePopover = false;
+  let shareWrapperEl: HTMLElement | null = null;
+  let shareInputEl: HTMLInputElement | null = null;
+  let shareCopiedTimeout: ReturnType<typeof setTimeout> | null = null;
+  let urlSyncTimeout: ReturnType<typeof setTimeout> | null = null;
+  let sharedSettingsNotice = false;
 
   $: isGluedSpheresStyle = selectedGenerator === createGluedSphereMesh;
   $: isSpheresBasedStyle = selectedGenerator === createSphereMesh || isGluedSpheresStyle;
@@ -232,13 +305,253 @@
     }
   }
 
+  $: currentStyleId = modelGenerators.find((g) => g.func === selectedGenerator)?.id ?? 'spheres';
+  $: currentShareState = {
+    source: moleculeSource,
+    molecule: moleculeQuery,
+    style: currentStyleId,
+    quality,
+    scale: jointMmPerUnit ?? 10,
+    mult: multiplicationFactor ?? 1.0,
+    showHydrogens,
+    bondDiameterFactor: bondDiameterMultiplicationFactor,
+    bondQuality,
+    groupBondsSeparately,
+    uniformAtomDiameter,
+    showMultipleBonds,
+    jointPreset,
+    jointParams: { ...jointParams },
+    jointPreferT,
+    jointSkipTerminal,
+    jointsInRings,
+    gluedMode,
+    gluedExportMode,
+    gluedPriorityOrder: [...gluedPriorityOrder],
+    gluedGap,
+    gluedPlateSpacing,
+    gluedMergeSameElement,
+    gluedPegHolesEnabled,
+    gluedPegHoleDiameter,
+    gluedPegHoleDepth,
+    gluedExplodedPercent,
+    gluedShowPartLabels
+  } satisfies ShareState;
+
+  function safeReplaceUrl(nextUrl: string) {
+    if (!browser) return;
+    if (window.location.href === nextUrl) return;
+    try {
+      replaceState(nextUrl, {});
+    } catch {
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }
+
+  $: if (browser && urlSyncReady && (moleculeSource !== null || openedWithShareParams)) {
+    const snapshot = currentShareState;
+    if (urlSyncTimeout) clearTimeout(urlSyncTimeout);
+    urlSyncTimeout = setTimeout(() => {
+      const nextUrl = buildShareUrl(window.location.href, snapshot);
+      safeReplaceUrl(nextUrl);
+    }, 200);
+  }
+
+  function applyShareState(state: ShareState) {
+    const matchingGen = modelGenerators.find((g) => g.id === state.style);
+    if (matchingGen) {
+      selectedGenerator = matchingGen.func;
+    }
+
+    quality = state.quality;
+    showHydrogens = state.showHydrogens;
+    bondDiameterMultiplicationFactor = state.bondDiameterFactor;
+    bondQuality = state.bondQuality;
+    groupBondsSeparately = state.groupBondsSeparately;
+    uniformAtomDiameter = state.uniformAtomDiameter;
+    showMultipleBonds = state.showMultipleBonds;
+
+    if (state.style === 'spheres' || state.style === 'spheres-glued') {
+      jointMmPerUnitSpheres = state.scale;
+      multiplicationFactorSpheres = state.mult;
+    } else if (state.style === 'ball-and-stick') {
+      jointMmPerUnitBallAndStick = state.scale;
+      multiplicationFactorBallAndStick = state.mult;
+    } else if (state.style === 'ball-and-stick-moving-joints') {
+      jointMmPerUnitMovingJoints = state.scale;
+      multiplicationFactorBallAndStick = state.mult;
+    } else if (state.style === 'sticks') {
+      jointMmPerUnitSticks = state.scale;
+      multiplicationFactorSticks = state.mult;
+    } else if (state.style === 'minecraft') {
+      jointMmPerUnitCubes = state.scale;
+      multiplicationFactorCubes = state.mult;
+    }
+
+    jointPreset = state.jointPreset;
+    jointParams = { ...state.jointParams };
+    jointPreferT = state.jointPreferT;
+    jointSkipTerminal = state.jointSkipTerminal;
+    jointsInRings = state.jointsInRings;
+
+    gluedMode = state.gluedMode;
+    gluedExportMode = state.gluedExportMode;
+    gluedPriorityOrder = [...state.gluedPriorityOrder];
+    gluedGap = state.gluedGap;
+    gluedPlateSpacing = state.gluedPlateSpacing;
+    gluedMergeSameElement = state.gluedMergeSameElement;
+    gluedPegHolesEnabled = state.gluedPegHolesEnabled;
+    gluedPegHoleDiameter = state.gluedPegHoleDiameter;
+    gluedPegHoleDepth = state.gluedPegHoleDepth;
+    gluedExplodedPercent = state.gluedExplodedPercent;
+    gluedShowPartLabels = state.gluedShowPartLabels;
+  }
+
+  $: displayedShareUrl = browser ? buildShareUrl(window.location.href, currentShareState) : '';
+
+  async function copyShareLink() {
+    if (!browser) return;
+    if (urlSyncTimeout) {
+      clearTimeout(urlSyncTimeout);
+      urlSyncTimeout = null;
+    }
+    openedWithShareParams = true;
+    const shareUrl = buildShareUrl(window.location.href, currentShareState);
+    safeReplaceUrl(shareUrl);
+
+    let copied = false;
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+    if (!copied) {
+      const textArea = document.createElement('textarea');
+      textArea.value = shareUrl;
+      textArea.setAttribute('readonly', '');
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        copied = true;
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    }
+
+    if (copied) {
+      shareCopied = true;
+      if (shareCopiedTimeout) clearTimeout(shareCopiedTimeout);
+      shareCopiedTimeout = setTimeout(() => {
+        shareCopied = false;
+      }, 2500);
+    }
+  }
+
+  async function handleShareButtonClick() {
+    if (showSharePopover) {
+      showSharePopover = false;
+      return;
+    }
+    showSlicerMenu = false;
+    showSharePopover = true;
+    await copyShareLink();
+    await tick();
+    if (shareInputEl) {
+      shareInputEl.focus();
+      shareInputEl.select();
+    }
+  }
+
+  let cleanupCanvasResize: (() => void) | undefined;
+  let isCanvasFullscreen = false;
+
+  function syncFullscreenState() {
+    if (!browser) return;
+    const container = document.getElementById('canvasContainer');
+    const fsEl =
+      document.fullscreenElement ??
+      (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement ??
+      null;
+    isCanvasFullscreen = Boolean(container && fsEl === container);
+  }
+
+  async function toggleCanvasFullscreen() {
+    const container = document.getElementById('canvasContainer') as
+      | (HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void })
+      | null;
+    if (!container) return;
+
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+
+    try {
+      if (!document.fullscreenElement && !doc.webkitFullscreenElement) {
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if (container.webkitRequestFullscreen) {
+          await container.webkitRequestFullscreen();
+        }
+      } else if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (doc.webkitExitFullscreen) {
+        await doc.webkitExitFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle failed:', err);
+    }
+  }
+
   onMount(() => {
     if (browser) {
+      let lastSiteDark = document.documentElement.classList.contains('dark');
+      canvasDark = lastSiteDark;
+      setCanvasTheme(canvasDark);
+      showBuildPlate = localStorage.getItem('canvasShowBuildPlate') === 'true';
+
+      themeObserver = new MutationObserver(() => {
+        const siteIsDark = document.documentElement.classList.contains('dark');
+        if (siteIsDark !== lastSiteDark) {
+          lastSiteDark = siteIsDark;
+          canvasDark = siteIsDark;
+          setCanvasTheme(canvasDark);
+        }
+      });
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+
+      document.addEventListener('fullscreenchange', syncFullscreenState);
+      document.addEventListener('webkitfullscreenchange', syncFullscreenState);
       initialize();
     }
     if (isIOS()) {
       acceptFormats = '';
     }
+    return () => {
+      if (browser) {
+        document.removeEventListener('fullscreenchange', syncFullscreenState);
+        document.removeEventListener('webkitfullscreenchange', syncFullscreenState);
+      }
+      if (themeObserver) {
+        themeObserver.disconnect();
+        themeObserver = null;
+      }
+      if (hoverRafId !== null && browser) {
+        cancelAnimationFrame(hoverRafId);
+        hoverRafId = null;
+      }
+      if (cleanupCanvasResize) cleanupCanvasResize();
+      if (urlSyncTimeout) clearTimeout(urlSyncTimeout);
+      if (shareCopiedTimeout) clearTimeout(shareCopiedTimeout);
+    };
   });
 
   async function initialize() {
@@ -248,6 +561,8 @@
     }
 
     searchHistory = JSON.parse(localStorage.getItem('searchHistory') || '[]');
+
+    let initialShareState: ShareState | null = null;
 
     if (browser) {
       // Načtení specifických hodnot pro každý generátor
@@ -340,12 +655,24 @@
       if (savedSlicer && slicerOptions.some((s) => s.id === savedSlicer)) {
         selectedSlicerId = savedSlicer;
       }
+
+      // Aplikace parametrů ze sdílené URL adresy (přepíše lokální nastavení)
+      const searchParams = new URLSearchParams(window.location.search);
+      if (hasShareSearchParams(searchParams)) {
+        openedWithShareParams = true;
+        initialShareState = parseShareSearchParams(searchParams);
+        applyShareState(initialShareState);
+        moleculeSource = initialShareState.source;
+        moleculeQuery = initialShareState.molecule;
+      }
+
       settingsLoaded = true;
     }
 
     canvas = document.getElementById('threeCanvas') as HTMLCanvasElement | null;
     if (!canvas) {
       console.error('Canvas not found');
+      urlSyncReady = true;
       return;
     }
 
@@ -355,7 +682,7 @@
       const storedTableInfo = sessionStorage.getItem('tableInfo');
       const storedImageUrl = sessionStorage.getItem('imageUrl');
       
-      if (storedCoordinates) {
+      if (!initialShareState && storedCoordinates) {
         atomCoordinates = JSON.parse(storedCoordinates);
         prevAtomCoordinates = atomCoordinates;
         lastSuccessfulInput = storedInput || '';
@@ -372,21 +699,46 @@
       }
 
       const { animate, updateCanvasSize, createAtoms: generatedCreateAtoms } = await setupThreeJS(canvas);
+      setCanvasTheme(canvasDark);
+      setBuildPlateVisible(showBuildPlate);
+      setAutoRotate(autoRotate);
 
-      const cleanup = setupCanvasResizing(canvas, updateCanvasSize);
-      resizeCanvas = updateCanvasSize;
+      const canvasResizeHandle = setupCanvasResizing(canvas, updateCanvasSize);
+      cleanupCanvasResize = canvasResizeHandle;
+      resizeCanvas = canvasResizeHandle.resize;
       createAtoms = generatedCreateAtoms;
       animate();
 
-      if (atomCoordinates.length > 0) {
-        redrawModel(atomCoordinates);
+      if (initialShareState) {
+        await tick();
+        if (
+          (initialShareState.source === 'pubchem' ||
+            initialShareState.source === 'pdb' ||
+            initialShareState.source === 'ccd' ||
+            initialShareState.source === 'cactus' ||
+            initialShareState.source === 'cod') &&
+          initialShareState.molecule
+        ) {
+          await loadMoleculeFromSource(initialShareState.source, initialShareState.molecule, {
+            saveToHistory: false
+          });
+        } else {
+          // Zdroj je vlastní soubor (nebo čisté sdílení nastavení) – rozbalit nastavení a zobrazit informaci
+          isCollapsed = false;
+          sharedSettingsNotice = true;
+          setTimeout(() => {
+            if (typeof resizeCanvas === 'function') resizeCanvas();
+          }, 50);
+        }
+      } else if (atomCoordinates.length > 0) {
+        await tick();
+        redrawModel(atomCoordinates, { resetCamera: true });
       }
-      
-      return () => {
-        cleanup();
-      };
     } catch (error) {
       console.error("Error during onMount initialization:", error);
+    } finally {
+      await tick();
+      urlSyncReady = true;
     }
   }
 
@@ -414,52 +766,130 @@
     );
   }
 
-  async function handleSubmit() {
-    if (!inputStr.trim() && !isReloadMode) {
-      return;
-    }
+  async function loadMoleculeFromSource(
+    source: 'pubchem' | 'pdb' | 'ccd' | 'cactus' | 'cod',
+    rawQuery: string,
+    options: {
+      saveToHistory?: boolean;
+      preloadedCodSdf?: string;
+      preloadedCodEntry?: CodLoadedEntry;
+      preloadedCcd?: CcdLoadedLigand;
+      preloadedCactus?: CactusLoadedMolecule;
+    } = {}
+  ) {
+    const trimmedQuery = rawQuery.trim();
+    if (!trimmedQuery) return;
 
-    if (isReloadMode && inputStr === lastSuccessfulInput) {
-      redrawModel(atomCoordinates);
-      if (typeof resizeCanvas === "function") resizeCanvas();
-      return;
-    }
+    const {
+      saveToHistory = true,
+      preloadedCodSdf,
+      preloadedCodEntry,
+      preloadedCcd,
+      preloadedCactus
+    } = options;
 
     isFileUploaded = false;
+    sharedSettingsNotice = false;
+    isFetchingMolecule = true;
+    hoveredAtom = null;
     setTableInfo("", "", "");
     setImage('');
 
-    const trimmedInput = inputStr.trim();
-    let nameToSaveForHistory = trimmedInput;
+    let nameToSaveForHistory = trimmedQuery;
     let newAtomCoordinates: AtomCoordinate[] = [];
+    let resolvedShareQuery = trimmedQuery;
+    let displayInput = trimmedQuery;
 
     try {
-      const isPDB = /^[1-9][a-zA-Z0-9]{3}$/i.test(trimmedInput);
-
-      if (isPDB) {
-        await fetchPDBData(trimmedInput, setTableInfo, setImage);
-        nameToSaveForHistory = trimmedInput.toUpperCase();
-        const url = `https://files.rcsb.org/view/${trimmedInput}.pdb`;
+      if (source === 'pdb') {
+        const spec = parsePdbQuerySpec(trimmedQuery);
+        await fetchPDBData(trimmedQuery, setTableInfo, setImage);
+        const normalizedSpec = formatPdbQuerySpec(spec.pdbId, spec.chainId, spec.includeWaters);
+        nameToSaveForHistory = spec.chainId || spec.includeWaters ? `PDB: ${normalizedSpec}` : spec.pdbId;
+        resolvedShareQuery = normalizedSpec;
+        displayInput = normalizedSpec;
+        const url = `https://files.rcsb.org/view/${encodeURIComponent(spec.pdbId)}.pdb`;
         const response = await fetch(url);
         if (!response.ok) throw new Error("Failed to fetch PDB data");
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "pdb";
-        newAtomCoordinates = await parsePDB(content);
+        newAtomCoordinates = await parsePDB(content, {
+          chainId: spec.chainId,
+          includeWaters: spec.includeWaters
+        });
+      } else if (source === 'ccd') {
+        const loaded = preloadedCcd ?? (await fetchCCDLigandData(trimmedQuery));
+        originalContent = loaded.sdf;
+        originalFileExtension = "sdf";
+        newAtomCoordinates = await parseSDF(loaded.sdf);
+        const formula = loaded.formula || computeMolecularFormula(newAtomCoordinates);
+        setTableInfo(loaded.name, loaded.id, formula);
+        setImage(loaded.imageUrl);
+        resolvedShareQuery = loaded.id;
+        displayInput = `CCD: ${loaded.id}`;
+        nameToSaveForHistory = displayInput;
+      } else if (source === 'cactus') {
+        const loaded = preloadedCactus ?? (await fetchCactus3DSdf(trimmedQuery));
+        originalContent = loaded.sdf;
+        originalFileExtension = "sdf";
+        newAtomCoordinates = await parseSDF(loaded.sdf);
+        const formula = computeMolecularFormula(newAtomCoordinates);
+        const desc = formula ? `${formula} · NIH CACTUS 3D` : "NIH CACTUS 3D";
+        setTableInfo(loaded.iupacName || loaded.query, "SMILES / CACTUS", desc);
+        setImage(loaded.imageUrl);
+        resolvedShareQuery = loaded.query;
+        displayInput = `SMILES: ${loaded.query}`;
+        nameToSaveForHistory = displayInput;
+      } else if (source === 'cod') {
+        const codEntry =
+          preloadedCodEntry ??
+          (preloadedCodSdf
+            ? {
+                id: trimmedQuery.replace(/^cod:\s*/i, '').trim(),
+                sdf: preloadedCodSdf,
+                name: `COD Entry: ${trimmedQuery}`,
+                formula: ''
+              }
+            : await fetchCODEntry(trimmedQuery));
+        originalContent = codEntry.sdf;
+        originalFileExtension = "sdf";
+        newAtomCoordinates = await parseSDF(codEntry.sdf);
+        if (newAtomCoordinates.length === 0) {
+          throw new Error("Failed to parse SDF content from COD.");
+        }
+        const formulaPart = codEntry.formula || computeMolecularFormula(newAtomCoordinates);
+        const sgPart = codEntry.spaceGroup ? ` · ${codEntry.spaceGroup}` : '';
+        const codDesc = formulaPart ? `${formulaPart}${sgPart}` : "Converted from CIF format";
+        setTableInfo(codEntry.name, codEntry.id, codDesc);
+        setImage('https://www.crystallography.net/cod/images/cod-logo.png');
+        resolvedShareQuery = codEntry.id;
+        displayInput = `COD: ${codEntry.id}`;
+        nameToSaveForHistory = displayInput;
       } else {
-        nameToSaveForHistory = await fetchPubChemDataWithAutocomplete(trimmedInput, setTableInfo, setImage);
+        nameToSaveForHistory = await fetchPubChemDataWithAutocomplete(trimmedQuery, setTableInfo, setImage);
         const cid = tableInfo.secondItem;
         if (!cid) throw new Error("PubChem could not find a molecule for the given input.");
         
         const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF?record_type=3d&response_type=display`;
         const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF`;
-        let response = await fetch(primaryUrl).catch(() => fetch(fallbackUrl));
+        const response = await fetch(primaryUrl).catch(() => fetch(fallbackUrl));
         if (!response.ok) throw new Error("Molecule data not available.");
         
         const content = await response.text();
         originalContent = content;
         originalFileExtension = "sdf";
         newAtomCoordinates = await parseSDF(content);
+
+        const isNumericOrCas = /^\d+$/.test(trimmedQuery) || /^\d{2,7}-\d{2}-\d$/.test(trimmedQuery);
+        if (isNumericOrCas) {
+          resolvedShareQuery = trimmedQuery;
+        } else if (nameToSaveForHistory && nameToSaveForHistory.length <= 50) {
+          resolvedShareQuery = nameToSaveForHistory;
+        } else {
+          resolvedShareQuery = cid || trimmedQuery;
+        }
+        displayInput = trimmedQuery;
       }
 
       if (newAtomCoordinates.length === 0) {
@@ -467,74 +897,114 @@
       }
 
       atomCoordinates = newAtomCoordinates;
+      moleculeSource = source;
+      moleculeQuery = resolvedShareQuery;
 
-      if (!areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
-        if (nameToSaveForHistory.length > 50) {
-          nameToSaveForHistory = trimmedInput;
+      if (saveToHistory && !areCoordinatesEqual(atomCoordinates, prevAtomCoordinates)) {
+        if (nameToSaveForHistory.length > 80) {
+          nameToSaveForHistory = trimmedQuery.slice(0, 80);
         }
         saveSearch(nameToSaveForHistory);
       }
       
       prevAtomCoordinates = [...atomCoordinates];
-      lastSuccessfulInput = inputStr;
+      inputStr = displayInput;
+      lastSuccessfulInput = displayInput;
       lastSuccessfulFileContent = originalContent;
       sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
 
-      redrawModel(atomCoordinates);
+      await tick();
+      redrawModel(atomCoordinates, { resetCamera: true });
       isReloadMode = true;
       if (typeof resizeCanvas === "function") resizeCanvas();
     } catch (error) {
       console.error("Error fetching/parsing molecule data:", error);
       showMoleculePopup = true;
       isReloadMode = false;
+    } finally {
+      isFetchingMolecule = false;
     }
   }
 
-  async function handleAdvancedSearch(event: CustomEvent) {
-    const { source, query, content } = event.detail;
+  async function handleSubmit() {
+    if (!inputStr.trim() && !isReloadMode) {
+      return;
+    }
 
-    setTableInfo("", "", "");
-    setImage('');
-    isFileUploaded = false; 
+    if (isReloadMode && inputStr === lastSuccessfulInput) {
+      await tick();
+      redrawModel(atomCoordinates);
+      if (typeof resizeCanvas === "function") resizeCanvas();
+      return;
+    }
+
+    const trimmedInput = inputStr.trim();
+    const codMatch = trimmedInput.match(/^cod:\s*(.+)$/i);
+    if (codMatch) {
+      await loadMoleculeFromSource('cod', codMatch[1].trim(), { saveToHistory: true });
+      return;
+    }
+    const ccdMatch = trimmedInput.match(/^ccd:\s*(.+)$/i);
+    if (ccdMatch) {
+      await loadMoleculeFromSource('ccd', ccdMatch[1].trim(), { saveToHistory: true });
+      return;
+    }
+    const cactusMatch = trimmedInput.match(/^(?:smiles|cactus):\s*(.+)$/i);
+    if (cactusMatch) {
+      await loadMoleculeFromSource('cactus', cactusMatch[1].trim(), { saveToHistory: true });
+      return;
+    }
+    const pdbMatch = trimmedInput.match(/^pdb:\s*(.+)$/i);
+    if (pdbMatch) {
+      await loadMoleculeFromSource('pdb', pdbMatch[1].trim(), { saveToHistory: true });
+      return;
+    }
+
+    const source = inferMoleculeSourceFromQuery(trimmedInput);
+    await loadMoleculeFromSource(source, trimmedInput, { saveToHistory: true });
+  }
+
+  async function handleAdvancedSearch(event: CustomEvent) {
+    const {
+      source,
+      query,
+      content,
+      preloadedCodEntry,
+      preloadedCcd,
+      preloadedCactus
+    } = event.detail;
+
+    isReloadMode = false;
 
     if (source === 'pubchem') {
       inputStr = query;
-      isReloadMode = false;
-      handleSubmit();
+      await loadMoleculeFromSource('pubchem', query, { saveToHistory: true });
+    } else if (source === 'pdb') {
+      inputStr = query;
+      await loadMoleculeFromSource('pdb', query, { saveToHistory: true });
+    } else if (source === 'ccd') {
+      await loadMoleculeFromSource('ccd', query, {
+        saveToHistory: true,
+        preloadedCcd
+      });
+    } else if (source === 'cactus') {
+      await loadMoleculeFromSource('cactus', query, {
+        saveToHistory: true,
+        preloadedCactus
+      });
     } else if (source === 'cod') {
-      try {
-        originalContent = content;
-        originalFileExtension = "sdf";
-        isFileUploaded = true;
-        uploadedFileName = `COD_${query}`;
-
-        atomCoordinates = await parseSDF(content);
-        if (atomCoordinates.length === 0) {
-          throw new Error("Failed to parse SDF content from COD.");
-        }
-
-        setTableInfo(`COD Entry: ${query}`, query, "Converted from CIF format");
-        setImage('https://www.crystallography.net/cod/images/cod-logo.png');
-
-        prevAtomCoordinates = [...atomCoordinates];
-        lastSuccessfulFileContent = content;
-        lastSuccessfulInput = `COD: ${query}`;
-        inputStr = lastSuccessfulInput;
-        sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
-
-        redrawModel(atomCoordinates);
-        isReloadMode = true;
-      } catch (error) {
-        console.error("Error processing data from COD:", error);
-        showMoleculePopup = true;
-        isReloadMode = false;
-      }
+      await loadMoleculeFromSource('cod', query, {
+        saveToHistory: true,
+        preloadedCodSdf: content,
+        preloadedCodEntry
+      });
     }
   }
 
   function handleKeyPress(event: KeyboardEvent) {
     if (event.key === "Enter") {
       event.preventDefault();
+      if (event.isComposing || event.keyCode === 229) return;
       handleSubmit();
     }
   }
@@ -619,8 +1089,10 @@
   }
 
   function getModelMetadata(desc = "3MF multicolor model with metadata"): Record<string, string | number | boolean | null | undefined> {
+    const shareUrl = browser ? buildShareUrl(window.location.href, currentShareState) : null;
     return {
       author: "3D Printing Molecules WEB APP",
+      shareUrl,
       moleculeName: tableInfo.firstItem || null,
       moleculeId: tableInfo.secondItem || null,
       moleculeDescription: tableInfo.thirdItem || null,
@@ -735,11 +1207,15 @@
     if (showSlicerMenu && slicerWrapperEl && !slicerWrapperEl.contains(event.target as Node)) {
       showSlicerMenu = false;
     }
+    if (showSharePopover && shareWrapperEl && !shareWrapperEl.contains(event.target as Node)) {
+      showSharePopover = false;
+    }
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
-    if (showSlicerMenu && event.key === 'Escape') {
-      showSlicerMenu = false;
+    if (event.key === 'Escape') {
+      if (showSlicerMenu) showSlicerMenu = false;
+      if (showSharePopover) showSharePopover = false;
     }
   }
 
@@ -765,7 +1241,75 @@
     exportModelAsSTL(fileName);
   }
 
-  function redrawModel(coords: AtomCoordinate[]) {
+  function refreshPreviewHud() {
+    modelBoundsMm = getModelBoundsMm();
+    elementGroups = getElementGroupsInfo();
+    hoveredAtom = null;
+  }
+
+  function handleResetCameraView() {
+    resetCameraView();
+  }
+
+  function handleToggleAutoRotate() {
+    autoRotate = !autoRotate;
+    setAutoRotate(autoRotate);
+  }
+
+  function handleToggleBuildPlate() {
+    showBuildPlate = !showBuildPlate;
+    setBuildPlateVisible(showBuildPlate);
+    if (browser) {
+      localStorage.setItem('canvasShowBuildPlate', String(showBuildPlate));
+    }
+  }
+
+  function handleToggleElementGroup(key: string) {
+    elementGroups = toggleElementGroupVisibility(key);
+    hoveredAtom = null;
+  }
+
+  function handleShowAllElementGroups() {
+    elementGroups = showAllElementGroups();
+  }
+
+  function handleCanvasPointerMove(event: PointerEvent) {
+    if (atomCoordinates.length === 0 || !canvas || event.buttons !== 0) {
+      if (hoveredAtom) hoveredAtom = null;
+      return;
+    }
+    pendingHoverCoords = { clientX: event.clientX, clientY: event.clientY };
+    if (hoverRafId !== null) return;
+    hoverRafId = requestAnimationFrame(() => {
+      hoverRafId = null;
+      if (!pendingHoverCoords || !canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const ndcX = ((pendingHoverCoords.clientX - rect.left) / rect.width) * 2 - 1;
+      const ndcY = -((pendingHoverCoords.clientY - rect.top) / rect.height) * 2 + 1;
+      hoveredAtom = pickAtomAtCanvasNormalizedPosition(ndcX, ndcY);
+    });
+  }
+
+  function handleCanvasPointerLeave() {
+    pendingHoverCoords = null;
+    hoveredAtom = null;
+  }
+
+  $: hasHiddenElementGroups = elementGroups.some((g) => !g.visible);
+
+  $: if (
+    browser &&
+    createAtoms &&
+    atomCoordinates.length > 0 &&
+    !isGluedSpheresStyle &&
+    !isMovingJointsStyle &&
+    jointMmPerUnit > 0
+  ) {
+    modelBoundsMm = syncPreviewScaleMmPerUnit(jointMmPerUnit);
+  }
+
+  function redrawModel(coords: AtomCoordinate[], options: { resetCamera?: boolean } = {}) {
     if (coords.length === 0) return;
     sessionStorage.setItem('atomCoordinates', JSON.stringify(coords));
     gluedExportError = null;
@@ -819,23 +1363,29 @@
           ? coords.length
           : coords.filter((c) => c.atomType !== 'H').length;
         gluedWorkerProgress = { running: true, completed: 0, total: activeCount };
-        computeAndRenderGluedSpheresAsync(params, {
-          onProgress: (completed, total) => {
-            gluedWorkerProgress = { running: true, completed, total };
+        computeAndRenderGluedSpheresAsync(
+          params,
+          {
+            onProgress: (completed, total) => {
+              gluedWorkerProgress = { running: true, completed, total };
+            },
+            onComplete: (stats) => {
+              gluedWorkerProgress = { running: false, completed: stats.totalAtoms, total: stats.totalAtoms };
+              gluedSpheresStats = stats;
+              refreshPreviewHud();
+            },
+            onError: (errMsg) => {
+              gluedWorkerProgress = { running: false, completed: 0, total: 0 };
+              gluedExportError = errMsg;
+            }
           },
-          onComplete: (stats) => {
-            gluedWorkerProgress = { running: false, completed: stats.totalAtoms, total: stats.totalAtoms };
-            gluedSpheresStats = stats;
-          },
-          onError: (errMsg) => {
-            gluedWorkerProgress = { running: false, completed: 0, total: 0 };
-            gluedExportError = errMsg;
-          }
-        });
+          options
+        );
       } else {
         gluedWorkerProgress = { running: false, completed: 0, total: 0 };
         gluedSpheresStats = null;
-        movingJointsStats = createAtoms(params);
+        movingJointsStats = createAtoms(params, options);
+        refreshPreviewHud();
       }
     } else {
       console.error("createAtoms function not initialized");
@@ -846,6 +1396,18 @@
     let name = "molecule";
     if (isFileUploaded) {
       name = `Molecule_${uploadedFileName}`;
+    } else if (moleculeSource === 'cod' && moleculeQuery) {
+      name = `Molecule_COD_${moleculeQuery}`;
+    } else if (moleculeSource === 'ccd' && moleculeQuery) {
+      name = `Molecule_CCD_${moleculeQuery}`;
+    } else if (moleculeSource === 'pdb' && moleculeQuery) {
+      name = `Molecule_PDB_${moleculeQuery.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+    } else if (moleculeSource === 'cactus' && (tableInfo.firstItem || moleculeQuery)) {
+      const safeLabel = (tableInfo.firstItem || moleculeQuery)
+        .replace(/[^A-Za-z0-9_-]/g, '_')
+        .replace(/_+/g, '_')
+        .slice(0, 32);
+      name = `Molecule_${safeLabel || 'CACTUS'}`;
     } else if (tableInfo.secondItem) {
       name = `Molecule_${tableInfo.secondItem}`;
     }
@@ -884,13 +1446,22 @@
       }
       
       isReloadMode = false;
+      isFetchingMolecule = true;
+      hoveredAtom = null;
       uploadedFileName = file.name.split('.').slice(0, -1).join('.');
       isFileUploaded = true;
+      moleculeSource = 'file';
+      moleculeQuery = '';
+      sharedSettingsNotice = false;
       setTableInfo(file.name, `Uploaded .${fileExtension} file`, "");
       setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
       inputStr = `File: ${file.name}`;
       
       const reader = new FileReader();
+      reader.onerror = () => {
+        isFetchingMolecule = false;
+        showMoleculePopup = true;
+      };
       reader.onload = async (e) => {
         const content = e.target?.result as string;
         
@@ -922,12 +1493,15 @@
           lastSuccessfulInput = inputStr;
           sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
 
-          redrawModel(atomCoordinates);
+          await tick();
+          redrawModel(atomCoordinates, { resetCamera: true });
           isReloadMode = true;
         } catch (error) {
           console.error("Error parsing uploaded file:", error);
           showMoleculePopup = true;
           isReloadMode = false;
+        } finally {
+          isFetchingMolecule = false;
         }
       };
       reader.readAsText(file);
@@ -1127,19 +1701,35 @@
     return typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
   }
 
+  let photoSaved = false;
+  let photoSavedTimer: ReturnType<typeof setTimeout> | null = null;
+
   function saveCanvasAsImage() {
     if (atomCoordinates.length === 0) {
       showMoleculePopup = true;
       return;
     }
+    if (isFetchingMolecule || gluedWorkerProgress.running) {
+      return;
+    }
     updateFileName();
-    const imageData = takeScreenshot();
-    if (imageData) {
+    const blob = takeScreenshotBlob();
+    if (blob) {
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `Photo_${fileName}`;
-      link.href = imageData;
+      link.download = buildPhotoDownloadFileName(fileName);
+      link.href = objectUrl;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(link.href);
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+      photoSaved = true;
+      if (photoSavedTimer) clearTimeout(photoSavedTimer);
+      photoSavedTimer = setTimeout(() => {
+        photoSaved = false;
+      }, 1500);
     } else {
       console.error("Failed to capture screenshot");
     }
@@ -1175,6 +1765,9 @@
       isReloadMode = false;
     }
   }
+
+  $: activeFaqItems = HOME_FAQ[normalizeLocale($currentLocale)];
+  const faqDetailsAttrs: Record<string, string> = { name: 'home-faq' };
 </script>
 
 <svelte:window on:click={handleWindowClick} on:keydown={handleWindowKeydown} />
@@ -1186,12 +1779,12 @@
   on:dragleave={handleDragLeave}
   on:dragover={handleDragOver}
   on:drop={handleDrop}
-  role="region"
 >
   <div class="container mt-4 main-panel main-content">
-    <div class="row">
+    <h1 class="visually-hidden">{$_('seo_home_h1')}</h1>
+    <div class="row main-layout-row">
       <div class="col-md-8 left-panel">
-        <div class="d-flex mb-3 align-items-center">
+        <search class="d-flex mb-3 align-items-center">
           <div class="input-group">
             <input
               type="text"
@@ -1208,23 +1801,22 @@
               {#if inputStr}
                 <button
                   type="button"
-                  class="btn-close"
+                  class="btn-close me-1"
                   aria-label="Clear"
                   on:click={() => {
                     inputStr = '';
                     isReloadMode = false;
                   }}
                 ></button>
-              {:else}
-                <button
-                  class="btn btn-icon"
-                  on:click={() => showAdvancedSearch = true}
-                  title="Advanced Search"
-                  aria-label="Advanced Search"
-                >
-                  <span class="material-symbols-outlined">settings</span>
-                </button>
               {/if}
+              <button
+                type="button"
+                class="btn btn-icon"
+                on:click={() => showAdvancedSearch = true}
+                aria-label={$_('adv_search_title')}
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+              </button>
             </div>
 
             {#if searchHistory.length > 0}
@@ -1269,15 +1861,27 @@
             on:click={handleSubmit}
             class="btn btn-primary button-with-icon d-flex align-items-center main-search-line"
             class:btn-warning={isReloadMode}
-            role="button"
-            tabindex="0"
+            type="button"
           >
             <span class="material-symbols-outlined">
               {isReloadMode ? 'refresh' : 'downloading'}
             </span>
             {isReloadMode ? $_('reload_data_button') : $_('fetch_data_button')}
           </button>
-        </div>
+        </search>
+
+        {#if sharedSettingsNotice}
+          <div class="alert alert-info alert-dismissible d-flex align-items-center gap-2 py-2 px-3 mb-3 small" role="status">
+            <span class="material-symbols-outlined flex-shrink-0" style="font-size: 20px; margin-right: 0;">tune</span>
+            <span class="flex-grow-1">{$_('shared_settings_applied_notice')}</span>
+            <button
+              type="button"
+              class="btn-close position-static p-1 ms-2"
+              aria-label={$_('close_popup') || 'Close'}
+              on:click={() => (sharedSettingsNotice = false)}
+            ></button>
+          </div>
+        {/if}
 
         <table class="table table-borderless">
           <thead>
@@ -1293,7 +1897,7 @@
               <td style="width: 40%;">{tableInfo.firstItem}</td>
               <td>
                 {#if tableInfo.secondItem}
-                  {#if determineInputType(inputStr) === "CID" && !isFileUploaded}
+                  {#if (moleculeSource === 'pubchem' || (determineInputType(inputStr) === "CID" && !moleculeSource)) && !isFileUploaded}
                     <a
                       href="https://pubchem.ncbi.nlm.nih.gov/compound/{tableInfo.secondItem}"
                       target="_blank"
@@ -1302,12 +1906,30 @@
                     >
                       {tableInfo.secondItem}
                     </a>
-                  {:else if determineInputType(inputStr) === "PDB" && !isFileUploaded}
+                  {:else if (moleculeSource === 'pdb' || (determineInputType(inputStr) === "PDB" && !moleculeSource)) && !isFileUploaded}
                     <a
                       href="https://www.rcsb.org/structure/{tableInfo.secondItem}"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="pdb-link"
+                    >
+                      {tableInfo.secondItem}
+                    </a>
+                  {:else if moleculeSource === 'ccd' && !isFileUploaded}
+                    <a
+                      href="https://www.rcsb.org/ligand/{tableInfo.secondItem}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="pdb-link"
+                    >
+                      {tableInfo.secondItem}
+                    </a>
+                  {:else if moleculeSource === 'cod' && !isFileUploaded}
+                    <a
+                      href="https://www.crystallography.net/cod/{tableInfo.secondItem}.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="pubchem-link"
                     >
                       {tableInfo.secondItem}
                     </a>
@@ -1319,7 +1941,12 @@
               <td>{tableInfo.thirdItem}</td>
               <td rowspan="2" style="width: 200px;">
                 {#if imageUrl}
-                  <img src={imageUrl} alt="representation of the molecule" class="img-fluid">
+                  <img
+                    src={imageUrl}
+                    alt={tableInfo.firstItem ? `2D structure of ${tableInfo.firstItem}` : 'Structure preview'}
+                    class="img-fluid"
+                    on:error={() => { imageUrl = ''; }}
+                  />
                 {:else}
                   <div class="image-placeholder">
                     <span>{$_('no_image_available')}</span>
@@ -2343,7 +2970,7 @@
             </button>
           {/if}
 
-          <div class="slicer-dropdown-wrapper" bind:this={slicerWrapperEl}>
+          <div class="slicer-dropdown-wrapper flex-shrink-0" bind:this={slicerWrapperEl}>
             <div class="slicer-split-group shadow-sm">
               <button
                 type="button"
@@ -2403,29 +3030,268 @@
               </div>
             {/if}
           </div>
+
+          <div class="share-popover-wrapper flex-shrink-0" bind:this={shareWrapperEl}>
+            {#if showSharePopover}
+              <div class="share-floating-popover" role="dialog" aria-label={$_('share_url_label') || 'Shareable link'}>
+                <div class="share-popover-card">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="share-popover-title fw-semibold small">
+                      {$_('share_url_label') || 'Shareable link'}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn-close share-popover-close"
+                      aria-label={$_('close_popup') || 'Close'}
+                      on:click={() => (showSharePopover = false)}
+                    ></button>
+                  </div>
+                  <div class="input-group input-group-sm">
+                    <input
+                      type="text"
+                      readonly
+                      class="form-control share-url-input"
+                      value={displayedShareUrl}
+                      bind:this={shareInputEl}
+                      on:click={(e) => e.currentTarget.select()}
+                      aria-label={$_('share_url_label') || 'Shareable link'}
+                    />
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary d-flex align-items-center gap-1 share-popover-copy-btn"
+                      class:copied={shareCopied}
+                      on:click={copyShareLink}
+                      title={$_('share_button_title') || 'Copy'}
+                    >
+                      <span class="material-symbols-outlined" style="font-size: 16px; margin-right: 0;">
+                        {shareCopied ? 'check' : 'content_copy'}
+                      </span>
+                      <span>{shareCopied ? ($_('share_copied') || 'Copied!') : ($_('share_copy_button') || 'Copy')}</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="share-popover-arrow"></div>
+              </div>
+            {/if}
+
+            <button
+              type="button"
+              class="btn btn-lg share-action-btn shadow-sm d-flex align-items-center justify-content-center h-100"
+              class:copied={shareCopied}
+              aria-expanded={showSharePopover}
+              on:click={handleShareButtonClick}
+              title={shareCopied ? ($_('share_copied') || 'Copied!') : ($_('share_button_title') || 'Share')}
+              aria-label={shareCopied ? ($_('share_copied') || 'Copied!') : ($_('share_button_title') || 'Share')}
+            >
+              <span class="material-symbols-outlined share-btn-icon">
+                {shareCopied ? 'check' : 'share'}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="col-md-4">
-        <div class="canvas-container" id="canvasContainer">
+      <div class="col-md-4 preview-column">
+        <div class="canvas-container" class:canvas-dark={canvasDark} id="canvasContainer">
+          {#if atomCoordinates.length > 0 && hoveredAtom}
+            <div class="canvas-hover-tag">
+              <span
+                class="legend-color-dot"
+                style="background-color: {hoveredAtom.colorHex};"
+                aria-hidden="true"
+              ></span>
+              {#if hoveredAtom.partName}
+                <span class="canvas-hover-symbol">{hoveredAtom.partName}</span>
+                <span class="canvas-hover-meta">({hoveredAtom.atomType})</span>
+              {:else}
+                <span class="canvas-hover-symbol">{hoveredAtom.atomType}</span>
+                {#if hoveredAtom.atomId !== undefined}
+                  <span class="canvas-hover-meta">#{hoveredAtom.atomId + 1}</span>
+                {/if}
+                {#if hoveredAtom.dimensionMm !== undefined}
+                  <span class="canvas-hover-meta">
+                    · {hoveredAtom.isCube ? '□' : 'Ø'} {hoveredAtom.dimensionMm.toFixed(1)} mm
+                  </span>
+                {/if}
+              {/if}
+            </div>
+          {/if}
+
           <div class="canvas-controls">
-            <button class="btn" on:click={saveCanvasAsImage} title="Save as image">
-              <span class="material-symbols-outlined canvas-control">photo_camera</span>
+            {#if atomCoordinates.length > 0}
+              <button
+                type="button"
+                class="btn canvas-tool-btn"
+                on:click={handleResetCameraView}
+                title={$_('canvas_reset_view')}
+                aria-label={$_('canvas_reset_view')}
+              >
+                <span class="material-symbols-outlined canvas-control" aria-hidden="true">center_focus_strong</span>
+              </button>
+              <button
+                type="button"
+                class="btn canvas-tool-btn"
+                class:active={autoRotate}
+                aria-pressed={autoRotate}
+                on:click={handleToggleAutoRotate}
+                title={$_('canvas_auto_rotate')}
+                aria-label={$_('canvas_auto_rotate')}
+              >
+                <span class="material-symbols-outlined canvas-control" aria-hidden="true">360</span>
+              </button>
+              <button
+                type="button"
+                class="btn canvas-tool-btn"
+                class:active={showBuildPlate}
+                aria-pressed={showBuildPlate}
+                on:click={handleToggleBuildPlate}
+                title={$_('canvas_build_plate')}
+                aria-label={$_('canvas_build_plate')}
+              >
+                <span class="material-symbols-outlined canvas-control" aria-hidden="true">grid_on</span>
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="btn canvas-tool-btn"
+              class:copied={photoSaved}
+              on:click={saveCanvasAsImage}
+              title={$_('canvas_save_image')}
+              aria-label={$_('canvas_save_image')}
+            >
+              <span class="material-symbols-outlined canvas-control" aria-hidden="true">
+                {photoSaved ? 'check' : 'photo_camera'}
+              </span>
             </button>
-            <button class="btn" on:click={() => {
-              const container = document.getElementById('canvasContainer');
-              if (container) {
-                if (!document.fullscreenElement) {
-                  container.requestFullscreen();
-                } else {
-                  document.exitFullscreen();
-                }
-              }
-            }} title="Fullscreen">
-              <span class="material-symbols-outlined canvas-control">fullscreen</span>
+            <button
+              type="button"
+              class="btn canvas-tool-btn"
+              class:active={isCanvasFullscreen}
+              aria-pressed={isCanvasFullscreen}
+              on:click={toggleCanvasFullscreen}
+              title={$_('canvas_fullscreen')}
+              aria-label={$_('canvas_fullscreen')}
+            >
+              <span class="material-symbols-outlined canvas-control" aria-hidden="true">
+                {isCanvasFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+              </span>
             </button>
           </div>
-          <canvas id="threeCanvas" class="border rounded"></canvas>
+
+          <canvas
+            id="threeCanvas"
+            class="border rounded"
+            on:dblclick={handleResetCameraView}
+            on:pointermove={handleCanvasPointerMove}
+            on:pointerleave={handleCanvasPointerLeave}
+          ></canvas>
+
+          {#if atomCoordinates.length === 0 && !isFetchingMolecule && !gluedWorkerProgress.running}
+            <div class="canvas-empty-state">
+              <div class="canvas-empty-title">{$_('canvas_empty_title')}</div>
+              <p class="canvas-empty-hint">{$_('canvas_empty_hint')}</p>
+              <div class="canvas-sample-list">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary canvas-sample-btn"
+                  on:click={() => loadMoleculeFromSource('pubchem', '2519', { saveToHistory: true })}
+                >
+                  {$_('canvas_sample_caffeine')}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary canvas-sample-btn"
+                  on:click={() => loadMoleculeFromSource('pubchem', '2244', { saveToHistory: true })}
+                >
+                  {$_('canvas_sample_aspirin')}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary canvas-sample-btn"
+                  on:click={() => loadMoleculeFromSource('pubchem', '962', { saveToHistory: true })}
+                >
+                  {$_('canvas_sample_water')}
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if isFetchingMolecule || gluedWorkerProgress.running}
+            <div class="canvas-loading-overlay">
+              <div class="canvas-loading-card">
+                <div class="canvas-loading-label">
+                  {#if gluedWorkerProgress.running}
+                    {$_('glued_spheres_progress_prefix')} ({gluedWorkerProgress.completed}/{gluedWorkerProgress.total})
+                  {:else}
+                    {$_('canvas_loading_molecule')}
+                  {/if}
+                </div>
+                {#if gluedWorkerProgress.running && gluedWorkerProgress.total > 0}
+                  <progress
+                    class="canvas-progress"
+                    value={gluedWorkerProgress.completed}
+                    max={gluedWorkerProgress.total}
+                  ></progress>
+                {:else}
+                  <progress class="canvas-progress"></progress>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          {#if atomCoordinates.length > 0 && (elementGroups.length > 0 || modelBoundsMm)}
+            <div class="canvas-hud-bottom">
+              {#if elementGroups.length > 0}
+                <div class="canvas-element-legend">
+                  {#each elementGroups as item (item.key)}
+                    <button
+                      type="button"
+                      class="canvas-legend-chip"
+                      class:muted={!item.visible}
+                      aria-pressed={item.visible}
+                      title={$_('canvas_legend_toggle_hint')}
+                      aria-label="{item.atomType === 'Bonds' ? $_('canvas_bonds_group') : item.atomType} ({item.count})"
+                      on:click={() => handleToggleElementGroup(item.key)}
+                    >
+                      <span
+                        class="legend-color-dot"
+                        style="background-color: {item.colorHex};"
+                        aria-hidden="true"
+                      ></span>
+                      <span class="legend-symbol">
+                        {item.atomType === 'Bonds' ? $_('canvas_bonds_group') : item.atomType}
+                      </span>
+                      <span class="legend-count">{item.count}</span>
+                    </button>
+                  {/each}
+                  {#if hasHiddenElementGroups}
+                    <button
+                      type="button"
+                      class="canvas-legend-chip canvas-legend-reset"
+                      on:click={handleShowAllElementGroups}
+                    >
+                      {$_('canvas_legend_show_all')}
+                    </button>
+                  {/if}
+                </div>
+              {/if}
+
+              {#if modelBoundsMm}
+                <div
+                  class="canvas-dimensions-badge"
+                  class:exceeds={modelBoundsMm.exceedsStandardPlate}
+                  title={modelBoundsMm.exceedsStandardPlate ? $_('canvas_dimensions_exceeds') : $_('canvas_dimensions_label')}
+                >
+                  {#if modelBoundsMm.exceedsStandardPlate}
+                    <span class="material-symbols-outlined canvas-badge-icon" aria-hidden="true">warning</span>
+                  {/if}
+                  <span>
+                    {Math.round(modelBoundsMm.widthMm)} × {Math.round(modelBoundsMm.depthMm)} × {Math.round(modelBoundsMm.heightMm)} mm
+                  </span>
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -2460,6 +3326,67 @@
       </div>
     </div>
   {/if}
+</div>
+
+<div class="container seo-overview-section mt-3 text-center">
+  <details class="seo-overview-disclosure">
+    <summary
+      class="btn btn-outline-secondary seo-disclosure-trigger shadow-sm"
+      title={$_('seo_toggle_label')}
+      aria-label={$_('seo_toggle_label')}
+    >
+      <span class="material-symbols-outlined seo-disclosure-icon" aria-hidden="true">info</span>
+      <span class="visually-hidden">{$_('seo_toggle_label')}</span>
+    </summary>
+
+    <div class="seo-overview-body pt-4 mt-3 border-top text-start">
+      <div class="seo-overview-header mb-4">
+        <h2 class="h4 fw-semibold mb-2">{$_('seo_overview_title')}</h2>
+        <p class="text-muted mb-3">{$_('seo_overview_lead')}</p>
+        <div class="d-flex flex-wrap gap-3 small">
+          <a href={buildLocalizedPath('/tutorials', $currentLocale)} class="seo-inline-link">
+            {$_('seo_link_tutorials')} →
+          </a>
+          <a href={buildLocalizedPath('/about', $currentLocale)} class="seo-inline-link">
+            {$_('seo_link_about')} →
+          </a>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4">
+        <div class="col-md-4">
+          <div class="seo-feature-card h-100 p-3 rounded border">
+            <h3 class="h6 fw-semibold mb-2">{$_('seo_feature_databases_title')}</h3>
+            <p class="small text-muted mb-0">{$_('seo_feature_databases_desc')}</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="seo-feature-card h-100 p-3 rounded border">
+            <h3 class="h6 fw-semibold mb-2">{$_('seo_feature_styles_title')}</h3>
+            <p class="small text-muted mb-0">{$_('seo_feature_styles_desc')}</p>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="seo-feature-card h-100 p-3 rounded border">
+            <h3 class="h6 fw-semibold mb-2">{$_('seo_feature_export_title')}</h3>
+            <p class="small text-muted mb-0">{$_('seo_feature_export_desc')}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="seo-faq-block">
+        <h2 class="h5 fw-semibold mb-3">{$_('seo_faq_title')}</h2>
+        <div class="d-flex flex-column gap-2">
+          {#each activeFaqItems as item (item.question)}
+            <details {...faqDetailsAttrs} class="seo-faq-item rounded border">
+              <summary class="seo-faq-summary fw-semibold px-3 py-2">{item.question}</summary>
+              <p class="small text-muted px-3 pb-3 pt-1 mb-0">{item.answer}</p>
+            </details>
+          {/each}
+        </div>
+      </div>
+    </div>
+  </details>
 </div>
 
 <AdvancedSearchPopup bind:show={showAdvancedSearch} on:search={handleAdvancedSearch} on:close={() => showAdvancedSearch = false}/>
@@ -2511,36 +3438,6 @@ img {
 .form-range {
   width: 150px;
 }
-@media (min-width: 768px) {
-  .row {
-    display: flex;
-    flex-direction: row;
-  }
-  .col-md-4 {
-    display: flex;
-    align-items: flex-start;
-    height: fit-content;
-  }
-  .canvas-container {
-    height: 100%;
-    max-height: none;
-  }
-  #threeCanvas {
-    max-height: none;
-  }
-}
-@media (max-width: 767px) {
-  .row {
-    display: flex;
-    flex-direction: column;
-  }
-  .col-md-4 {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-top: 40px;
-  }
-}
 .full-page-drop-zone {
   width: 100%;
   position: relative;
@@ -2578,60 +3475,440 @@ img {
 }
 .canvas-container {
   position: relative;
-  width: 100%;
-  max-height: 100vh;
+  inline-size: 100%;
+  min-inline-size: 0;
+  aspect-ratio: 1 / 1;
+  max-block-size: calc(100dvh - 2rem);
+  border-radius: 0.375rem;
+  color-scheme: light;
+  background-color: #ffffff;
+  overflow: hidden;
+  --canvas-surface: rgba(248, 249, 250, 0.92);
+  --canvas-surface-hover: #e9ecef;
+  --canvas-border: #dee2e6;
+  --canvas-text: #212529;
+  --canvas-text-muted: #6c757d;
+  --canvas-accent-bg: rgba(13, 110, 253, 0.1);
+  --canvas-accent-border: rgba(13, 110, 253, 0.45);
+  --canvas-accent-text: #0d6efd;
+  --canvas-focus-ring: #0d6efd;
 }
-.canvas-container:fullscreen {
-  background: rgb(255, 255, 255);
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.canvas-container.canvas-dark {
+  color-scheme: dark;
+  background-color: #212529;
+  --canvas-surface: rgba(43, 48, 53, 0.92);
+  --canvas-surface-hover: #343a40;
+  --canvas-border: #495057;
+  --canvas-text: #f8f9fa;
+  --canvas-text-muted: #adb5bd;
+  --canvas-accent-bg: rgba(13, 110, 253, 0.22);
+  --canvas-accent-border: #6ea8fe;
+  --canvas-accent-text: #6ea8fe;
+  --canvas-focus-ring: #6ea8fe;
 }
-.canvas-container:fullscreen canvas {
-  width: 100% !important;
-  height: 100% !important;
+:global(html.dark) .canvas-container #threeCanvas,
+.canvas-container.canvas-dark #threeCanvas {
+  border-color: #495057 !important;
+}
+@media (min-width: 768px) {
+  .main-layout-row {
+    display: flex;
+    flex-direction: row;
+  }
+  .left-panel {
+    align-self: flex-start;
+    min-inline-size: 0;
+  }
+  .preview-column {
+    align-self: stretch;
+    min-inline-size: 0;
+  }
+  .canvas-container {
+    position: sticky;
+    inset-block-start: 1rem;
+    max-block-size: calc(100dvh - 2rem);
+  }
+}
+@media (max-width: 767.98px) {
+  .main-layout-row {
+    display: flex;
+    flex-direction: column;
+  }
+  .left-panel,
+  .preview-column {
+    min-inline-size: 0;
+  }
+  .preview-column {
+    margin-block-start: 2rem;
+  }
+}
+.canvas-container:fullscreen,
+.canvas-container:-webkit-full-screen {
+  position: relative;
+  inset-block-start: 0;
+  inline-size: 100dvw;
+  block-size: 100dvh;
+  max-block-size: none;
+  aspect-ratio: auto;
+  border-radius: 0;
+  padding: 0;
+  background-color: #ffffff;
+}
+.canvas-container.canvas-dark:fullscreen,
+.canvas-container.canvas-dark:-webkit-full-screen {
+  background-color: #212529;
+}
+.canvas-container:fullscreen #threeCanvas,
+.canvas-container:-webkit-full-screen #threeCanvas {
   border: none !important;
+  border-radius: 0 !important;
 }
-.canvas-container:fullscreen .canvas-controls {
-  position: fixed;
-  top: 20px;
-  right: 20px;
+.canvas-container:fullscreen .canvas-controls,
+.canvas-container:-webkit-full-screen .canvas-controls {
+  inset-block-start: 16px;
+  inset-inline-end: 16px;
+}
+.canvas-container:fullscreen .canvas-hover-tag,
+.canvas-container:-webkit-full-screen .canvas-hover-tag {
+  inset-block-start: 16px;
+  inset-inline-start: 16px;
+}
+.canvas-container:fullscreen .canvas-hud-bottom,
+.canvas-container:-webkit-full-screen .canvas-hud-bottom {
+  inset-block-end: 16px;
+  inset-inline: 16px;
 }
 .canvas-controls {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
   z-index: 10;
   display: flex;
-  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
 }
-.canvas-controls button {
-  display: flex;
+.canvas-tool-btn {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  height: 31px;
-  width: 31px;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--canvas-text-muted);
+  box-shadow: none;
   line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.canvas-tool-btn:hover {
+  background-color: var(--canvas-surface-hover);
+  border-color: transparent;
+  color: var(--canvas-text);
+}
+.canvas-tool-btn:active {
+  background-color: var(--canvas-surface-hover);
+  box-shadow: none;
+}
+.canvas-tool-btn.active {
+  background-color: var(--canvas-accent-bg);
+  border-color: var(--canvas-accent-border);
+  color: var(--canvas-accent-text);
+}
+.canvas-tool-btn.copied {
+  border-color: #198754;
+  background-color: #ecfdf3;
+  color: #146c43;
+}
+.canvas-container.canvas-dark .canvas-tool-btn.copied {
+  border-color: #2ea043;
+  background-color: rgba(46, 160, 67, 0.18);
+  color: #7ee787;
+}
+.canvas-tool-btn:focus-visible,
+.canvas-legend-chip:focus-visible,
+.canvas-sample-btn:focus-visible {
+  box-shadow: none;
+  outline: 2px solid var(--canvas-focus-ring);
+  outline-offset: 2px;
 }
 .canvas-controls .material-symbols-outlined {
-  font-size: 20px;
+  font-size: 19px;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.canvas-controls button:hover {
-  background-color: rgb(195, 195, 195);
 }
 .material-symbols-outlined.canvas-control {
   margin: 0;
   padding: 0;
   display: inline-block;
 }
+.canvas-hover-tag {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-start: 8px;
+  z-index: 10;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-inline-size: calc(100% - 224px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  min-block-size: 26px;
+  border-radius: 0.25rem;
+  background-color: var(--canvas-surface);
+  border: 1px solid var(--canvas-border);
+  color: var(--canvas-text);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.2;
+}
+.canvas-hover-symbol {
+  font-weight: 400;
+}
+.canvas-hover-meta {
+  color: var(--canvas-text-muted);
+  font-weight: 300;
+}
+.canvas-hud-bottom {
+  position: absolute;
+  inset-block-end: 8px;
+  inset-inline: 8px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  pointer-events: none;
+}
+.canvas-element-legend {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-inline-size: 100%;
+}
+.canvas-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  min-block-size: 24px;
+  border-radius: 0.25rem;
+  border: 1px solid var(--canvas-border);
+  background-color: var(--canvas-surface);
+  color: var(--canvas-text);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.canvas-legend-chip:hover {
+  background-color: var(--canvas-surface-hover);
+  border-color: #adb5bd;
+}
+.canvas-container.canvas-dark .canvas-legend-chip:hover {
+  border-color: #6c757d;
+}
+.canvas-legend-chip.muted {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.canvas-legend-reset {
+  border-color: var(--canvas-accent-border);
+  color: var(--canvas-accent-text);
+  text-decoration: none;
+}
+.legend-color-dot {
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(33, 37, 41, 0.25);
+  flex-shrink: 0;
+}
+.canvas-container.canvas-dark .legend-color-dot {
+  border-color: rgba(248, 249, 250, 0.35);
+}
+.legend-symbol {
+  font-weight: 400;
+}
+.legend-count {
+  color: var(--canvas-text-muted);
+  font-weight: 300;
+  font-size: 0.74rem;
+}
+.canvas-dimensions-badge {
+  pointer-events: auto;
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  min-block-size: 24px;
+  border-radius: 0.25rem;
+  background-color: var(--canvas-surface);
+  border: 1px solid var(--canvas-border);
+  color: var(--canvas-text-muted);
+  font-size: 0.78rem;
+  font-weight: 300;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.canvas-dimensions-badge.exceeds {
+  background-color: #fff9db;
+  border-color: #ffe066;
+  color: #664d03;
+  font-weight: 400;
+}
+.canvas-container.canvas-dark .canvas-dimensions-badge.exceeds {
+  background-color: rgba(255, 193, 7, 0.14);
+  border-color: rgba(255, 193, 7, 0.35);
+  color: #ffda6a;
+}
+.canvas-badge-icon {
+  font-size: 15px;
+  margin: 0;
+  line-height: 1;
+  color: #e67700;
+}
+.canvas-container.canvas-dark .canvas-badge-icon {
+  color: #ffc107;
+}
+.canvas-empty-state {
+  position: absolute;
+  inset: 44px 16px 16px 16px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1rem;
+  pointer-events: none;
+}
+.canvas-empty-title {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--canvas-text);
+  margin-block-end: 0.3rem;
+}
+.canvas-empty-hint {
+  font-size: 0.85rem;
+  font-weight: 300;
+  color: var(--canvas-text-muted);
+  max-inline-size: 30ch;
+  line-height: 1.4;
+  margin-block-end: 0.85rem;
+}
+.canvas-sample-list {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.canvas-sample-btn {
+  font-weight: 300;
+  font-size: 0.82rem;
+  border-color: var(--canvas-border);
+  color: var(--canvas-text);
+  background-color: transparent;
+}
+.canvas-sample-btn:hover {
+  background-color: var(--canvas-surface-hover);
+  border-color: #adb5bd;
+  color: var(--canvas-text);
+}
+.canvas-container.canvas-dark .canvas-sample-btn {
+  border-color: #495057;
+  color: #f8f9fa;
+}
+.canvas-container.canvas-dark .canvas-sample-btn:hover {
+  background-color: #343a40;
+  border-color: #6c757d;
+  color: #ffffff;
+}
+.canvas-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: rgba(33, 37, 41, 0.08);
+  pointer-events: none;
+}
+.canvas-container.canvas-dark .canvas-loading-overlay {
+  background-color: rgba(0, 0, 0, 0.28);
+}
+.canvas-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0.65rem 1rem;
+  border-radius: 0.375rem;
+  background-color: var(--canvas-surface);
+  border: 1px solid var(--canvas-border);
+  color: var(--canvas-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  max-inline-size: 90%;
+}
+.canvas-loading-label {
+  font-size: 0.85rem;
+  font-weight: 300;
+  text-align: center;
+}
+.canvas-progress {
+  inline-size: min(180px, 60vw);
+  block-size: 6px;
+  accent-color: var(--canvas-accent-text);
+}
+.canvas-container.canvas-dark .canvas-progress {
+  accent-color: var(--canvas-accent-text);
+}
+@media (pointer: coarse) {
+  .canvas-tool-btn {
+    min-inline-size: 34px;
+    min-block-size: 34px;
+  }
+  .canvas-legend-chip {
+    min-block-size: 30px;
+    padding: 3px 9px;
+  }
+  .canvas-sample-btn {
+    min-block-size: 34px;
+    padding: 0.3rem 0.65rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-tool-btn,
+  .canvas-legend-chip,
+  .canvas-sample-btn,
+  .popup-overlay,
+  .popup-content,
+  .slicer-chevron {
+    transition: none;
+    animation: none;
+  }
+}
 #threeCanvas {
-  max-height: 100vh;
-  object-fit: contain;
+  position: absolute;
+  inset: 0;
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  touch-action: none;
 }
 .popup-overlay {
   position: fixed;
@@ -2941,6 +4218,154 @@ label[for="model-generator"] {
   color: #ffffff;
 }
 
+.share-popover-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.share-floating-popover {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  z-index: 1065;
+  width: min(430px, calc(100vw - 2rem));
+}
+
+.share-popover-card {
+  position: relative;
+  background-color: #ffffff;
+  border: 1px solid #c5c5c5;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  z-index: 2;
+}
+
+.share-popover-arrow {
+  position: absolute;
+  bottom: -6px;
+  right: 18px;
+  width: 12px;
+  height: 12px;
+  background-color: #ffffff;
+  border-right: 1px solid #c5c5c5;
+  border-bottom: 1px solid #c5c5c5;
+  transform: rotate(45deg);
+  z-index: 3;
+}
+
+.share-popover-title {
+  color: #212529;
+}
+
+.share-popover-close {
+  font-size: 0.7rem;
+}
+
+.share-url-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  background-color: #f8f9fa;
+  color: #212529;
+}
+
+.share-popover-copy-btn.copied {
+  border-color: #198754;
+  background-color: #ecfdf3;
+  color: #146c43;
+}
+
+.share-action-btn {
+  border: 1px solid #d0d5dd;
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  color: #212529;
+  aspect-ratio: 1 / 1;
+  min-width: 48px;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.share-action-btn:hover,
+.share-action-btn:focus-visible {
+  background-color: #f2f4f7;
+  border-color: #adb5bd;
+  color: #212529;
+}
+
+.share-action-btn.copied {
+  border-color: #198754;
+  background-color: #ecfdf3;
+  color: #146c43;
+}
+
+.share-btn-icon {
+  margin-right: 0;
+  font-size: 20px;
+}
+
+:global(html.dark) .share-popover-card {
+  background-color: #2b3035;
+  border-color: #495057;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+:global(html.dark) .share-popover-arrow {
+  background-color: #2b3035;
+  border-right-color: #495057;
+  border-bottom-color: #495057;
+}
+
+:global(html.dark) .share-popover-title {
+  color: #f8f9fa;
+}
+
+:global(html.dark) .share-popover-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+:global(html.dark) .share-url-input {
+  background-color: #1b1f22;
+  border-color: #495057;
+  color: #f8f9fa;
+}
+
+:global(html.dark) .share-popover-copy-btn {
+  border-color: #495057;
+  color: #f8f9fa;
+}
+
+:global(html.dark) .share-popover-copy-btn:hover {
+  background-color: #343a40;
+  color: #ffffff;
+}
+
+:global(html.dark) .share-popover-copy-btn.copied {
+  border-color: #2ea043;
+  background-color: rgba(46, 160, 67, 0.18);
+  color: #7ee787;
+}
+
+:global(html.dark) .share-action-btn {
+  background-color: #2b3035;
+  border-color: #495057;
+  color: #f8f9fa;
+}
+
+:global(html.dark) .share-action-btn:hover,
+:global(html.dark) .share-action-btn:focus-visible {
+  background-color: #343a40;
+  border-color: #6c757d;
+  color: #ffffff;
+}
+
+:global(html.dark) .share-action-btn.copied {
+  border-color: #2ea043;
+  background-color: rgba(46, 160, 67, 0.18);
+  color: #7ee787;
+}
+
 .settings-checkbox-group {
   background-color: #f8f9fa;
 }
@@ -3067,5 +4492,129 @@ label[for="model-generator"] {
 
 .cursor-pointer {
   cursor: pointer;
+}
+
+.seo-overview-section {
+  max-width: 1140px;
+}
+
+.seo-overview-disclosure {
+  display: block;
+  text-align: center;
+}
+
+.seo-overview-body {
+  text-align: start;
+}
+
+.seo-disclosure-trigger {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: fit-content;
+  min-inline-size: 2.75rem;
+  min-block-size: 2.25rem;
+  padding: 0.375rem 0.75rem;
+  margin-inline: auto;
+  border-radius: 0.5rem;
+  user-select: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.seo-disclosure-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.seo-disclosure-trigger::after {
+  content: "";
+  display: inline-block;
+  margin-left: 0.2rem;
+  vertical-align: 0.12em;
+  border-top: 0.35em solid currentColor;
+  border-right: 0.3em solid transparent;
+  border-bottom: 0;
+  border-left: 0.3em solid transparent;
+  transition: transform 0.2s ease;
+}
+
+.seo-overview-disclosure[open] > .seo-disclosure-trigger::after {
+  transform: rotate(180deg);
+}
+
+.seo-overview-disclosure[open] > .seo-disclosure-trigger {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: #ffffff;
+}
+
+.seo-disclosure-trigger:focus-visible {
+  outline: 2px solid #0d6efd;
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .seo-disclosure-trigger {
+    min-inline-size: 3rem;
+    min-block-size: 2.75rem;
+  }
+}
+
+.seo-disclosure-icon {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.seo-feature-card,
+.seo-faq-item {
+  background-color: #f8f9fa;
+  border-color: #e2e8f0 !important;
+}
+
+.seo-faq-summary {
+  cursor: pointer;
+}
+
+.seo-inline-link {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.seo-inline-link:hover {
+  text-decoration: underline;
+}
+
+:global(html.dark) .seo-disclosure-trigger {
+  background-color: #2b3035;
+  border-color: #495057;
+  color: #adb5bd;
+}
+
+:global(html.dark) .seo-disclosure-trigger:hover {
+  background-color: #343a40;
+  border-color: #6c757d;
+  color: #ffffff;
+}
+
+:global(html.dark) .seo-overview-disclosure[open] > .seo-disclosure-trigger {
+  background-color: #343a40;
+  border-color: #6c757d;
+  color: #ffffff;
+}
+
+:global(html.dark) .seo-overview-body {
+  border-color: #495057 !important;
+}
+
+:global(html.dark) .seo-feature-card,
+:global(html.dark) .seo-faq-item {
+  background-color: #2b3035;
+  border-color: #495057 !important;
+}
+
+:global(html.dark) .seo-overview-section .text-muted {
+  color: #adb5bd !important;
 }
 </style>

@@ -25,6 +25,9 @@ export function getTargetSwitchPath(newLocale: string, currentPathname: string):
   if (pathLocale) {
     return currentPathname.replace(/^\/(cs|en)/, `/${validLocale}`);
   }
+  if (!currentPathname || currentPathname === '/') {
+    return `/${validLocale}`;
+  }
   return currentPathname;
 }
 
@@ -51,6 +54,7 @@ export function switchLocale(newLocale: string, event?: Event) {
   const validLocale = normalizeLocale(newLocale);
 
   if (typeof window !== 'undefined') {
+    document.documentElement.lang = validLocale;
     localStorage.setItem('language', validLocale);
     sessionStorage.setItem('language', validLocale);
     document.cookie = `locale=${validLocale};path=/;max-age=31536000;SameSite=Lax`;
@@ -64,7 +68,7 @@ export function switchLocale(newLocale: string, event?: Event) {
     if (pathLocale) {
       const newPath = getTargetSwitchPath(validLocale, pathname);
       if (newPath !== pathname) {
-        goto(newPath);
+        goto(`${newPath}${window.location.search}`);
       }
     }
   }

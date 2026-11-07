@@ -1,0 +1,94 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_OG_IMAGE, getRouteSeo, SITE_ORIGIN } from './seo';
+import { reroute } from '../hooks';
+import { GET as getSitemap } from '../routes/sitemap.xml/+server';
+
+describe('getRouteSeo', () => {
+	it('generates canonical, hreflang, and valid JSON-LD for root and localized homepages', () => {
+		const rootEn = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/'), 'en');
+		expect(rootEn.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/');
+		expect(rootEn.robots).toBe('index, follow');
+		expect(rootEn.ogImage).toBe(DEFAULT_OG_IMAGE);
+		expect(rootEn.alternates).toEqual([
+			{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs` },
+			{ hreflang: 'en', href: `${SITE_ORIGIN}/en` },
+			{ hreflang: 'x-default', href: `${SITE_ORIGIN}/` }
+		]);
+
+		const csHome = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/cs/'), 'en');
+		expect(csHome.lang).toBe('cs');
+		expect(csHome.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/cs');
+		expect(csHome.ogLocale).toBe('cs_CZ');
+		expect(csHome.title).toContain('3D Tisk Molekul');
+
+		// Verify JSON-LD parses cleanly and has valid Offer currency + FAQPage
+		const jsonRaw = csHome.jsonLdHtml
+			.replace(/^<script type="application\/ld\+json">/, '')
+			.replace(/<\/script>$/, '');
+		const parsed = JSON.parse(jsonRaw);
+		expect(parsed['@graph']).toHaveLength(2);
+		expect(parsed['@graph'][0]['@type']).toBe('WebApplication');
+		expect(parsed['@graph'][0].offers.priceCurrency).toBe('CZK');
+		expect(parsed['@graph'][1]['@type']).toBe('FAQPage');
+	});
+
+	it('strips share query parameters from canonical URL while enriching og:title for shared molecules', () => {
+		const shared = getRouteSeo(
+			new URL('https://3dmolekuly.vscht.cz/?source=pubchem&mol=caffeine&style=ball-and-stick'),
+			'cs'
+		);
+		expect(shared.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/');
+		expect(shared.ogTitle).toContain('caffeine');
+		expect(shared.ogUrl).toBe(
+			'https://3dmolekuly.vscht.cz/?source=pubchem&mol=caffeine&style=ball-and-stick'
+		);
+	});
+
+	it('provides unique titles, descriptions, and HowTo/AboutPage schemas for subpages', () => {
+		const csTut = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/cs/tutorials'), 'en');
+		const enAbout = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/en/about'), 'cs');
+		const home = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/cs'), 'cs');
+
+		expect(csTut.lang).toBe('cs');
+		expect(csTut.title).not.toBe(home.title);
+		expect(csTut.description).not.toBe(home.description);
+		expect(csTut.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/cs/tutorials');
+		expect(csTut.alternates).toEqual([
+			{ hreflang: 'cs', href: 'https://3dmolekuly.vscht.cz/cs/tutorials' },
+			{ hreflang: 'en', href: 'https://3dmolekuly.vscht.cz/en/tutorials' },
+			{ hreflang: 'x-default', href: 'https://3dmolekuly.vscht.cz/en/tutorials' }
+		]);
+
+		expect(enAbout.lang).toBe('en');
+		expect(enAbout.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/en/about');
+	});
+
+	it('marks unfinished demonstrations pages as noindex, nofollow', () => {
+		const demo = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/cs/demonstrations'), 'cs');
+		expect(demo.robots).toBe('noindex, nofollow');
+	});
+
+	it('reroutes /cs and /en homepages to / while keeping subpages untouched', () => {
+		expect(reroute({ url: new URL('https://3dmolekuly.vscht.cz/cs'), fetch } as any)).toBe('/');
+		expect(reroute({ url: new URL('https://3dmolekuly.vscht.cz/en/'), fetch } as any)).toBe('/');
+		expect(
+			reroute({ url: new URL('https://3dmolekuly.vscht.cz/cs/tutorials'), fetch } as any)
+		).toBeUndefined();
+	});
+
+	it('serves a multilingual XML sitemap for https://3dmolekuly.vscht.cz', async () => {
+		const response = await getSitemap({} as any);
+		expect(response.headers.get('Content-Type')).toContain('application/xml');
+		const xml = await response.text();
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs/tutorials</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/tutorials</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs/about</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/about</loc>');
+		expect(xml).toContain('xhtml:link rel="alternate" hreflang="cs"');
+		expect(xml).not.toContain('demonstrations');
+		expect(xml).not.toContain('vercel.app');
+	});
+});

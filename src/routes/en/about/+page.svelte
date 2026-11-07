@@ -11,12 +11,12 @@
     line-height: 1.6;
     color: #333;
   }
-  .about h2 {
+  .about h1 {
     font-size: 2.5rem;
     margin-bottom: 1rem;
     text-align: center;
   }
-  .about h3 {
+  .about h2 {
     font-size: 1.75rem;
     margin-top: 2rem;
     margin-bottom: 0.75rem;
@@ -64,9 +64,9 @@
 </style>
 
 <section class="about">
-  <h2>About the Project</h2>
+  <h1>About the Project</h1>
 
-  <h3>Who We Are</h3>
+  <h2>Who We Are</h2>
   <p>
     The project is the result of a <strong>collaboration between academic institutions and students</strong>.
     This partnership of experts in <em>medicine</em>, <em>biochemistry</em>, <em>computer science</em>, and
@@ -82,14 +82,14 @@
 
   <div class="logos-container">
     <a href="https://kuhv.vscht.cz" target="_blank" rel="noopener noreferrer" title="Department of Chemistry Education and Humanities, UCT Prague">
-      <img src={vscht} alt="Logo of the Department of Chemistry Education and Humanities, UCT Prague" class="logo" style="color:red;">
+      <img src={vscht} alt="Logo of the Department of Chemistry Education and Humanities, UCT Prague" height="75" class="logo" style="color:red;">
     </a>
     <a href="https://www.lf1.cuni.cz" target="_blank" rel="noopener noreferrer" title="First Faculty of Medicine, Charles University">
-      <img src={lf1} alt="Logo of the First Faculty of Medicine, Charles University" class="logo" style="color:blue;">
+      <img src={lf1} alt="Logo of the First Faculty of Medicine, Charles University" height="75" class="logo" style="color:blue;">
     </a>
   </div>
 
-  <h3>Why It Was Created</h3>
+  <h2>Why It Was Created</h2>
   <p>
     We believe that to truly <strong>understand molecular shape</strong>, <strong>spatial interactions</strong>,
     and <strong>the properties of bioorganic molecules</strong>, it is essential to work with
@@ -100,7 +100,7 @@
     to make <strong>3D printing of molecules</strong> more <em>accessible, faster, and user-friendly</em>.
   </p>
 
-  <h3>What It Can Do</h3>
+  <h2>What It Can Do</h2>
   <p>
     Our application allows you to:
   </p>
@@ -118,7 +118,7 @@
     <em>manual processing</em>.
   </p>
 
-  <h3>Technical Foundations</h3>
+  <h2>Technical Foundations</h2>
   <ul class="tech-list">
     <li>Language: <span class="highlight">TypeScript</span></li>
     <li>GUI: <em>SvelteKit</em>, <em>Bootstrap</em></li>

@@ -331,11 +331,23 @@
     updateFileName();
     const imageData = takeScreenshot();
     if (imageData) {
+      const commaIndex = imageData.indexOf(',');
+      const binary = commaIndex !== -1 ? atob(imageData.slice(commaIndex + 1)) : '';
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.download = `Photo_${fileName}`;
-      link.href = imageData;
+      const cleanName = (fileName || 'molecule').replace(/\.png$/i, '');
+      link.download = `Photo_${cleanName}.png`;
+      link.href = objectUrl;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(link.href);
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } else {
       console.error("Failed to capture screenshot");
     }
@@ -657,42 +669,6 @@ img {
   width: 150px; /* Adjust this value to control the slider width */
 }
 
-@media (min-width: 768px) {
-  .row {
-    display: flex;
-    flex-direction: row;
-  }
-
-  .col-md-4 {
-    display: flex;
-    align-items: flex-start; /* Changed from center to flex-start */
-    height: fit-content;
-  }
-
-  .canvas-container {
-    height: 100%;
-    max-height: none; /* Remove the max-height constraint */
-  }
-
-  #threeCanvas {
-    max-height: none; /* Remove the max-height constraint */
-  }
-}
-
-@media (max-width: 767px) {
-  .row {
-      display: flex;
-      flex-direction: column;
-  }
-
-  .col-md-4 {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin-top: 40px;
-  }
-}
-
 .full-page-drop-zone {
     width: 100%;
     position: relative;
@@ -735,34 +711,80 @@ img {
 
 .canvas-container {
   position: relative;
-  width: 100%;
-  max-height: 100vh; /* Prevent excessive height */
+  inline-size: 100%;
+  min-inline-size: 0;
+  aspect-ratio: 1 / 1;
+  max-block-size: calc(100dvh - 2rem);
 }
 
-.canvas-container:fullscreen {
+@media (min-width: 768px) {
+  .row {
+    display: flex;
+    flex-direction: row;
+  }
+
+  .left-panel {
+    align-self: flex-start;
+    min-inline-size: 0;
+  }
+
+  .col-md-4 {
+    align-self: stretch;
+    min-inline-size: 0;
+  }
+
+  .canvas-container {
+    position: sticky;
+    inset-block-start: 1rem;
+    max-block-size: calc(100dvh - 2rem);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .row {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .left-panel,
+  .col-md-4 {
+    min-inline-size: 0;
+  }
+
+  .col-md-4 {
+    margin-block-start: 2rem;
+  }
+}
+
+.canvas-container:fullscreen,
+.canvas-container:-webkit-full-screen {
+  position: relative;
+  inset-block-start: 0;
+  inline-size: 100dvw;
+  block-size: 100dvh;
+  max-block-size: none;
+  aspect-ratio: auto;
+  padding: 0;
   background: rgb(255, 255, 255);
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
-.canvas-container:fullscreen canvas {
-  width: 100% !important;
-  height: 100% !important;
+.canvas-container:fullscreen #threeCanvas,
+.canvas-container:-webkit-full-screen #threeCanvas {
   border: none !important;
+  border-radius: 0 !important;
 }
 
-.canvas-container:fullscreen .canvas-controls {
+.canvas-container:fullscreen .canvas-controls,
+.canvas-container:-webkit-full-screen .canvas-controls {
   position: fixed;
-  top: 20px;
-  right: 20px;
+  inset-block-start: 20px;
+  inset-inline-end: 20px;
 }
 
 .canvas-controls {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  inset-block-start: 10px;
+  inset-inline-end: 10px;
   z-index: 10;
   display: flex;
   gap: 5px;
@@ -796,8 +818,11 @@ img {
 }
 
 #threeCanvas {
-  max-height: 100vh; /* Prevent canvas from exceeding viewport height */
-  object-fit: contain;
+  position: absolute;
+  inset: 0;
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
 }
 
 </style>

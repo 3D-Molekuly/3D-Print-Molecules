@@ -1,3 +1,7 @@
+:root {
+    color-scheme: light;
+}
+
 main {
     font-family: "Exo 2", sans-serif;
     font-optical-sizing: auto;
@@ -30,6 +34,7 @@ main {
   }
 
   html.dark {
+    color-scheme: dark;
     background-color: #212529; /* Tmavé pozadí */
     color: #ffffff; /* Světlý text */
   }
@@ -65,7 +70,20 @@ main {
   html.dark .about svg {
     filter: invert(1);
   }
-  /* Make the h3 divider visible on dark backgrounds */
+  /* Make the h2/h3 divider visible on dark backgrounds */
+  html.dark .about h2,
   html.dark .about h3 {
     border-bottom: 2px solid rgba(255,255,255,0.12) !important;
+  }
+
+  .visually-hidden:where(:not(:focus-within, :active)) {
+    position: absolute !important;
+    clip-path: inset(50%) !important;
+    overflow: hidden !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    white-space: nowrap !important;
   }

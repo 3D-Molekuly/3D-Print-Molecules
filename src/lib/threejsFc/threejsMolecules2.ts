@@ -27,13 +27,45 @@ interface LocalSelectedGeneratorParams {
     uniformAtomDiameter?: boolean;
 }
 
-export function setupThreeJS(canvas: HTMLCanvasElement) {
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-    // Add alpha: true for transparency support
-    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, preserveDrawingBuffer: true });
+const BASE_CAMERA_FOV_DEG = 75;
 
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+function applyResponsiveCameraProjection(
+    cam: THREE.PerspectiveCamera,
+    width: number,
+    height: number
+) {
+    const aspect = width / height;
+    cam.aspect = aspect;
+
+    if (aspect < 1) {
+        const baseFovRad = THREE.MathUtils.degToRad(BASE_CAMERA_FOV_DEG);
+        const verticalFovRad = 2 * Math.atan(Math.tan(baseFovRad / 2) / aspect);
+        cam.fov = THREE.MathUtils.radToDeg(verticalFovRad);
+    } else {
+        cam.fov = BASE_CAMERA_FOV_DEG;
+    }
+
+    cam.updateProjectionMatrix();
+}
+
+export function setupThreeJS(canvas: HTMLCanvasElement) {
+    const initWidth = Math.max(1, canvas.clientWidth);
+    const initHeight = Math.max(1, canvas.clientHeight);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(BASE_CAMERA_FOV_DEG, initWidth / initHeight, 0.1, 100);
+    applyResponsiveCameraProjection(camera, initWidth, initHeight);
+
+    // Add alpha: true for transparency support
+    renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        preserveDrawingBuffer: true
+    });
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(initWidth, initHeight, false);
     renderer.setClearColor(0xffffff); // scene background for display remains white
     renderer.shadowMap.enabled = true;
 
@@ -225,11 +257,21 @@ export function setupThreeJS(canvas: HTMLCanvasElement) {
     function updateCanvasSize() {
         const width = canvas.clientWidth;
         const height = canvas.clientHeight;
-        if (renderer && camera) {
-            renderer.setSize(width, height);
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
+        if (width <= 0 || height <= 0 || !renderer || !camera) {
+            return;
         }
+
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        if (renderer.getPixelRatio() !== pixelRatio) {
+            renderer.setPixelRatio(pixelRatio);
+        }
+
+        const currentSize = renderer.getSize(new THREE.Vector2());
+        if (currentSize.x !== width || currentSize.y !== height) {
+            renderer.setSize(width, height, false);
+        }
+
+        applyResponsiveCameraProjection(camera, width, height);
     }
 
     return { animate, updateCanvasSize, createAtoms, clearScene };
@@ -856,22 +898,22 @@ function downloadSTL(data: ArrayBufferLike, filename: string) {
     URL.revokeObjectURL(link.href);
 }
 
-// Add this new function
 export function takeScreenshot(): string | null {
     if (!renderer || !scene || !camera) {
         console.warn("Three.js not initialized");
         return null;
     }
-    // Store original clear settings
-    const originalClearColor = renderer.getClearColor(new THREE.Color()).getHex();
+    const originalClearColor = renderer.getClearColor(new THREE.Color()).clone();
     const originalAlpha = renderer.getClearAlpha();
-    // Set transparent background for the screenshot
-    renderer.setClearColor(0x000000, 0);
-    renderer.render(scene, camera);
-    const dataUrl = renderer.domElement.toDataURL('image/png');
-    // Restore original clear settings
-    renderer.setClearColor(originalClearColor, originalAlpha);
-    return dataUrl;
+    try {
+        renderer.setClearColor(0x000000, 0);
+        renderer.clear(true, true, true);
+        renderer.render(scene, camera);
+        return renderer.domElement.toDataURL('image/png');
+    } finally {
+        renderer.setClearColor(originalClearColor, originalAlpha);
+        renderer.render(scene, camera);
+    }
 }
 
 interface UpdatedLocalSelectedGeneratorParams extends LocalSelectedGeneratorParams {

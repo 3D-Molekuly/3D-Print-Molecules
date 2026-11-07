@@ -79,7 +79,7 @@
     line-height: 1.6;
     /* color: #333; odstraněno pro podporu tmavého režimu u textů mimo boxy */
   }
-  .tutorial h2 {
+  .tutorial h1 {
     font-size: 2.5rem;
     margin-bottom: 1rem;
     text-align: center;
@@ -118,7 +118,7 @@
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
   }
-  .step-container h3 {
+  .step-container h2 {
     font-size: 1.5rem;
     margin-top: 0;
     color: #0070f3;
@@ -233,7 +233,8 @@
     object-fit: contain;
     margin-bottom: 1rem;
   }
-  .gallery-preview h4 {
+  .gallery-preview h3 {
+    font-size: 1.25rem;
     margin: 0 0 0.5rem 0;
     color: #333;
   }
@@ -256,6 +257,138 @@
     }
   }
 
+  /* --- STYLY PRO DLAŽDICI SDÍLENÍ --- */
+  .share-tutorial-mockup {
+    background: #ffffff;
+    border: 1px solid #dce6f2;
+    border-radius: 10px;
+    padding: 1.25rem 1.25rem 1rem 1.25rem;
+    margin: 1.25rem 0 1rem 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.65rem;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
+  }
+  .share-mockup-popover {
+    width: 100%;
+    max-width: 440px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 0.65rem 0.75rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+    position: relative;
+  }
+  .share-mockup-popover::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    right: 17px;
+    width: 12px;
+    height: 12px;
+    background: #ffffff;
+    border-right: 1px solid #cbd5e1;
+    border-bottom: 1px solid #cbd5e1;
+    transform: rotate(45deg);
+  }
+  .share-mockup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 0.4rem;
+  }
+  .share-mockup-close {
+    color: #94a3b8;
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .share-mockup-input-row {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f8fafc;
+  }
+  .share-mockup-url {
+    flex: 1;
+    padding: 0.35rem 0.55rem;
+    font-family: monospace;
+    font-size: 0.76rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .share-mockup-copy {
+    background: #e8f5e9;
+    color: #198754;
+    border-left: 1px solid #cbd5e1;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+  .share-mockup-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .share-mockup-download {
+    background: #198754;
+    color: #ffffff;
+    border-radius: 7px;
+    padding: 0.55rem 1rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 1;
+    min-width: 160px;
+    justify-content: center;
+  }
+  .share-mockup-slice {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+    padding: 0.55rem 0.85rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .share-mockup-square-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 7px;
+    background: #198754;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(25, 135, 84, 0.3);
+    flex-shrink: 0;
+  }
+  .share-mockup-square-btn .material-symbols-outlined,
+  .share-mockup-download .material-symbols-outlined,
+  .share-mockup-copy .material-symbols-outlined {
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
   /* --- STYLY PRO PRINTABLES SEKCI --- */
   .printables-container {
     background: #fff8f5;
@@ -263,7 +396,7 @@
     color: #333;
     text-align: center;
   }
-  .printables-container h3 {
+  .printables-container h2 {
     color: #fa6831;
     border-bottom: 2px solid #ffe4d6;
   }
@@ -277,20 +410,25 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
   }
-  .printables-btn {
+  .printables-btn,
+  .makerworld-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.75rem;
-    background-color: #fa6831;
-    color: #ffffff !important;
     font-size: 1.2rem;
     font-weight: 700;
     padding: 0.75rem 1.75rem;
     border-radius: 8px;
     text-decoration: none;
-    box-shadow: 0 4px 12px rgba(250, 104, 49, 0.25);
     transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+  .printables-btn {
+    background-color: #fa6831;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(250, 104, 49, 0.25);
   }
   .printables-btn:hover {
     background-color: #e0531c;
@@ -298,22 +436,37 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(250, 104, 49, 0.35);
   }
+  .makerworld-btn {
+    background-color: #ffffff;
+    color: #111111 !important;
+    border: 1px solid #dcdcdc;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+  .makerworld-btn:hover {
+    background-color: #f5f5f5;
+    color: #111111 !important;
+    border-color: #c8c8c8;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+  }
   .printables-logo {
     display: inline-block;
     flex-shrink: 0;
   }
-  .printables-btn .external-arrow {
+  .printables-btn .external-arrow,
+  .makerworld-btn .external-arrow {
     font-size: 1.1rem;
     line-height: 1;
     transition: transform 0.2s ease;
   }
-  .printables-btn:hover .external-arrow {
+  .printables-btn:hover .external-arrow,
+  .makerworld-btn:hover .external-arrow {
     transform: translate(2px, -2px);
   }
 </style>
 
 <section class="tutorial">
-  <h2>Jak používat 3D Printing Molecules</h2>
+  <h1>Jak používat 3D Printing Molecules</h1>
   <p style="text-align: center; margin-bottom: 1.5rem;">
     Připravit model molekuly pro 3D tisk nebylo nikdy jednodušší. Celý proces lze shrnout do tří rychlých kroků:
   </p>
@@ -329,7 +482,7 @@
 
   <!-- Krok 1 -->
   <div class="step-container">
-    <h3>Krok 1: Výběr molekuly</h3>
+    <h2>Krok 1: Výběr molekuly</h2>
     <p>Nejprve programu řekni, jakou látku chceš modelovat. Můžeš využít automatický import nebo nahrát vlastní data.</p>
     <img src={step1Img} alt="UI ukázka screenshot" class="tutorial-img">
     <p class="image-caption">Obr. 1: Zobrazení vyhledávání z PubChemu</p>
@@ -341,17 +494,17 @@
 
   <!-- Krok 2 -->
   <div class="step-container">
-    <h3>Krok 2: Rozhraní pro zobrazení</h3>
+    <h2>Krok 2: Rozhraní pro zobrazení</h2>
     <p>Po načtení dat se ti zpřístupní nastavení modelu. Prvním krokem je výběr reprezentace molekuly.</p>
-    <img src={step2Img} alt="UI ukázka screenshot s rozbaleným menu" class="tutorial-img">
+    <img src={step2Img} alt="UI ukázka screenshot s rozbaleným menu" loading="lazy" class="tutorial-img">
     <p class="image-caption">Obr. 2: UI ukázka s rozbaleným menu pro reprezentaci</p>
   </div>
 
   <!-- Krok 3 -->
   <div class="step-container">
-    <h3>Krok 3: Volba typu zobrazení</h3>
+    <h2>Krok 3: Volba typu zobrazení</h2>
     <p>Vyber si vzhled, který nejlépe vyhovuje tvým potřebám pro výuku nebo 3D tisk.</p>
-    <img src={step3Img} alt="Výběr reprezentací molekuly" class="tutorial-img" style="max-width: 400px; display: block; margin: 1rem auto;">
+    <img src={step3Img} alt="Výběr reprezentací molekuly" loading="lazy" class="tutorial-img" style="max-width: 400px; display: block; margin: 1rem auto;">
     <p class="image-caption">Obr. 3: Nabídka rozbalovacího menu</p>
     <ul class="legend-list">
       <li><span class="legend-number">3</span><div><strong>Select Model Type:</strong> Zvol požadovaný vzhled (Spheres, Ball-and-Stick, Sticks, nebo náš tajný <span class="easter-egg">Minecraft</span> režim).</div></li>
@@ -360,7 +513,7 @@
 
   <!-- Krok 4 a Interaktivní galerie -->
   <div class="step-container">
-    <h3>Krok 4: Nastavení parametrů a export</h3>
+    <h2>Krok 4: Nastavení parametrů a export</h2>
     <p>Přizpůsob si detail a proporce modelu tak, aby se co nejlépe tiskl. Najetím myší na jednotlivé možnosti níže uvidíš, jak parametry vizuálně mění výsledek.</p>
     
     <!-- INTERAKTIVNÍ GALERIE -->
@@ -380,14 +533,14 @@
       </div>
       
       <div class="gallery-preview">
-        <img src={activeOption.img} alt={activeOption.name} />
-        <h4>{activeOption.name}</h4>
+        <img src={activeOption.img} alt={activeOption.name} loading="lazy" />
+        <h3>{activeOption.name}</h3>
         <p>{activeOption.desc}</p>
       </div>
     </div>
     <!-- KONEC GALERIE -->
 
-    <img src={step4Img} alt="Ukázka parametrů u ball and stick" class="tutorial-img" style="margin-top: 2rem;">
+    <img src={step4Img} alt="Ukázka parametrů u ball and stick" loading="lazy" class="tutorial-img" style="margin-top: 2rem;">
     <p class="image-caption">Obr. 4: Parametry modelu a možnosti exportu</p>
     
     <ul class="legend-list">
@@ -399,31 +552,71 @@
 
   <!-- Krok 5 -->
   <div class="step-container">
-    <h3>Krok 5: Aplikace změn (Reload)</h3>
+    <h2>Krok 5: Aplikace změn (Reload)</h2>
     <p>Na obrázku vidíš složitější model (ATP). Pamatuj, že po jakékoliv úpravě v sekci <em>Model Settings</em> se náhled neaktualizuje sám.</p>
-    <img src={step5Img} alt="Ukázka aktualizace modelu pomocí tlačítka Reload" class="tutorial-img">
+    <img src={step5Img} alt="Ukázka aktualizace modelu pomocí tlačítka Reload" loading="lazy" class="tutorial-img">
     <p class="image-caption">Obr. 5: Ukázka modelu ATP a žlutého tlačítka Reload</p>
     <ul class="legend-list">
       <li><span class="legend-number">7</span><div><strong>Tlačítko Reload:</strong> Kdykoliv upravíš nastavení, vždy nejprve klikni na toto žluté tlačítko. Tím aplikuješ změny do 3D náhledu.</div></li>
     </ul>
   </div>
 
+  <!-- SDÍLENÍ MODELU A NASTAVENÍ -->
+  <div class="step-container">
+    <h2>Sdílení modelu a nastavení přes URL</h2>
+    <p>Svůj připravený model včetně přesného nastavení parametrů můžeš jednoduše poslat kolegům, studentům nebo si ho uložit do záložek pomocí URL odkazu.</p>
+
+    <div class="share-tutorial-mockup" aria-label="Ukázka tlačítka sdílení a vyskakovacího okna s URL odkazem">
+      <div class="share-mockup-popover">
+        <div class="share-mockup-header">
+          <span>Odkaz ke sdílení</span>
+          <span class="share-mockup-close" aria-hidden="true">✕</span>
+        </div>
+        <div class="share-mockup-input-row">
+          <div class="share-mockup-url">https://3dmolekuly.vscht.cz/?source=pubchem&amp;mol=caffeine&amp;style=ball-and-stick&amp;q=50</div>
+          <div class="share-mockup-copy">
+            <span class="material-symbols-outlined" aria-hidden="true">check</span>
+            Zkopírováno!
+          </div>
+        </div>
+      </div>
+
+      <div class="share-mockup-actions">
+        <div class="share-mockup-download">
+          <span class="material-symbols-outlined" aria-hidden="true">deployed_code_update</span>
+          Download Model (.3mf)
+        </div>
+        <div class="share-mockup-slice">
+          Slice ▾
+        </div>
+        <div class="share-mockup-square-btn" title="Sdílet">
+          <span class="material-symbols-outlined" aria-hidden="true">check</span>
+        </div>
+      </div>
+    </div>
+    <p class="image-caption">Obr. 6: Čtvercové tlačítko sdílení a vyskakovací okno s URL odkazem</p>
+
+    <ul class="legend-list">
+      <li><span class="legend-number">8</span><div><strong>Tlačítko Sdílet:</strong> Klikni na čtvercové tlačítko s ikonou sdílení (vedle tlačítka <em>Slice</em>). Odkaz se zkopíruje do schránky, tlačítko zezelená a přímo nad ním se otevře okno s textovým polem a celým URL odkazem. Odkaz v sobě nese zdroj databáze (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), název či kód molekuly, zvolený typ zobrazení i všechny upravené parametry, takže po jeho otevření se vše automaticky nastaví a vykreslí. Pokud pracuješ s vlastním nahraným souborem (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), odkaz slouží ke sdílení samotného typu zobrazení a nastavených hodnot (<code>source=file</code>), které se po otevření přednastaví pro nahrání vlastního modelu.</div></li>
+    </ul>
+  </div>
+
   <!-- INFORMACE K IMPORTU DO SLICERU -->
   <div class="step-container" style="background: #eef5ff; border: 1px solid #cce0ff; color: #333;">
-    <h3>Jak importovat do sliceru?</h3>
+    <h2>Jak importovat do sliceru?</h2>
     <p style="font-size: 1.1rem; text-align: center;">
       Pro <strong>vícebarevný</strong> tisk molekuly se ujisti, že tě slicer upozorní hláškou <br>
       <em>„Byl detekován objekt o více částech“ (Multi-part object detected)</em>, <br>
       a následně potvrď volbou <strong>„ANO“ (YES)</strong>.
     </p>
-    <img src="/assets/multipartobject.svg" alt="Dialog importu do sliceru" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
+    <img src="/assets/multipartobject.svg" alt="Dialog importu do sliceru" loading="lazy" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
   </div>
 
-  <!-- SEKCE PRINTABLES -->
+  <!-- SEKCE PRINTABLES A MAKERWORLD -->
   <div class="step-container printables-container">
-    <h3>Vyzkoušej již hotové modely na Printables</h3>
+    <h2>Vyzkoušej již hotové modely na Printables a MakerWorld</h2>
     <p class="printables-desc">
-      Hledáš inspiraci nebo si chceš rovnou vytisknout oblíbené molekuly bez nutnosti nastavování? Prozkoumej naši sbírku hotových, ověřených 3D modelů molekul přímo na Printables.
+      Hledáš inspiraci nebo si chceš rovnou vytisknout oblíbené molekuly bez nutnosti nastavování? Prozkoumej naši sbírku hotových, ověřených 3D modelů molekul přímo na Printables a MakerWorld.
     </p>
     <div class="printables-btn-wrapper">
       <a
@@ -437,6 +630,19 @@
           <path d="M3.678 4.8 12 9.6v9.6l8.322-4.8V4.8L12 0ZM12 19.2l-8.322-4.8V24Z"/>
         </svg>
         <span>Printables</span>
+        <span class="external-arrow">↗</span>
+      </a>
+      <a
+        href="https://makerworld.com/en/@3DPMol"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="makerworld-btn"
+      >
+        <svg class="printables-logo" viewBox="19 10 168 167" fill="currentColor" width="28" height="28" aria-hidden="true">
+          <title>MakerWorld</title>
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M23 31 L66 14 L103 28 L140 14 L183 31 L183 156 L140 173 L103 159 L66 173 L23 156 Z M67 21 L102 36 L102 86 L67 71 Z M140 21 L176 36 L176 86 L140 71 Z M31 94 L66 79 L101 94 L66 109 Z M105 94 L140 79 L175 94 L140 109 Z M30 102 L66 117 L66 167 L30 152 Z M104 102 L140 117 L140 167 L104 152 Z"/>
+        </svg>
+        <span>MakerWorld</span>
         <span class="external-arrow">↗</span>
       </a>
     </div>

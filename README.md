@@ -2,6 +2,8 @@
 
 A web application for visualizing and preparing molecular structures for multicolour 3D printing. Easily prepare your molecule for printing.
 
+**Live Application:** [https://3dmolekuly.vscht.cz](https://3dmolekuly.vscht.cz)
+
 ## Description
 
 This project provides a web interface for scientists, educators, and enthusiasts to visualize molecular structures and prepare them easily for 3D printing. Built with threejs, it offers an intuitive way to work with molecular models.
@@ -26,7 +28,7 @@ The program makes easier 3D printing muliticolour molecules by automatically sep
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/3D-Print-Molecules-WEB.git
+git clone https://github.com/KubiV/3D-Print-Molecules-WEB.git
 cd 3D-Print-Molecules-WEB
 ```
 
@@ -118,7 +120,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 Your Name - [Your Email]
 
-Project Link: [https://github.com/yourusername/3D-Print-Molecules-WEB](https://github.com/yourusername/3D-Print-Molecules-WEB)
+Project Link: [https://github.com/KubiV/3D-Print-Molecules-WEB](https://github.com/KubiV/3D-Print-Molecules-WEB) | Web: [https://3dmolekuly.vscht.cz](https://3dmolekuly.vscht.cz)
 
 ## Acknowledgments
 

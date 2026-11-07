@@ -11,12 +11,12 @@
     line-height: 1.6;
     color: #333;
   }
-  .about h2 {
+  .about h1 {
     font-size: 2.5rem;
     margin-bottom: 1rem;
     text-align: center;
   }
-  .about h3 {
+  .about h2 {
     font-size: 1.75rem;
     margin-top: 2rem;
     margin-bottom: 0.75rem;
@@ -65,9 +65,9 @@
 </style>
 
 <section class="about">
-  <h2 style="text-align: center;">O projektu</h2>
+  <h1>O projektu</h1>
 
-  <h3>Kdo jsme</h3>
+  <h2>Kdo jsme</h2>
   <p>
     Projekt je dílem <strong>spolupráce mezi akademickými pracovišti a studenty</strong>.
     Toto spojení odborníků z <em>medicíny</em>, <em>biochemie</em>, <em>výpočetní techniky</em> a
@@ -82,14 +82,14 @@
   </p>
     <div class="logos-container">
         <a href="https://kuhv.vscht.cz" target="_blank" rel="noopener noreferrer" title="Ústav učitelství chemie a humanitních věd VŠCHT Praha">
-            <img src={vscht} alt="Logo Ústavu učitelství chemie a humanitních věd VŠCHT Praha" class="logo" style="color:red;">
+            <img src={vscht} alt="Logo Ústavu učitelství chemie a humanitních věd VŠCHT Praha" height="75" class="logo" style="color:red;">
         </a>
         <a href="https://www.lf1.cuni.cz" target="_blank" rel="noopener noreferrer" title="1. lékařská fakulta Univerzity Karlovy">
-            <img src={lf1} alt="Logo 1. lékařské fakulty Univerzity Karlovy" class="logo" style="color:blue;">
+            <img src={lf1} alt="Logo 1. lékařské fakulty Univerzity Karlovy" height="75" class="logo" style="color:blue;">
         </a>
     </div>
 
-  <h3>Proč vznikl</h3>
+  <h2>Proč vznikl</h2>
   <p>
     Věříme, že pro <strong>porozumění tvaru</strong>, <strong>prostorovým interakcím</strong>
     a <strong>vlastnostem bioorganických molekul</strong> je klíčové mít možnost
@@ -101,7 +101,7 @@
     udělat <strong>3D tisk molekul</strong> <em>dostupnějším, rychlejším a přívětivým</em>.
   </p>
 
-  <h3>Co umí</h3>
+  <h2>Co umí</h2>
   <p>
     Naše aplikace umožňuje:
   </p>
@@ -119,7 +119,7 @@
     při <em>manuálním zpracování</em>.
   </p>
 
-  <h3>Technické základy</h3>
+  <h2>Technické základy</h2>
   <ul class="tech-list">
     <li>Jazyk: <span class="highlight">TypeScript</span></li>
     <li>GUI: <em>SvelteKit</em>, <em>Bootstrap</em></li>

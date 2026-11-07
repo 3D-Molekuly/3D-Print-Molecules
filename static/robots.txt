@@ -1,7 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /cs/demonstrations
-Disallow: /en/demonstrations
 
 Sitemap: https://3dmolekuly.vscht.cz/sitemap.xml

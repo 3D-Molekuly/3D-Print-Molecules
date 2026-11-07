@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
 import { DEFAULT_OG_IMAGE, getRouteSeo, SITE_ORIGIN } from './seo';
 import { reroute } from '../hooks';
 import { GET as getSitemap } from '../routes/sitemap.xml/+server';
+import { load as loadEnDemo } from '../routes/en/demonstrations/+page.server';
+import { load as loadCsDemo } from '../routes/cs/demonstrations/+page.server';
 
 describe('getRouteSeo', () => {
 	it('generates canonical, hreflang, and valid JSON-LD for root and localized homepages', () => {
@@ -90,5 +93,30 @@ describe('getRouteSeo', () => {
 		expect(xml).toContain('xhtml:link rel="alternate" hreflang="cs"');
 		expect(xml).not.toContain('demonstrations');
 		expect(xml).not.toContain('vercel.app');
+	});
+
+	it('redirects demonstrations routes permanently (301) to the localized homepages', () => {
+		try {
+			loadEnDemo({} as any);
+			expect.fail('Expected 301 redirect');
+		} catch (err: any) {
+			expect(err.status).toBe(301);
+			expect(err.location).toBe('/en');
+		}
+
+		try {
+			loadCsDemo({} as any);
+			expect.fail('Expected 301 redirect');
+		} catch (err: any) {
+			expect(err.status).toBe(301);
+			expect(err.location).toBe('/cs');
+		}
+	});
+
+	it('ensures robots.txt does not disallow demonstrations pages so crawlers follow 301 redirects', () => {
+		const robots = fs.readFileSync('static/robots.txt', 'utf-8');
+		expect(robots).not.toContain('Disallow: /cs/demonstrations');
+		expect(robots).not.toContain('Disallow: /en/demonstrations');
+		expect(robots).toContain('Sitemap: https://3dmolekuly.vscht.cz/sitemap.xml');
 	});
 });

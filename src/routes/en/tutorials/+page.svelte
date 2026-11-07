@@ -257,6 +257,143 @@
     }
   }
 
+  /* --- ADVANCED SEARCH STYLES --- */
+  .adv-search-mockup {
+    background: #ffffff;
+    border: 1px solid #dce6f2;
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin: 1.25rem 0 1rem 0;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.03);
+  }
+  .adv-search-bar-mockup {
+    display: flex;
+    align-items: center;
+    border: 2px solid #0070f3;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 112, 243, 0.12);
+    gap: 0.5rem;
+  }
+  .adv-search-input-text {
+    flex: 1;
+    font-family: monospace;
+    font-size: 0.95rem;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .adv-search-prefix-highlight {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    margin-right: 0.25rem;
+  }
+  .adv-gear-btn-mockup {
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #0070f3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: default;
+    transition: all 0.2s;
+  }
+  .adv-gear-btn-mockup:hover {
+    background: #e0f2fe;
+    transform: rotate(30deg);
+  }
+  .adv-tabs-mockup {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0.5rem;
+  }
+  .adv-tab-pill {
+    padding: 0.35rem 0.85rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .adv-tab-pill.active {
+    background: #0070f3;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(0, 112, 243, 0.25);
+  }
+  .adv-sources-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1.25rem;
+  }
+  .adv-source-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .adv-source-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+  }
+  .adv-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .adv-card-title {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .adv-prefix-badge {
+    font-family: monospace;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #0070f3;
+    border: 1px solid #cbd5e1;
+  }
+  .adv-card-desc {
+    font-size: 0.88rem;
+    color: #475569;
+    margin: 0 0 0.5rem 0;
+    line-height: 1.45;
+  }
+  .adv-card-example {
+    font-size: 0.82rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.45rem 0.65rem;
+    color: #334155;
+  }
+  .adv-card-example code {
+    font-weight: 600;
+    color: #0369a1;
+  }
+
   /* --- STYLES FOR SHARING TILE --- */
   .share-tutorial-mockup {
     background: #ffffff;
@@ -490,6 +627,132 @@
       <li><span class="legend-number">1</span><div><strong>Search:</strong> Enter the English name of the substance into the "Search on PubChem" field and press Enter. Data will automatically download from the public database.</div></li>
       <li><span class="legend-number">2</span><div><strong>Custom Data:</strong> If you have your own <code>.sdf</code> file, use the <em>Upload File</em> button followed by <em>Fetch Data</em>.</div></li>
     </ul>
+  </div>
+
+  <!-- ADVANCED SEARCH -->
+  <div class="step-container">
+    <h2>Advanced Search & Specific Inputs</h2>
+    <p>
+      Need to model a compound from a SMILES string, a macromolecule from the Protein Data Bank, a crystal lattice, or a cofactor with a bound metal? The app supports advanced multi-database search.
+    </p>
+
+    <div class="adv-search-mockup" aria-label="Mockup of search bar and advanced search">
+      <!-- Search bar mockup -->
+      <div class="adv-search-bar-mockup">
+        <span class="material-symbols-outlined" style="color: #64748b; font-size: 1.25rem;" aria-hidden="true">search</span>
+        <div class="adv-search-input-text">
+          <span class="adv-search-prefix-highlight">smiles:</span>CC(=O)Oc1ccccc1C(=O)O
+        </div>
+        <div class="adv-gear-btn-mockup" title="Advanced Search">
+          <span class="material-symbols-outlined" style="font-size: 1.25rem;" aria-hidden="true">settings</span>
+        </div>
+      </div>
+
+      <!-- Modal tabs mockup -->
+      <div class="adv-tabs-mockup">
+        <span class="adv-tab-pill">
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">database</span>
+          PubChem
+        </span>
+        <span class="adv-tab-pill">
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">biotech</span>
+          PDB / Ligands
+        </span>
+        <span class="adv-tab-pill active">
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">science</span>
+          SMILES → 3D
+        </span>
+        <span class="adv-tab-pill">
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">grain</span>
+          COD (Crystals)
+        </span>
+      </div>
+    </div>
+    <p class="image-caption">Example: Search bar with prefix and tabs in the Advanced Search dialog</p>
+
+    <ul class="legend-list">
+      <li>
+        <span class="legend-number">A</span>
+        <div>
+          <strong>Gear Icon (Search Settings):</strong>
+          Click the gear button <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.15rem; color: #0070f3;">settings</span> on the right side of the main search bar to open the <em>Advanced Search</em> popup. Here you can switch between databases via tabs, use interactive filters (like chain selection for PDB), or try pre-configured example molecules.
+        </div>
+      </li>
+      <li>
+        <span class="legend-number">B</span>
+        <div>
+          <strong>Direct Prefixes in Search Field:</strong>
+          You don't even have to open the popup – just type a prefix followed by a colon directly into the main search box. The application automatically detects the query type and routes it to the corresponding service.
+        </div>
+      </li>
+    </ul>
+
+    <!-- Input source cards -->
+    <div class="adv-sources-grid">
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">science</span>
+            SMILES & InChI
+          </div>
+          <span class="adv-prefix-badge">smiles: / cactus:</span>
+        </div>
+        <p class="adv-card-desc">
+          Converts linear chemical notation directly into 3D coordinates using NIH CACTUS CIR (with PubChem 3D fallback). Ideal for custom, synthetic, or exotic compounds outside standard catalogs.
+        </p>
+        <div class="adv-card-example">
+          Examples: <code>smiles: CC(=O)Oc1ccccc1C(=O)O</code> (aspirin), <code>smiles: C1CCCCC1</code> (cyclohexane), <code>smiles: C12C3C4C1C5C2C3C45</code> (cubane)
+        </div>
+      </div>
+
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">biotech</span>
+            PDB Macromolecules
+          </div>
+          <span class="adv-prefix-badge">pdb:</span>
+        </div>
+        <p class="adv-card-desc">
+          Fetches macromolecular structures from the Protein Data Bank (proteins, enzymes, DNA, RNA). In the Advanced Search dialog, you can also specify an individual chain and toggle crystal water molecules.
+        </p>
+        <div class="adv-card-example">
+          Examples: <code>pdb: 1CRN</code> (crambin), <code>pdb: 1BNA</code> (B-DNA), <code>pdb: 1CRN:A</code> (chain A)
+        </div>
+      </div>
+
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">category</span>
+            CCD Ligands & Cofactors
+          </div>
+          <span class="adv-prefix-badge">ccd:</span>
+        </div>
+        <p class="adv-card-desc">
+          Downloads ligands and cofactors from the PDB Chemical Component Dictionary. Perfect for 3D printing metal-complexed cofactors, dyes, and drugs bound to macromolecules.
+        </p>
+        <div class="adv-card-example">
+          Examples: <code>ccd: HEM</code> (heme), <code>ccd: ATP</code>, <code>ccd: CLA</code> (chlorophyll a)
+        </div>
+      </div>
+
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">grain</span>
+            COD Crystals & Minerals
+          </div>
+          <span class="adv-prefix-badge">cod:</span>
+        </div>
+        <p class="adv-card-desc">
+          Queries the Crystallography Open Database. Allows you to load inorganic crystal lattices, salts, and minerals by fulltext name, empirical formula, or numeric COD ID.
+        </p>
+        <div class="adv-card-example">
+          Examples: <code>cod: 1506182</code>, <code>cod: CaCO3</code> (calcite), <code>cod: quartz</code>, <code>cod: NaCl</code>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Step 2 -->

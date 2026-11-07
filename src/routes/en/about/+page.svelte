@@ -100,6 +100,11 @@
     to make <strong>3D printing of molecules</strong> more <em>accessible, faster, and user-friendly</em>.
   </p>
 
+  <h2>History and Development</h2>
+  <p>
+    The first prototype of the application was created in 2023 as a terminal script for the <em>PyMOL</em> application, and gradually through several iterations in <em>Python</em> evolved into the concept of a web application. The project was even recognized at the First Faculty of Medicine, Charles University, receiving an award at the <a href="https://www.lf1.cuni.cz/25-rocnik-svk-a-vpz-uz-znaji-sve-viteze" target="_blank" rel="noopener noreferrer">25th Student Scientific Conference (SVK)</a>.
+  </p>
+
   <h2>What It Can Do</h2>
   <p>
     Our application allows you to:

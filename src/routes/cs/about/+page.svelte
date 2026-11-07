@@ -101,6 +101,11 @@
     udělat <strong>3D tisk molekul</strong> <em>dostupnějším, rychlejším a přívětivým</em>.
   </p>
 
+  <h2>Historie a vývoj</h2>
+  <p>
+    První prototyp aplikace vznikl v roce 2023 jakožto skript v terminálu pro aplikaci <em>PyMOL</em> a postupně se přes pár iterací v <em>Pythonu</em> přesunul do konceptu webové aplikace. Projekt byl navíc oceněn na půdě 1. LF UK v rámci <a href="https://www.lf1.cuni.cz/25-rocnik-svk-a-vpz-uz-znaji-sve-viteze" target="_blank" rel="noopener noreferrer">25. ročníku Studentské vědecké konference (SVK)</a>.
+  </p>
+
   <h2>Co umí</h2>
   <p>
     Naše aplikace umožňuje:

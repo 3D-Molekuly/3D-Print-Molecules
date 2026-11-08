@@ -1,5 +1,6 @@
 // src/lib/molecules/inputs.ts
 import { cifToSdf } from '$lib/utils/cifToSdf';
+import { detectFormulaQuery, looksLikeSimpleSmiles, looksLikeSmiles } from './queryDetection';
 
 export interface PdbSearchHit {
   id: string;
@@ -127,62 +128,171 @@ export async function fetchPubChemData(
   }
 }
 
-// New function for PubChem with autocomplete
+export interface PubChemCompoundHit {
+  cid: string;
+  title: string;
+  formula: string;
+  iupacName?: string;
+  weight?: string;
+}
+
+export interface PubChemConformer {
+  id: string;
+  sdf: string;
+  /** MMFF94 energy (kcal/mol) reported by PubChem, when present. */
+  energy?: number;
+}
+
+const PUBCHEM_REST = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
+
+async function firstCid(url: string, init?: RequestInit): Promise<string | null> {
+  try {
+    const res = await fetch(url, init);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const cid = data?.IdentifierList?.CID?.[0];
+    return cid ? String(cid) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** CIDs for a molecular formula, ordered by PubChem relevance (e.g. H2O -> water first). */
+export async function searchPubChemCidsByFormula(formula: string, limit = 10): Promise<string[]> {
+  try {
+    const res = await fetch(`${PUBCHEM_REST}/compound/fastformula/${encodeURIComponent(formula)}/cids/JSON?MaxRecords=${limit}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.IdentifierList?.CID ?? []).slice(0, limit).map((c: number) => String(c));
+  } catch {
+    return [];
+  }
+}
+
+/** Compounds (with names) matching a molecular formula — isomers are listed separately. */
+export async function searchPubChemByFormula(formula: string, limit = 8): Promise<PubChemCompoundHit[]> {
+  const cids = await searchPubChemCidsByFormula(formula, limit);
+  if (cids.length === 0) return [];
+  try {
+    const res = await fetch(`${PUBCHEM_REST}/compound/cid/${cids.join(',')}/property/Title,IUPACName,MolecularFormula,MolecularWeight/JSON`);
+    if (!res.ok) return cids.map((cid) => ({ cid, title: `CID ${cid}`, formula }));
+    const data = await res.json();
+    const byCid = new Map<string, PubChemCompoundHit>();
+    for (const p of data?.PropertyTable?.Properties ?? []) {
+      const cid = String(p.CID);
+      byCid.set(cid, {
+        cid,
+        title: p.Title || p.IUPACName || `CID ${cid}`,
+        formula: p.MolecularFormula || formula,
+        iupacName: p.IUPACName || undefined,
+        weight: p.MolecularWeight ? `${Number(p.MolecularWeight).toFixed(2)} g/mol` : undefined
+      });
+    }
+    return cids.map((cid) => byCid.get(cid) ?? { cid, title: `CID ${cid}`, formula });
+  } catch {
+    return cids.map((cid) => ({ cid, title: `CID ${cid}`, formula }));
+  }
+}
+
+/**
+ * Resolves free text to a PubChem CID and the name worth keeping in the search history.
+ * Order: CID digits -> confident formula ("H2SO4", "h2o") -> autocomplete/name/CAS ->
+ * digit-free formula ("NaCl") -> SMILES ("CCO", "C1=CC=CC=C1").
+ */
+export async function resolvePubChemCid(inputStr: string): Promise<{ cid: string | null; nameToSave: string }> {
+  const trimmed = inputStr.trim();
+  if (/^\d+$/.test(trimmed)) return { cid: trimmed, nameToSave: trimmed };
+
+  const formulaQuery = detectFormulaQuery(trimmed);
+  if (formulaQuery?.confident) {
+    const [cid] = await searchPubChemCidsByFormula(formulaQuery.formula, 1);
+    if (cid) return { cid, nameToSave: formulaQuery.formula };
+  }
+
+  let nameToSave = trimmed;
+  let cid: string | null = null;
+
+  // Autocomplete gives better name matching ("asprin" -> "aspirin"), but never for formulas:
+  // it would happily turn "H2O" into "H2O2".
+  if (!formulaQuery) {
+    try {
+      const autocompleteRes = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound/${encodeURIComponent(trimmed)}?limit=1`);
+      if (autocompleteRes.ok) {
+        const autocompleteData = await autocompleteRes.json();
+        const suggestedName: string | undefined = autocompleteData?.dictionary_terms?.compound?.[0];
+        if (suggestedName) {
+          cid = await firstCid(`${PUBCHEM_REST}/compound/name/${encodeURIComponent(suggestedName)}/cids/JSON`);
+          if (cid) nameToSave = suggestedName;
+        }
+      }
+    } catch (error) {
+      console.log('Autocomplete failed, trying direct name search:', error);
+    }
+  }
+
+  // Direct name search (text names and CAS numbers)
+  if (!cid) {
+    cid = await firstCid(`${PUBCHEM_REST}/compound/name/${encodeURIComponent(trimmed)}/cids/JSON`);
+  }
+
+  if (!cid && formulaQuery) {
+    const [formulaCid] = await searchPubChemCidsByFormula(formulaQuery.formula, 1);
+    if (formulaCid) return { cid: formulaCid, nameToSave: formulaQuery.formula };
+  }
+
+  if (!cid && (looksLikeSmiles(trimmed) || looksLikeSimpleSmiles(trimmed))) {
+    cid = await firstCid(`${PUBCHEM_REST}/compound/smiles/cids/JSON`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `smiles=${encodeURIComponent(trimmed)}`
+    });
+    if (cid === '0') cid = null;
+  }
+
+  return { cid, nameToSave };
+}
+
+/** IDs of the diverse 3D conformers PubChem keeps for a compound (empty when it has none). */
+export async function fetchPubChemConformerIds(cid: string): Promise<string[]> {
+  try {
+    const res = await fetch(`${PUBCHEM_REST}/compound/cid/${encodeURIComponent(cid)}/conformers/JSON`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.InformationList?.Information?.[0]?.ConformerID ?? []).map((id: string) => String(id));
+  } catch {
+    return [];
+  }
+}
+
+export function readSdfProperty(sdf: string, name: string): string | undefined {
+  const m = new RegExp(`^>\\s*<${name}>[^\\n]*\\r?\\n([^\\r\\n]*)`, 'm').exec(sdf);
+  return m ? m[1].trim() : undefined;
+}
+
+export async function fetchPubChemConformer(conformerId: string): Promise<PubChemConformer> {
+  const url = `${PUBCHEM_REST}/conformers/${encodeURIComponent(conformerId)}/SDF`;
+  let res = await fetch(url);
+  // PubChem answers 503 ("server busy") when throttling: back off and retry. The browser may
+  // cache that 503 (PubChem sends an Expires header), so retries bypass the HTTP cache.
+  for (let attempt = 1; attempt <= 3 && res.status === 503; attempt++) {
+    await new Promise((r) => setTimeout(r, 700 * attempt));
+    res = await fetch(url, { cache: 'reload' });
+  }
+  if (!res.ok) throw new Error(`PubChem conformer '${conformerId}' could not be loaded (HTTP ${res.status}).`);
+  const sdf = await res.text();
+  const energy = Number(readSdfProperty(sdf, 'PUBCHEM_MMFF94_ENERGY'));
+  return { id: conformerId.toUpperCase(), sdf, energy: Number.isFinite(energy) ? energy : undefined };
+}
+
+// PubChem lookup with autocomplete, formula and SMILES support
 export async function fetchPubChemDataWithAutocomplete(
   inputStr: string,
   setTableInfo: (first: string, second: string, third: string) => void,
   setImage: (url: string) => void
 ): Promise<string> { // Returns the name to save to history
-  let cid: string | null = null;
-  const allDigits = /^\d+$/.test(inputStr);
-  let nameToSave = inputStr; // Default to the user's input
-
-  if (!allDigits) {
-    // First try autocomplete API for better name matching
-    try {
-      const autocompleteUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/autocomplete/compound/${encodeURIComponent(inputStr)}?limit=1`;
-      const autocompleteResponse = await fetch(autocompleteUrl);
-
-      if (autocompleteResponse.ok) {
-        const autocompleteData = await autocompleteResponse.json();
-        if (autocompleteData.dictionary_terms && autocompleteData.dictionary_terms.compound && autocompleteData.dictionary_terms.compound.length > 0) {
-          const suggestedName = autocompleteData.dictionary_terms.compound[0];
-          nameToSave = suggestedName; // Capture the autocompleted name for history
-          console.log(`Autocomplete suggested: ${suggestedName}`);
-
-          // Use the suggested name to get CID
-          const pubchemUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(suggestedName)}/cids/JSON`;
-          const response = await fetch(pubchemUrl);
-          if (response.ok) {
-            const data = await response.json();
-            cid = data.IdentifierList?.CID?.[0] || null;
-          }
-        }
-      }
-    } catch (error) {
-      console.log("Autocomplete failed, trying direct name search:", error);
-    }
-
-    // If autocomplete didn't work, fall back to direct name search (handles text names and CAS numbers)
-    if (!cid) {
-      const pubchemUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(inputStr)}/cids/JSON`;
-      const response = await fetch(pubchemUrl);
-      if (response.ok) {
-        const data = await response.json();
-        cid = data.IdentifierList?.CID?.[0] || null;
-        if (!cid) {
-          console.error("CID not found for the given name.");
-          return nameToSave;
-        }
-      } else {
-        console.error("Error fetching CID.");
-        return nameToSave;
-      }
-    }
-  } else {
-    // If the input is all digits, treat it as a CID
-    cid = inputStr;
-  }
+  const resolved = await resolvePubChemCid(inputStr);
+  const cid = resolved.cid;
+  let nameToSave = resolved.nameToSave;
 
   if (!cid) {
     console.error("Could not determine CID.");

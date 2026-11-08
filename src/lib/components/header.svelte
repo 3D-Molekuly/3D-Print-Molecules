@@ -17,14 +17,14 @@
 <header class="p-3 mb-1 border-bottom">
   <div class="container">
     <div class="d-flex flex-wrap align-items-center justify-content-between">
-      <a href={homePath} class="d-flex align-items-center mb-2 mb-sm-0 text-decoration-none">
+      <a href={homePath} class="d-flex align-items-center mb-2 mb-sm-0 text-decoration-none header-brand">
         <img src={logo} alt="" aria-hidden="true" width="40" height="40" class="me-2">
         <span class="fs-3 text-black font-tittle">{$_('app_tittle')}</span>
       </a>
 
-      <div class="d-flex align-items-center">
-        <nav aria-label={$_('primary_nav_label') || 'Primary'}>
-          <ul class="nav mb-2 justify-content-center mb-md-0 me-3">
+      <div class="d-flex align-items-center header-actions">
+        <nav aria-label={$_('primary_nav_label') || 'Primary'} class="header-primary-nav">
+          <ul class="nav mb-2 justify-content-center mb-md-0 me-3 header-nav">
             <li><a href={homePath} class="nav-link px-2 fs-4 text-grey">{$_('make_model_tittle')}</a></li>
             <li><a href={localizedPath('/tutorials')} class="nav-link px-2 fs-4 text-grey">{$_('tutorials_tittle')}</a></li>
             <li><a href="https://www.printables.com/@3DPMol_5381976/models" target="_blank" rel="noopener noreferrer" class="nav-link px-2 fs-4 text-grey">{$_('examples_tittle')}</a></li>
@@ -75,5 +75,45 @@
   ul, .dropdown {
     font-family: "Handjet";
     font-weight: 400;
+  }
+
+  /* Telefon: logo + jazyk + motiv v prvním řádku, menu přes celou šířku pod nimi */
+  @media (max-width: 575.98px) {
+    header {
+      padding-block: 0.75rem !important;
+    }
+    .header-actions {
+      display: contents !important;
+    }
+    .header-brand {
+      margin-inline-end: auto;
+      margin-block-end: 0 !important;
+      min-width: 0;
+    }
+    .header-brand .font-tittle {
+      font-size: 1.5rem !important;
+      white-space: nowrap;
+    }
+    .header-primary-nav {
+      order: 3;
+      flex: 1 1 100%;
+      margin-block-start: 0.5rem;
+    }
+    .header-nav {
+      flex-wrap: nowrap;
+      justify-content: space-between !important;
+      margin: 0 !important;
+    }
+    .header-nav .nav-link {
+      font-size: 1.25rem !important;
+      padding: 0.15rem 0.25rem !important;
+      white-space: nowrap;
+    }
+    .header-nav li:first-child .nav-link {
+      padding-inline-start: 0 !important;
+    }
+    .header-nav li:last-child .nav-link {
+      padding-inline-end: 0 !important;
+    }
   }
 </style>

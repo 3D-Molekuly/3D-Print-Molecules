@@ -13,8 +13,15 @@
     parsePdbQuerySpec,
     type CodSearchHit,
     type PdbSearchHit,
-    type CcdSearchHit
+    type CcdSearchHit,
+    searchPubChemByFormula,
+    resolvePubChemCid,
+    fetchPubChemConformerIds,
+    fetchPubChemConformer,
+    type PubChemCompoundHit,
+    type PubChemConformer
   } from '$lib/molecules/inputs';
+  import { detectFormulaQuery, formatConformerQuery } from '$lib/molecules/queryDetection';
   import MoleculeDrawPanel from '$lib/components/MoleculeDrawPanel.svelte';
   import { isOnline, isOffline } from '$lib/functions/network';
 
@@ -56,6 +63,14 @@
   // Result lists
   let pubchemSuggestions: string[] = [];
   let activePubchemIndex = -1;
+  /** Compounds matching a typed formula (isomers), e.g. C2H6O -> ethanol, dimethyl ether. */
+  let pubchemFormulaHits: PubChemCompoundHit[] = [];
+  /** "Choose a 3D conformer" mode of the PubChem tab. */
+  let chooseConformer = false;
+  let conformerCompound: { cid: string; title: string } | null = null;
+  let conformerIds: string[] = [];
+  let conformers: Record<string, PubChemConformer | null> = {};
+  let conformerListLoading = false;
   let ccdResults: CcdSearchHit[] = [];
   let pdbResults: PdbSearchHit[] = [];
   let codResults: CodSearchHit[] = [];
@@ -151,8 +166,11 @@
   function handlePubchemInput() {
     clearFeedback();
     activePubchemIndex = -1;
+    pubchemFormulaHits = [];
+    resetConformers();
     if (debounceTimer) clearTimeout(debounceTimer);
-    if (pubchemQuery.trim().length < 3) {
+    // Name suggestions make no sense for formulas ("H2O" would suggest "H2O2")
+    if (pubchemQuery.trim().length < 3 || detectFormulaQuery(pubchemQuery)?.confident) {
       pubchemSuggestions = [];
       return;
     }
@@ -189,22 +207,128 @@
   }
 
   function selectPubchemSuggestion(suggestion: string) {
+    if (isSearchingList) return;
     pubchemQuery = suggestion;
     pubchemSuggestions = [];
     activePubchemIndex = -1;
     handlePubChemSearch();
   }
 
-  function handlePubChemSearch() {
+  async function handlePubChemSearch() {
     const q = pubchemQuery.trim();
-    if (!q) return;
+    if (!q || isLoading || isSearchingList) return;
     if (blockIfOffline()) return;
+    if (debounceTimer) clearTimeout(debounceTimer);
+    pubchemSuggestions = [];
+    errorMsg = '';
+    resetConformers();
+
+    // Formulas ("C2H6O", "h2so4") can match several compounds: let the user pick the isomer
+    const formulaQuery = detectFormulaQuery(q);
+    if (formulaQuery) {
+      isSearchingList = true;
+      try {
+        pubchemFormulaHits = await searchPubChemByFormula(formulaQuery.formula, 8);
+        hasSearchedCurrentList = true;
+      } catch {
+        pubchemFormulaHits = [];
+      } finally {
+        isSearchingList = false;
+      }
+      if (pubchemFormulaHits.length > 0 || formulaQuery.confident) return;
+      // "NaCl"-like input without a formula match: fall through to the name search
+    }
+    pubchemFormulaHits = [];
+
+    if (chooseConformer) {
+      isSearchingList = true;
+      try {
+        const { cid } = await resolvePubChemCid(q);
+        if (!cid) {
+          errorMsg = $_('adv_no_results');
+          return;
+        }
+        await showConformersFor(cid, q);
+      } finally {
+        isSearchingList = false;
+      }
+      return;
+    }
+
     dispatch('search', {
       source: 'pubchem',
       query: q
     });
     requestClose();
   }
+
+  function selectPubchemCompound(hit: PubChemCompoundHit) {
+    if (blockIfOffline()) return;
+    if (chooseConformer) {
+      showConformersFor(hit.cid, hit.title);
+      return;
+    }
+    dispatch('search', { source: 'pubchem', query: hit.cid });
+    requestClose();
+  }
+
+  function resetConformers() {
+    conformerCompound = null;
+    conformerIds = [];
+    conformers = {};
+    conformerListLoading = false;
+  }
+
+  /** Lists PubChem's 3D conformers for a compound and loads their energies in the background. */
+  async function showConformersFor(cid: string, title: string) {
+    resetConformers();
+    conformerCompound = { cid, title };
+    conformerListLoading = true;
+    try {
+      conformerIds = await fetchPubChemConformerIds(cid);
+    } finally {
+      conformerListLoading = false;
+    }
+    // PubChem throttles at ~5 requests/s: load with limited concurrency
+    const queue = [...conformerIds];
+    const loadNext = async (): Promise<void> => {
+      const id = queue.shift();
+      if (!id || conformerCompound?.cid !== cid) return;
+      let conformer: PubChemConformer | null = null;
+      try {
+        conformer = await fetchPubChemConformer(id); // retries on PubChem throttling itself
+      } catch {
+        conformer = null;
+      }
+      if (conformerCompound?.cid === cid) conformers = { ...conformers, [id]: conformer };
+      return loadNext();
+    };
+    await Promise.all([loadNext(), loadNext()]);
+  }
+
+  function selectConformer(id: string, index: number) {
+    if (blockIfOffline()) return;
+    const label = `${$_('adv_conformer_label')} ${index + 1}/${conformerIds.length}`;
+    dispatch('search', {
+      source: 'pubchem',
+      query: formatConformerQuery(id),
+      preloadedConformer: conformers[id] ?? undefined,
+      conformerLabel: label
+    });
+    requestClose();
+  }
+
+  function loadCompoundWithoutConformer() {
+    if (!conformerCompound) return;
+    dispatch('search', { source: 'pubchem', query: conformerCompound.cid });
+    requestClose();
+  }
+
+  $: conformerEnergyMin = Math.min(
+    ...Object.values(conformers)
+      .map((c) => c?.energy)
+      .filter((e): e is number => e !== undefined)
+  );
 
   // --- 2A. RCSB CCD Ligands ---
   function handleCcdInput() {
@@ -511,6 +635,8 @@
     hasSearchedCurrentList = false;
     pubchemSuggestions = [];
     activePubchemIndex = -1;
+    pubchemFormulaHits = [];
+    resetConformers();
     ccdResults = [];
     pdbResults = [];
     codResults = [];
@@ -655,7 +781,14 @@
             class="form-control adv-input"
             placeholder={$_('adv_pubchem_placeholder')}
           />
-          <button type="submit" class="btn btn-primary">{$_('adv_search_button')}</button>
+          <button type="submit" class="btn btn-primary" disabled={isSearchingList}>
+            {#if isSearchingList}
+              <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+              {$_('adv_searching')}
+            {:else}
+              {$_('adv_search_button')}
+            {/if}
+          </button>
           {#if pubchemSuggestions.length > 0}
             <ul class="autocomplete-results" role="list">
               {#each pubchemSuggestions as s, i}
@@ -673,13 +806,97 @@
             </ul>
           {/if}
         </div>
+        <div class="form-check conformer-check">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            id="adv-pubchem-conformer"
+            bind:checked={chooseConformer}
+            on:change={resetConformers}
+            aria-describedby="adv-pubchem-conformer-hint"
+          />
+          <label class="form-check-label small-label" for="adv-pubchem-conformer">
+            {$_('adv_conformer_toggle')}
+          </label>
+          <p id="adv-pubchem-conformer-hint" class="field-hint mb-0">{$_('adv_conformer_hint')}</p>
+        </div>
       </form>
       <div class="example-row">
         <span class="example-label">{$_('adv_examples_label')}</span>
         <button type="button" class="example-chip" on:click={() => selectPubchemSuggestion('Aspirin')}>Aspirin</button>
         <button type="button" class="example-chip" on:click={() => selectPubchemSuggestion('Caffeine')}>Caffeine</button>
         <button type="button" class="example-chip" on:click={() => selectPubchemSuggestion('50-78-2')}>50-78-2</button>
+        <button type="button" class="example-chip" on:click={() => selectPubchemSuggestion('H2SO4')}>H2SO4</button>
+        <button type="button" class="example-chip" on:click={() => selectPubchemSuggestion('C2H6O')}>C2H6O</button>
       </div>
+
+      {#if conformerCompound}
+        <section class="conformer-section" aria-labelledby="adv-conformer-title">
+          <div class="conformer-header">
+            <h3 id="adv-conformer-title" class="conformer-title">
+              {$_('adv_conformer_list_title')}: <span class="hit-title">{conformerCompound.title}</span>
+              <span class="hit-badge">CID {conformerCompound.cid}</span>
+            </h3>
+          </div>
+          {#if conformerListLoading}
+            <p class="empty-results"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>{$_('adv_searching')}</p>
+          {:else if conformerIds.length === 0}
+            <p class="empty-results">{$_('adv_conformer_none')}</p>
+            <button type="button" class="btn btn-outline-primary btn-sm" on:click={loadCompoundWithoutConformer}>
+              {$_('adv_conformer_load_anyway')}
+            </button>
+          {:else}
+            <ul class="hit-list" role="list">
+              {#each conformerIds as id, i (id)}
+                {@const conformer = conformers[id]}
+                <li>
+                  <button type="button" class="hit-item" on:click={() => selectConformer(id, i)}>
+                    <div class="hit-main">
+                      <span class="hit-badge">{i + 1}</span>
+                      <span class="hit-title">
+                        {$_('adv_conformer_label')} {i + 1}
+                        {#if i === 0}<span class="conformer-default">· {$_('adv_conformer_default')}</span>{/if}
+                      </span>
+                    </div>
+                    <div class="hit-meta">
+                      {#if conformer === undefined}
+                        <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                      {:else if conformer?.energy !== undefined}
+                        <span class="hit-formula" title={$_('adv_conformer_energy_title')}>
+                          {conformer.energy.toFixed(1)} kcal/mol
+                          {#if Number.isFinite(conformerEnergyMin) && conformer.energy > conformerEnergyMin + 0.05}
+                            (+{(conformer.energy - conformerEnergyMin).toFixed(1)})
+                          {/if}
+                        </span>
+                      {/if}
+                    </div>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </section>
+      {:else if pubchemFormulaHits.length > 0}
+        <p class="field-hint mt-3 mb-1">{$_('adv_formula_results_hint')}</p>
+        <ul class="hit-list" role="list">
+          {#each pubchemFormulaHits as hit (hit.cid)}
+            <li>
+              <button type="button" class="hit-item" on:click={() => selectPubchemCompound(hit)}>
+                <div class="hit-main">
+                  <span class="hit-badge">{hit.cid}</span>
+                  <span class="hit-title">{hit.title}</span>
+                </div>
+                <div class="hit-meta">
+                  <span class="hit-formula">{hit.formula}</span>
+                  {#if hit.weight}<span>· {hit.weight}</span>{/if}
+                </div>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {:else if hasSearchedCurrentList && !isSearchingList}
+        <p class="empty-results">{$_('adv_no_results')}</p>
+      {/if}
     </div>
   {/if}
 
@@ -1411,6 +1628,29 @@
 
   .hit-formula {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .conformer-check {
+    margin-top: 0.6rem;
+  }
+
+  .conformer-section {
+    margin-top: 1rem;
+  }
+
+  .conformer-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .conformer-default {
+    opacity: 0.7;
+    font-weight: 400;
   }
 
   .empty-results {

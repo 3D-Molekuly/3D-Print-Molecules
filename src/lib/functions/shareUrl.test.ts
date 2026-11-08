@@ -176,6 +176,9 @@ describe('shareUrl serialization and parsing', () => {
 		expect(inferMoleculeSourceFromQuery('smiles: C1CCCCC1')).toBe('cactus');
 		expect(inferMoleculeSourceFromQuery('cod: 1506182')).toBe('cod');
 		expect(inferMoleculeSourceFromQuery('caffeine')).toBe('pubchem');
+		expect(inferMoleculeSourceFromQuery('H2SO4')).toBe('pubchem');
+		expect(inferMoleculeSourceFromQuery('conformer:000008C40000000B')).toBe('pubchem');
+		expect(inferMoleculeSourceFromQuery('CC(=O)OC1=CC=CC=C1C(=O)O')).toBe('cactus');
 
 		const ccdState = createDefaultShareState('ball-and-stick');
 		ccdState.source = 'ccd';

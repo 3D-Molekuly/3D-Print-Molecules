@@ -6,6 +6,7 @@ import type {
 	ModelStyleId,
 	MoleculeSource
 } from '$lib/types';
+import { looksLikeSmiles } from '$lib/molecules/queryDetection';
 
 export interface ShareState {
 	source: MoleculeSource | null;
@@ -193,6 +194,9 @@ export function inferMoleculeSourceFromQuery(
 	if (/^ccd:\s*.+$/i.test(trimmed)) return 'ccd';
 	if (/^(?:smiles|cactus):\s*.+$/i.test(trimmed)) return 'cactus';
 	if (/^pdb:\s*.+$/i.test(trimmed)) return 'pdb';
+	if (/^(?:conformer|formula):\s*.+$/i.test(trimmed)) return 'pubchem';
+	// Pasted SMILES (e.g. ChemDraw "Copy As > SMILES") go to the SMILES -> 3D service
+	if (looksLikeSmiles(trimmed)) return 'cactus';
 	if (/(?=.*[a-zA-Z])^[1-9][a-zA-Z0-9]{3}(?::[a-zA-Z0-9]+)?$/.test(trimmed)) {
 		return 'pdb';
 	}

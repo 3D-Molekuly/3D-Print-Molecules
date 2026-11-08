@@ -92,4 +92,13 @@ describe('structure file format detection', () => {
 		expect(detectStructureFormat('HEADER    TEST\nATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00 10.00           N  \n')).toBe('pdb');
 		expect(detectStructureFormat('hello world')).toBeNull();
 	});
+
+	it('detects ChemDraw documents', async () => {
+		const { detectStructureFormat, structureFormatFromFileName } = await import('$lib/molecules/molecularDataParser');
+		expect(detectStructureFormat('<?xml version="1.0" encoding="UTF-8" ?>\n<!DOCTYPE CDXML SYSTEM "http://www.cambridgesoft.com/xml/cdxml.dtd" >\n<CDXML>')).toBe('cdxml');
+		expect(detectStructureFormat('<CDXML CreationProgram="ChemDraw 22">')).toBe('cdxml');
+		expect(detectStructureFormat('VjCD0100\u0004\u0003\u0002\u0001')).toBe('cdx');
+		expect(structureFormatFromFileName('aspirin.cdxml')).toEqual({ baseName: 'aspirin', format: 'cdxml' });
+		expect(structureFormatFromFileName('aspirin.CDX')).toEqual({ baseName: 'aspirin', format: 'cdx' });
+	});
 });

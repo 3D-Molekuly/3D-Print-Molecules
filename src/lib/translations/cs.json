@@ -36,7 +36,7 @@
     "search_field": "⌕ Hledej na PubChem",
     "delete_history": "Vymazat historii",
     "upload_file_button": "Nahrát Soubor",
-    "invalid_file_type":"Neplatný formát souboru. Použij .pdb nebo .sdf",
+    "invalid_file_type":"Neplatný formát souboru. Použij .sdf, .mol, .pdb, .cif nebo ChemDraw (.cdx, .cdxml)",
     "drag_and_drop_message":"Drag and Drop",
     "fetch_data_button": "Načíst Data",
     "reload_data_button":"Obnovit",
@@ -206,7 +206,7 @@
     "canvas_legend_show_all": "Zobrazit vše",
     "canvas_bonds_group": "Vazby",
     "canvas_empty_title": "3D náhled molekuly",
-    "canvas_empty_hint": "Vyhledejte sloučeninu, přetáhněte soubor (.sdf, .pdb, .cif) nebo vyzkoušejte ukázku:",
+    "canvas_empty_hint": "Vyhledejte sloučeninu (název, vzorec jako H2O nebo SMILES), přetáhněte či vložte soubor (.sdf, .mol, .pdb, .cif, ChemDraw .cdx/.cdxml) nebo vyzkoušejte ukázku:",
     "canvas_sample_caffeine": "Kofein",
     "canvas_sample_aspirin": "Aspirin",
     "canvas_sample_water": "Voda (H₂O)",
@@ -251,9 +251,9 @@
     "adv_search_button": "Hledat",
     "adv_no_results": "Žádné odpovídající záznamy nebyly nalezeny.",
 
-    "adv_pubchem_label": "Název sloučeniny, PubChem CID nebo CAS číslo",
-    "adv_pubchem_hint": "Prohledá veřejnou databázi PubChem (organické a bioorganické molekuly).",
-    "adv_pubchem_placeholder": "např. Aspirin, 2244, 50-78-2",
+    "adv_pubchem_label": "Název sloučeniny, vzorec, PubChem CID nebo CAS číslo",
+    "adv_pubchem_hint": "Prohledá veřejnou databázi PubChem (organické a bioorganické molekuly). Funguje i vzorec, např. H2O, CO2, h2so4 – zobrazí se všechny odpovídající izomery.",
+    "adv_pubchem_placeholder": "např. Aspirin, H2SO4, 2244, 50-78-2",
 
     "adv_pdb_mode_legend": "Typ záznamu v RCSB PDB",
     "adv_pdb_mode_ccd": "Ligandy a kofaktory (CCD)",
@@ -281,5 +281,15 @@
     "adv_cod_hint": "Prohledá Crystallography Open Database fulltextově, podle vzorce (např. CaCO3, SiO2, NaCl) nebo načte přímo číselné COD ID.",
     "adv_cod_placeholder": "např. calcite, quartz, NaCl, CaCO3, 1506182",
     "adv_cod_fetch_id_button": "Načíst & převést",
-    "offline_search_notice": "Jste v offline režimu. Vyhledávání v databázích vyžaduje připojení k internetu. Můžete nahrát vlastní soubor (SDF, PDB, CIF) z počítače."
+    "offline_search_notice": "Jste v offline režimu. Vyhledávání v databázích vyžaduje připojení k internetu. Můžete nahrát vlastní soubor (SDF, PDB, CIF) nebo molekulu nakreslit (Rozšířené vyhledávání → Kreslení).",
+    "offline_more_info": "Více v návodu",
+    "adv_conformer_toggle": "Vybrat 3D konformer",
+    "adv_conformer_hint": "Místo výchozí struktury nabídne všechny 3D konformery, které PubChem pro sloučeninu má (seřazené podle diverzity, s energií MMFF94).",
+    "adv_conformer_label": "Konformer",
+    "adv_conformer_list_title": "Dostupné konformery",
+    "adv_conformer_default": "výchozí",
+    "adv_conformer_energy_title": "Energie MMFF94 podle PubChem; v závorce rozdíl oproti nejnižší",
+    "adv_conformer_none": "PubChem pro tuto sloučeninu nemá 3D konformery (typicky soli, kovové komplexy nebo velmi flexibilní molekuly).",
+    "adv_conformer_load_anyway": "Načíst i tak (2D → 3D)",
+    "adv_formula_results_hint": "Sloučeniny s tímto vzorcem (seřazené podle relevance) – vyberte tu správnou:"
 }

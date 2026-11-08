@@ -842,8 +842,8 @@
     <img src={step1Img} alt="UI ukázka screenshot" class="tutorial-img">
     <p class="image-caption">Obr. 1: Zobrazení vyhledávání z PubChemu</p>
     <ul class="legend-list">
-      <li><span class="legend-number">1</span><div><strong>Vyhledávání:</strong> Zadej anglický název látky do pole "Search on PubChem" a stiskni Enter. Data se automaticky stáhnou z veřejné databáze.</div></li>
-      <li><span class="legend-number">2</span><div><strong>Vlastní data:</strong> Pokud máš vlastní <code>.sdf</code> soubor, použij tlačítko <em>Upload File</em> a následně <em>Fetch Data</em>.</div></li>
+      <li><span class="legend-number">1</span><div><strong>Vyhledávání:</strong> Zadej anglický název látky do pole "Search on PubChem" a stiskni Enter. Data se automaticky stáhnou z veřejné databáze. Kromě názvu funguje i CAS číslo, PubChem CID, <strong>sumární vzorec</strong> (<code>H2O</code>, <code>CO2</code>, <code>H2SO4</code> – velikost písmen nevadí, projde i <code>h2so4</code> nebo <code>H₂O</code>) a <strong>SMILES</strong> (např. <code>CC(=O)OC1=CC=CC=C1C(=O)O</code>). U vzorce se načte nejrelevantnější sloučenina; pokud jich vzorci odpovídá víc (izomery), vybereš konkrétní v pokročilém vyhledávání.</div></li>
+      <li><span class="legend-number">2</span><div><strong>Vlastní data:</strong> Soubor <code>.sdf</code>, <code>.mol</code>, <code>.pdb</code>, <code>.cif</code> nebo z ChemDraw (<code>.cdx</code>, <code>.cdxml</code>) nahraj tlačítkem <em>Upload File</em>, přetáhni ho do okna, nebo ho vlož klávesami <kbd>Ctrl</kbd>+<kbd>V</kbd>. Model se načte hned. 2D struktury (typicky export z ChemDraw či Marvin, bez vodíků) se automaticky převedou do 3D a vodíky se doplní.</div></li>
     </ul>
   </details>
 
@@ -904,13 +904,44 @@
         <span class="legend-number">B</span>
         <div>
           <strong>Přímé prefixy v hlavním poli:</strong>
-          Okno nemusíš otevírat – stačí napsat prefix následovaný dvojtečkou přímo do vyhledávacího pole. Aplikace automaticky rozpozná typ dotazu a přesměruje jej na správnou službu.
+          Okno nemusíš otevírat – stačí napsat prefix následovaný dvojtečkou přímo do vyhledávacího pole. Aplikace automaticky rozpozná typ dotazu a přesměruje jej na správnou službu. Sumární vzorce a SMILES se rozpoznají i bez prefixu.
         </div>
       </li>
     </ul>
 
     <!-- Karty jednotlivých vstupů -->
     <div class="adv-sources-grid">
+      <div class="adv-source-card adv-source-card--wide">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">database</span>
+            PubChem: vzorce, izomery a 3D konformery
+          </div>
+          <span class="adv-prefix-badge">formula: / conformer:</span>
+        </div>
+        <p class="adv-card-desc">
+          Zadáš-li v záložce <em>PubChem</em> sumární vzorec, zobrazí se seznam všech sloučenin s tímto vzorcem seřazený podle relevance – například pro <code>C2H6O</code> ethanol i dimethylether – a vybereš tu správnou. Po zaškrtnutí <em>Vybrat 3D konformer</em> aplikace místo výchozí struktury nabídne až 10 prostorových konformací, které PubChem pro sloučeninu spočítal. U každé je uvedena energie MMFF94 a v závorce rozdíl oproti nejstabilnější. Hodí se pro ukázky flexibility molekul nebo tisk několika konformací vedle sebe. Konformer se ukládá do historie i do sdíleného odkazu.
+        </p>
+        <div class="adv-card-example">
+          Příklady: <code>H2SO4</code>, <code>C2H6O</code> (izomery), Aspirin + <em>Vybrat 3D konformer</em>. Soli a kovové komplexy často 3D konformery nemají – aplikace pak nabídne převod 2D → 3D.
+        </div>
+      </div>
+
+      <div class="adv-source-card adv-source-card--wide">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">upload_file</span>
+            ChemDraw a soubory .mol
+          </div>
+          <span class="adv-prefix-badge">Upload / přetažení / Ctrl+V</span>
+        </div>
+        <p class="adv-card-desc">
+          Strukturu z ChemDraw načteš třemi způsoby: uložením jako <code>.cdx</code> nebo <code>.cdxml</code> a nahráním souboru; přes <em>Edit → Copy As → MOL Text</em> nebo <em>CDXML Text</em> a vložením <kbd>Ctrl</kbd>+<kbd>V</kbd> kamkoli do aplikace (mimo jiná textová pole); nebo přes <em>Copy As → SMILES</em> a vložením do vyhledávacího pole. Stejně funguje <code>.mol</code> z ChemDraw, Marvin, ChemSketch či jiných editorů. Kreslené (2D) struktury nemají prostorové souřadnice ani vodíky, proto se automaticky převedou do 3D – online přes NIH CACTUS, offline lokálně (OpenBabel). Rozbalují se i zkratky skupin (Ph, OMe…) a zachovají se náboje i stereochemie z klínových vazeb.
+        </p>
+        <div class="adv-card-example">
+          Soubory, které už 3D souřadnice obsahují (např. export z Avogadra nebo PubChem 3D SDF), se načtou beze změny.
+        </div>
+      </div>
       <div class="adv-source-card">
         <div class="adv-card-header">
           <div class="adv-card-title">
@@ -920,7 +951,7 @@
           <span class="adv-prefix-badge">smiles: / cactus:</span>
         </div>
         <p class="adv-card-desc">
-          Převod lineárního chemického vzorce do 3D souřadnic pomocí služby NIH CACTUS CIR (s fallbackem na PubChem 3D). Vhodné pro libovolné vlastní či exotické sloučeniny mimo běžné katalogy.
+          Převod lineárního chemického vzorce do 3D souřadnic pomocí služby NIH CACTUS CIR (s fallbackem na PubChem 3D). Vhodné pro libovolné vlastní či exotické sloučeniny mimo běžné katalogy. SMILES se závorkami, kruhy či násobnými vazbami (např. výstup z ChemDraw <em>Copy As → SMILES</em>) se rozpozná i bez prefixu.
         </p>
         <div class="adv-card-example">
           Příklady: <code>smiles: CC(=O)Oc1ccccc1C(=O)O</code> (aspirin), <code>smiles: C1CCCCC1</code> (cyklohexan), <code>smiles: C12C3C4C1C5C2C3C45</code> (kuban)
@@ -989,7 +1020,7 @@
         <img src={drawImg} alt="Záložka Kreslení v pokročilém vyhledávání s nakreslenou kyselinou salicylovou" loading="lazy" class="tutorial-img draw-img">
         <p class="image-caption">Ukázka: kyselina salicylová nakreslená v záložce Kreslení</p>
         <div class="adv-card-example">
-          Online se 3D struktura počítá přes NIH CACTUS, bez internetu automaticky lokálně v prohlížeči (OpenBabel, silové pole MMFF94). Tip: záložku otevři jednou s připojením, aby se offline výpočet uložil do prohlížeče.
+          Online se 3D struktura počítá přes NIH CACTUS, bez internetu automaticky lokálně v prohlížeči (OpenBabel, silové pole MMFF94). Tip: záložku otevři jednou s připojením, aby se offline výpočet uložil do prohlížeče (nainstalovaná aplikace to udělá sama).
         </div>
       </div>
     </div>
@@ -1100,7 +1131,7 @@
     <p class="image-caption">Obr. 6: Čtvercové tlačítko sdílení a vyskakovací okno s URL odkazem</p>
 
     <ul class="legend-list">
-      <li><span class="legend-number">8</span><div><strong>Tlačítko Sdílet:</strong> Klikni na čtvercové tlačítko s ikonou sdílení (vedle tlačítka <em>Slice</em>). Odkaz se zkopíruje do schránky, tlačítko zezelená a přímo nad ním se otevře okno s textovým polem a celým URL odkazem. Odkaz v sobě nese zdroj databáze (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), název či kód molekuly, zvolený typ zobrazení i všechny upravené parametry, takže po jeho otevření se vše automaticky nastaví a vykreslí. Pokud pracuješ s vlastním nahraným souborem (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), odkaz slouží ke sdílení samotného typu zobrazení a nastavených hodnot (<code>source=file</code>), které se po otevření přednastaví pro nahrání vlastního modelu.</div></li>
+      <li><span class="legend-number">8</span><div><strong>Tlačítko Sdílet:</strong> Klikni na čtvercové tlačítko s ikonou sdílení (vedle tlačítka <em>Slice</em>). Odkaz se zkopíruje do schránky, tlačítko zezelená a přímo nad ním se otevře okno s textovým polem a celým URL odkazem. Odkaz v sobě nese zdroj databáze (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), název či kód molekuly, zvolený typ zobrazení i všechny upravené parametry, takže po jeho otevření se vše automaticky nastaví a vykreslí. Vybraný 3D konformer z PubChem se v odkazu zachová také (<code>conformer:…</code>). Pokud pracuješ s vlastním nahraným souborem (<code>.sdf</code>, <code>.mol</code>, <code>.pdb</code>, <code>.cif</code>, ChemDraw), odkaz slouží ke sdílení samotného typu zobrazení a nastavených hodnot (<code>source=file</code>), které se po otevření přednastaví pro nahrání vlastního modelu.</div></li>
     </ul>
   </details>
 
@@ -1141,7 +1172,7 @@
           </div>
         </div>
         <p class="adv-card-desc">
-          Nahrání vlastních souborů z disku (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), 3D náhled a všechny typy zobrazení, úprava parametrů modelu, pohyblivé klouby, kontrola vodotěsnosti (manifold) i export do <code>.3mf</code> / <code>.stl</code> tlačítkem <em>Download Model</em>. Funguje i <em>Kreslení molekuly</em> v pokročilém vyhledávání – 3D model se spočítá lokálně.
+          Nahrání vlastních souborů z disku (<code>.sdf</code>, <code>.mol</code>, <code>.pdb</code>, <code>.cif</code>, ChemDraw <code>.cdx</code>/<code>.cdxml</code>; 2D struktury se do 3D převedou lokálním výpočtem), 3D náhled a všechny typy zobrazení, úprava parametrů modelu, pohyblivé klouby, kontrola vodotěsnosti (manifold) i export do <code>.3mf</code> / <code>.stl</code> tlačítkem <em>Download Model</em>. Funguje i <em>Kreslení molekuly</em> v pokročilém vyhledávání – 3D model se spočítá lokálně (OpenBabel). Podmínkou je, že se výpočetní modul (~8 MB) už uložil do zařízení: v prohlížeči stačí záložku Kreslení alespoň jednou otevřít s připojením, nainstalovaná aplikace (PWA) si ho stáhne sama při spuštění online.
         </p>
         <div class="adv-card-example">
           Veškeré výpočty (3D geometrie, Manifold, balení do ZIPu) běží přímo v tvém prohlížeči – na server se nic neodesílá.

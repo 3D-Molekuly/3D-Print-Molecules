@@ -37,7 +37,8 @@
     type HoveredAtomInfo
   } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
-  import { parsePDB, parseSDF, computeMolecularFormula, structureFormatFromFileName, detectStructureFormat } from '$lib/molecules/molecularDataParser';
+  import { parsePDB, parseSDF, computeMolecularFormula, structureFormatFromFileName, detectStructureFormat, STRUCTURE_FILE_ACCEPT, type StructureFileFormat } from '$lib/molecules/molecularDataParser';
+  import { chemDrawTo3D, isCdxBinary, molfileIsFlat, molfileTo3D, type Converted3D } from '$lib/molecules/structureImport';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
   import type { CreateAtomsParams, JointPresetId, ModelStyleId, MoleculeSource, MovingJointsStats, GluedSpheresMode, GluedSpheresExportMode, GluedSpheresStats } from '$lib/types';
   import { JOINT_PRESETS, checkJointParams, jointLevels, paramsForRod, type JointParams } from '$lib/geometry/jointGeometry';
@@ -58,14 +59,19 @@
     formatPdbQuerySpec,
     type CodLoadedEntry,
     type CcdLoadedLigand,
-    type CactusLoadedMolecule
+    type CactusLoadedMolecule,
+    fetchPubChemConformer,
+    readSdfProperty,
+    type PubChemConformer
   } from '$lib/molecules/inputs';
+  import { formatConformerQuery, parseConformerQuery } from '$lib/molecules/queryDetection';
   import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
   import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte';
   import { isOnline, isOffline } from '$lib/functions/network';
 
   // Types
   let inputStr = '';
+  let searchInputEl: HTMLInputElement | null = null;
   let searchHistory: string[] = [];
   let tableInfo = { firstItem: "", secondItem: "", thirdItem: "" };
   let imageUrl = '';
@@ -74,7 +80,7 @@
   let resizeCanvas: (() => void) | undefined;
   let canvas: HTMLCanvasElement | null = null;
 
-  let acceptFormats = '.sdf, .pdb, .cif';
+  let acceptFormats = STRUCTURE_FILE_ACCEPT;
 
   let atomCoordinates: AtomCoordinate[] = [];
   let prevAtomCoordinates: AtomCoordinate[] = [];
@@ -780,6 +786,8 @@
       preloadedCodEntry?: CodLoadedEntry;
       preloadedCcd?: CcdLoadedLigand;
       preloadedCactus?: CactusLoadedMolecule;
+      preloadedConformer?: PubChemConformer;
+      conformerLabel?: string;
     } = {}
   ) {
     const trimmedQuery = rawQuery.trim();
@@ -801,7 +809,9 @@
       preloadedCodSdf,
       preloadedCodEntry,
       preloadedCcd,
-      preloadedCactus
+      preloadedCactus,
+      preloadedConformer,
+      conformerLabel
     } = options;
 
     isFileUploaded = false;
@@ -884,16 +894,47 @@
         displayInput = `COD: ${codEntry.id}`;
         nameToSaveForHistory = displayInput;
       } else {
+        const conformerId = parseConformerQuery(trimmedQuery);
+        if (conformerId) {
+          // A specific PubChem 3D conformer (chosen in Advanced search, or from a shared link)
+          const conformer =
+            preloadedConformer && preloadedConformer.id === conformerId
+              ? preloadedConformer
+              : await fetchPubChemConformer(conformerId);
+          const cid = readSdfProperty(conformer.sdf, 'PUBCHEM_COMPOUND_CID') || conformer.sdf.split(/\r?\n/)[0].trim();
+          await fetchPubChemDataWithAutocomplete(cid, setTableInfo, setImage);
+          originalContent = conformer.sdf;
+          originalFileExtension = "sdf";
+          newAtomCoordinates = await parseSDF(conformer.sdf);
+          const energy = conformer.energy !== undefined ? ` · E(MMFF94) ${conformer.energy.toFixed(1)} kcal/mol` : '';
+          const label = conformerLabel ? conformerLabel : `${$_('adv_conformer_label')} ${conformerId}`;
+          setTableInfo(tableInfo.firstItem, cid, `${tableInfo.thirdItem} · ${label}${energy}`);
+          resolvedShareQuery = formatConformerQuery(conformerId);
+          displayInput = resolvedShareQuery;
+          nameToSaveForHistory = resolvedShareQuery;
+        } else {
         nameToSaveForHistory = await fetchPubChemDataWithAutocomplete(trimmedQuery, setTableInfo, setImage);
         const cid = tableInfo.secondItem;
         if (!cid) throw new Error("PubChem could not find a molecule for the given input.");
-        
+
         const primaryUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF?record_type=3d&response_type=display`;
         const fallbackUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/CID/${cid}/record/SDF`;
-        const response = await fetch(primaryUrl).catch(() => fetch(fallbackUrl));
+        // Not every compound has a 3D conformer (salts, many inorganics): fall back to the 2D record
+        let response = await fetch(primaryUrl).catch(() => null);
+        if (!response || !response.ok) response = await fetch(fallbackUrl);
         if (!response.ok) throw new Error("Molecule data not available.");
-        
-        const content = await response.text();
+
+        let content = await response.text();
+        if (molfileIsFlat(content)) {
+          try {
+            const converted = await molfileTo3D(content);
+            content = converted.sdf;
+            const generator = converted.generator === 'cactus' ? 'NIH CACTUS 3D' : 'OpenBabel 3D';
+            setTableInfo(tableInfo.firstItem, tableInfo.secondItem, `${tableInfo.thirdItem} · 2D → ${generator}`);
+          } catch (err) {
+            console.warn('PubChem has no 3D record and 3D generation failed; using 2D coordinates:', err);
+          }
+        }
         originalContent = content;
         originalFileExtension = "sdf";
         newAtomCoordinates = await parseSDF(content);
@@ -907,6 +948,7 @@
           resolvedShareQuery = cid || trimmedQuery;
         }
         displayInput = trimmedQuery;
+        }
       }
 
       if (newAtomCoordinates.length === 0) {
@@ -988,14 +1030,16 @@
       content,
       preloadedCodEntry,
       preloadedCcd,
-      preloadedCactus
+      preloadedCactus,
+      preloadedConformer,
+      conformerLabel
     } = event.detail;
 
     isReloadMode = false;
 
     if (source === 'pubchem') {
       inputStr = query;
-      await loadMoleculeFromSource('pubchem', query, { saveToHistory: true });
+      await loadMoleculeFromSource('pubchem', query, { saveToHistory: true, preloadedConformer, conformerLabel });
     } else if (source === 'pdb') {
       inputStr = query;
       await loadMoleculeFromSource('pdb', query, { saveToHistory: true });
@@ -1481,79 +1525,149 @@
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
   }
   
+  /**
+   * Turns uploaded or pasted structure data into atom coordinates. ChemDraw documents and 2D
+   * molfiles (implicit hydrogens, z = 0) are converted to full 3D structures first.
+   */
+  async function structureContentToAtoms(
+    raw: string | ArrayBuffer,
+    displayName: string,
+    formatHint: StructureFileFormat | null
+  ): Promise<AtomCoordinate[]> {
+    const bytes = typeof raw === 'string' ? null : new Uint8Array(raw);
+    const text = typeof raw === 'string' ? raw : new TextDecoder().decode(bytes!);
+    const fileFormat = formatHint ?? (bytes && isCdxBinary(bytes) ? 'cdx' : detectStructureFormat(text));
+    if (!fileFormat) {
+      throw new Error(`Unsupported file format: ${displayName}`);
+    }
+    setTableInfo(displayName, `Uploaded .${fileFormat} file`, "");
+
+    const applyConverted = async (converted: Converted3D, sourceLabel: string) => {
+      originalContent = converted.sdf;
+      originalFileExtension = 'sdf';
+      const atoms = await parseSDF(converted.sdf);
+      const formula = computeMolecularFormula(atoms);
+      const generator = converted.generator === 'cactus' ? 'NIH CACTUS 3D' : 'OpenBabel 3D (offline)';
+      setTableInfo(displayName, `${sourceLabel} → ${generator}`, formula);
+      if (converted.imageUrl) setImage(converted.imageUrl);
+      return atoms;
+    };
+
+    if (fileFormat === 'cdx' || fileFormat === 'cdxml') {
+      const data = fileFormat === 'cdx' ? (bytes ?? new TextEncoder().encode(text)) : text;
+      return applyConverted(await chemDrawTo3D(data, fileFormat), `ChemDraw (.${fileFormat})`);
+    }
+    if (fileFormat === 'pdb') {
+      originalContent = text;
+      originalFileExtension = 'pdb';
+      return parsePDB(text);
+    }
+    if (fileFormat === 'cif') {
+      const sdfContent = await cifToSdf(text);
+      originalContent = sdfContent;
+      originalFileExtension = 'sdf';
+      return parseSDF(sdfContent);
+    }
+
+    if (molfileIsFlat(text)) {
+      try {
+        return await applyConverted(await molfileTo3D(text), '2D molfile');
+      } catch (err) {
+        // Keep the flat drawing rather than failing: it is still a valid (planar) structure
+        console.warn('2D -> 3D conversion failed, using the flat structure:', err);
+      }
+    }
+    originalContent = text;
+    originalFileExtension = 'sdf';
+    return parseSDF(text);
+  }
+
+  async function loadStructureData(raw: string | ArrayBuffer, displayName: string, formatHint: StructureFileFormat | null, baseName: string) {
+    isReloadMode = false;
+    isFetchingMolecule = true;
+    hoveredAtom = null;
+    uploadedFileName = baseName || displayName;
+    isFileUploaded = true;
+    moleculeSource = 'file';
+    moleculeQuery = '';
+    sharedSettingsNotice = false;
+    setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
+    inputStr = `File: ${displayName}`;
+
+    try {
+      const newAtomCoordinates = await structureContentToAtoms(raw, displayName, formatHint);
+      if (newAtomCoordinates.length === 0) {
+        throw new Error(`No atoms found in the uploaded file: ${displayName}`);
+      }
+
+      atomCoordinates = newAtomCoordinates;
+      prevAtomCoordinates = [...atomCoordinates];
+      lastSuccessfulFileContent = originalContent;
+      lastSuccessfulInput = inputStr;
+      sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
+
+      await tick();
+      redrawModel(atomCoordinates, { resetCamera: true });
+      isReloadMode = true;
+    } catch (error) {
+      console.error("Error parsing uploaded file:", error);
+      showMoleculePopup = true;
+      isReloadMode = false;
+    } finally {
+      isFetchingMolecule = false;
+    }
+  }
+
   function handleFiles(files: FileList) {
     if (files && files.length > 0) {
       const file = files[0];
       // Format from the extension (ignoring a wrapper ".txt", e.g. "molecule.sdf.txt" from iOS),
       // otherwise detected from the content once the file is read.
       const { baseName, format: formatFromName } = structureFormatFromFileName(file.name);
-
-      isReloadMode = false;
       isFetchingMolecule = true;
-      hoveredAtom = null;
-      uploadedFileName = baseName || file.name;
-      isFileUploaded = true;
-      moleculeSource = 'file';
-      moleculeQuery = '';
-      sharedSettingsNotice = false;
-      setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
-      inputStr = `File: ${file.name}`;
-
-      const reader = new FileReader();
-      reader.onerror = () => {
-        isFetchingMolecule = false;
-        showMoleculePopup = true;
-      };
-      reader.onload = async (e) => {
-        const content = e.target?.result as string;
-
-        try {
-          const fileFormat = formatFromName ?? detectStructureFormat(content);
-          if (!fileFormat) {
-            throw new Error(`Unsupported file format: ${file.name}`);
-          }
-          setTableInfo(file.name, `Uploaded .${fileFormat} file`, "");
-
-          let newAtomCoordinates: AtomCoordinate[] = [];
-
-          if (fileFormat === 'pdb') {
-            originalContent = content;
-            originalFileExtension = 'pdb';
-            newAtomCoordinates = await parsePDB(content);
-          } else if (fileFormat === 'sdf') {
-            originalContent = content;
-            originalFileExtension = 'sdf';
-            newAtomCoordinates = await parseSDF(content);
-          } else if (fileFormat === 'cif') {
-            const sdfContent = await cifToSdf(content);
-            originalContent = sdfContent;
-            originalFileExtension = 'sdf';
-            newAtomCoordinates = await parseSDF(sdfContent);
-          }
-
-          if (newAtomCoordinates.length === 0) {
-            throw new Error(`No atoms found in the uploaded file: ${file.name}`);
-          }
-
-          atomCoordinates = newAtomCoordinates;
-          prevAtomCoordinates = [...atomCoordinates];
-          lastSuccessfulFileContent = originalContent;
-          lastSuccessfulInput = inputStr;
-          sessionStorage.setItem('lastSuccessfulInput', lastSuccessfulInput);
-
-          await tick();
-          redrawModel(atomCoordinates, { resetCamera: true });
-          isReloadMode = true;
-        } catch (error) {
-          console.error("Error parsing uploaded file:", error);
-          showMoleculePopup = true;
-          isReloadMode = false;
-        } finally {
+      // Read raw bytes: binary ChemDraw (.cdx) files must not go through a text decoder
+      file.arrayBuffer().then(
+        (buffer) => loadStructureData(buffer, file.name, formatFromName, baseName),
+        () => {
           isFetchingMolecule = false;
+          showMoleculePopup = true;
         }
-      };
-      reader.readAsText(file);
+      );
     }
+  }
+
+  /**
+   * Pasting a structure: MDL molfile / SDF text, CDXML (ChemDraw "Copy As > CDXML Text" or
+   * "MOL Text") or a copied file. Returns true when the paste was handled.
+   */
+  function handleStructurePaste(event: ClipboardEvent): boolean {
+    const data = event.clipboardData;
+    if (!data) return false;
+    if (data.files && data.files.length > 0) {
+      const { format } = structureFormatFromFileName(data.files[0].name);
+      if (format) {
+        event.preventDefault();
+        handleFiles(data.files);
+        return true;
+      }
+    }
+    const text = data.getData('text/plain') || data.getData('text');
+    if (!text || !text.includes('\n') && !/^\s*<CDXML/i.test(text)) return false;
+    const format = detectStructureFormat(text);
+    if (!format) return false;
+    event.preventDefault();
+    const label = format === 'cdxml' ? 'ChemDraw (pasted)' : 'Pasted structure';
+    loadStructureData(text, label, format, 'pasted_structure');
+    return true;
+  }
+
+  function handleWindowPaste(event: ClipboardEvent) {
+    const target = event.target as HTMLElement | null;
+    const isEditable = target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    // Inside the main search box multi-line structures are handled too; other fields keep their paste
+    if (isEditable && target !== searchInputEl) return;
+    if (document.querySelector('dialog[open]')) return;
+    handleStructurePaste(event);
   }
 
   function handleFileUpload(event: Event) {
@@ -1818,7 +1932,7 @@
   const faqDetailsAttrs: Record<string, string> = { name: 'home-faq' };
 </script>
 
-<svelte:window on:click={handleWindowClick} on:keydown={handleWindowKeydown} />
+<svelte:window on:click={handleWindowClick} on:keydown={handleWindowKeydown} on:paste={handleWindowPaste} />
 
 <div
   class="full-page-drop-zone"
@@ -1832,11 +1946,12 @@
     <h1 class="visually-hidden">{$_('seo_home_h1')}</h1>
     <div class="row main-layout-row">
       <div class="col-md-8 left-panel">
-        <search class="d-flex mb-3 align-items-center">
+        <search class="d-flex mb-3 align-items-center main-search-bar">
           <div class="input-group">
             <input
               type="text"
               bind:value={inputStr}
+              bind:this={searchInputEl}
               on:keydown={handleKeyPress}
               on:input={handleInputChange}
               class="form-control form-control-lg me-2 main-search-line dropdown-toggle"
@@ -1897,7 +2012,7 @@
             </ul>
           </div>
 
-          <div>
+          <div class="search-action-item">
             <label for="fileInput" class="btn btn-primary me-2 button-with-icon d-flex align-items-center main-search-line">
               <span class="material-symbols-outlined">upload_file</span>
               {$_('upload_file_button')}
@@ -1913,7 +2028,7 @@
 
           <button
             on:click={handleSubmit}
-            class="btn btn-primary button-with-icon d-flex align-items-center main-search-line"
+            class="btn btn-primary button-with-icon d-flex align-items-center main-search-line search-action-item"
             class:btn-warning={isReloadMode}
             type="button"
           >
@@ -1927,7 +2042,10 @@
         {#if !$isOnline}
           <div class="alert alert-warning d-flex align-items-center gap-2 py-2 px-3 mb-3 small" role="status">
             <span class="material-symbols-outlined flex-shrink-0" style="font-size: 20px; margin-right: 0;" aria-hidden="true">cloud_off</span>
-            <span class="flex-grow-1">{$_('offline_search_notice')}</span>
+            <span class="flex-grow-1">
+              {$_('offline_search_notice')}
+              <a href={`${buildLocalizedPath('/tutorials', $currentLocale)}#offline-pwa`} class="alert-link fw-normal text-nowrap">{$_('offline_more_info')}</a>
+            </span>
           </div>
         {/if}
 
@@ -1944,7 +2062,7 @@
           </div>
         {/if}
 
-        <table class="table table-borderless">
+        <table class="table table-borderless molecule-info-table">
           <thead>
             <tr>
               <th>{$_('name_table_header')}</th>
@@ -2000,7 +2118,7 @@
                 {/if}
               </td>
               <td>{tableInfo.thirdItem}</td>
-              <td rowspan="2" style="width: 200px;">
+              <td rowspan="2" class="molecule-image-cell">
                 {#if imageUrl}
                   <img
                     src={imageUrl}
@@ -3018,7 +3136,7 @@
         </div>
         <br>
 
-        <div class="d-flex gap-2 align-items-stretch">
+        <div class="d-flex gap-2 align-items-stretch model-action-row">
           {#if isGluedSpheresStyle}
             <button on:click={downloadModelZip} class="btn btn-success btn-lg flex-grow-1 shadow-sm d-flex align-items-center justify-content-center gap-2">
               <span class="material-symbols-outlined">folder_zip</span>
@@ -3488,6 +3606,88 @@
 }
 img {
   object-fit: cover;
+}
+.molecule-image-cell {
+  width: 200px;
+}
+@media (max-width: 575.98px) {
+  /* Telefon: vyhledávání na celou šířku, tlačítka Upload/Fetch pod ním vedle sebe */
+  .main-search-bar {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+  .main-search-bar > .input-group {
+    flex: 1 1 100%;
+  }
+  .main-search-bar > .search-action-item {
+    flex: 1 1 40%;
+    min-width: 0;
+  }
+  .main-search-bar > div.search-action-item {
+    display: flex;
+  }
+  .main-search-bar > div.search-action-item > .main-search-line {
+    flex: 1 1 auto;
+  }
+  .main-search-bar .search-action-item.main-search-line,
+  .main-search-bar .search-action-item > .main-search-line {
+    justify-content: center;
+    text-align: center;
+    line-height: 1.15;
+    height: 52px;
+  }
+  .main-search-bar .main-search-line.form-control {
+    height: 52px;
+    margin-right: 0 !important;
+  }
+  /* Tabulka s informacemi: menší obrázek, dlouhé názvy se zalomí */
+  .molecule-info-table {
+    font-size: 0.875rem;
+  }
+  .molecule-info-table th,
+  .molecule-info-table td {
+    padding: 0.35rem 0.25rem;
+  }
+  .molecule-info-table th {
+    white-space: nowrap;
+  }
+  .molecule-info-table td {
+    overflow-wrap: anywhere;
+  }
+  .molecule-info-table td:first-child {
+    width: auto !important;
+  }
+  .molecule-info-table td:nth-child(2) {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+  .molecule-image-cell {
+    width: 110px;
+  }
+  .molecule-image-cell .image-placeholder {
+    width: 100px;
+    height: 100px;
+    font-size: 12px;
+  }
+  /* Akční tlačítka: Download přes celou šířku, Slice + Share pod ním */
+  .model-action-row {
+    flex-wrap: wrap;
+  }
+  .model-action-row > .btn-success {
+    flex: 1 1 100% !important;
+  }
+  .model-action-row > .slicer-dropdown-wrapper {
+    flex: 1 1 auto !important;
+  }
+  .model-action-row .slicer-split-group,
+  .model-action-row .slicer-main-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+  .model-action-row .share-action-btn {
+    height: auto !important;
+    width: 52px;
+  }
 }
 .image-placeholder {
   display: flex;
@@ -4565,10 +4765,6 @@ label[for="model-generator"] {
 
 .cursor-pointer {
   cursor: pointer;
-}
-
-.seo-overview-section {
-  max-width: 1140px;
 }
 
 .seo-overview-disclosure {

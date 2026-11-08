@@ -747,7 +747,8 @@ export async function extractElementData(symbol: string): Promise<{ AtomicRadius
   return FALLBACK_ELEMENTS[normalized] ?? null;
 }
 
-export type StructureFileFormat = 'pdb' | 'sdf' | 'cif';
+/** `cdx` / `cdxml` are ChemDraw documents (converted via OpenBabel in the browser). */
+export type StructureFileFormat = 'pdb' | 'sdf' | 'cif' | 'cdx' | 'cdxml';
 
 const EXTENSION_FORMATS: Record<string, StructureFileFormat> = {
   pdb: 'pdb',
@@ -757,8 +758,13 @@ const EXTENSION_FORMATS: Record<string, StructureFileFormat> = {
   mol: 'sdf',
   mdl: 'sdf',
   cif: 'cif',
-  mmcif: 'cif'
+  mmcif: 'cif',
+  cdx: 'cdx',
+  cdxml: 'cdxml'
 };
+
+/** File-picker `accept` list for all supported structure formats. */
+export const STRUCTURE_FILE_ACCEPT = '.sdf, .sd, .mol, .mdl, .pdb, .ent, .cif, .mmcif, .cdx, .cdxml';
 
 /**
  * Splits a file name into its base name and structure format. Wrapper extensions such as
@@ -776,7 +782,10 @@ export function structureFormatFromFileName(fileName: string): { baseName: strin
 
 /** Guesses the structure format from the file content; null when it is not recognised. */
 export function detectStructureFormat(content: string): StructureFileFormat | null {
-  const lines = content.replace(/^﻿/, '').split(/\r?\n/);
+  const text = content.replace(/^\uFEFF/, '');
+  if (text.startsWith('VjCD0100')) return 'cdx';
+  if (/^\s*(?:<\?xml[^>]*>\s*)?(?:<!DOCTYPE\s+CDXML|<CDXML[\s>])/i.test(text.slice(0, 600))) return 'cdxml';
+  const lines = text.split(/\r?\n/);
   // MDL molfile / SDF: counts line (4th line) ends with V2000/V3000, or "M  END" is present
   if (lines.slice(0, 10).some((l) => /\bV[23]000\s*$/.test(l)) || lines.some((l) => l.startsWith('M  END'))) {
     return 'sdf';

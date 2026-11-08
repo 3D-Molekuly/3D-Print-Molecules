@@ -36,7 +36,7 @@
     "search_field":"⌕ Search on PubChem",
     "delete_history": "Delete History",
     "upload_file_button":"Upload File",
-    "invalid_file_type":"Invalid File Type. Use .pdb or .sdf",
+    "invalid_file_type":"Invalid file type. Use .sdf, .mol, .pdb, .cif or ChemDraw (.cdx, .cdxml)",
     "drag_and_drop_message":"Drag and Drop",
     "fetch_data_button":"Fetch Data",
     "reload_data_button":"Reload",
@@ -206,7 +206,7 @@
     "canvas_legend_show_all": "Show all",
     "canvas_bonds_group": "Bonds",
     "canvas_empty_title": "3D Molecule Preview",
-    "canvas_empty_hint": "Search for a compound, drop a file (.sdf, .pdb, .cif), or try an example:",
+    "canvas_empty_hint": "Search for a compound (name, formula like H2O, or SMILES), drop or paste a file (.sdf, .mol, .pdb, .cif, ChemDraw .cdx/.cdxml), or try an example:",
     "canvas_sample_caffeine": "Caffeine",
     "canvas_sample_aspirin": "Aspirin",
     "canvas_sample_water": "Water (H₂O)",
@@ -251,9 +251,9 @@
     "adv_search_button": "Search",
     "adv_no_results": "No matching entries found.",
 
-    "adv_pubchem_label": "Compound name, PubChem CID, or CAS number",
-    "adv_pubchem_hint": "Searches the public PubChem database (organic and bioorganic molecules).",
-    "adv_pubchem_placeholder": "e.g., Aspirin, 2244, 50-78-2",
+    "adv_pubchem_label": "Compound name, formula, PubChem CID, or CAS number",
+    "adv_pubchem_hint": "Searches the public PubChem database (organic and bioorganic molecules). Formulas work too, e.g. H2O, CO2, h2so4 – all matching isomers are listed.",
+    "adv_pubchem_placeholder": "e.g., Aspirin, H2SO4, 2244, 50-78-2",
 
     "adv_pdb_mode_legend": "RCSB PDB entry type",
     "adv_pdb_mode_ccd": "Ligands & Cofactors (CCD)",
@@ -281,5 +281,15 @@
     "adv_cod_hint": "Searches Crystallography Open Database by fulltext, chemical formula (e.g., CaCO3, SiO2, NaCl), or loads a numeric COD ID directly.",
     "adv_cod_placeholder": "e.g., calcite, quartz, NaCl, CaCO3, 1506182",
     "adv_cod_fetch_id_button": "Fetch & Convert",
-    "offline_search_notice": "You are offline. Searching online databases requires an internet connection. You can upload your own file (SDF, PDB, CIF) from your computer."
+    "offline_search_notice": "You are offline. Searching online databases requires an internet connection. You can upload your own file (SDF, PDB, CIF) or draw a molecule (Advanced Search → Draw).",
+    "offline_more_info": "More in the tutorial",
+    "adv_conformer_toggle": "Choose a 3D conformer",
+    "adv_conformer_hint": "Instead of the default structure, lists all 3D conformers PubChem has for the compound (in diversity order, with MMFF94 energy).",
+    "adv_conformer_label": "Conformer",
+    "adv_conformer_list_title": "Available conformers",
+    "adv_conformer_default": "default",
+    "adv_conformer_energy_title": "MMFF94 energy from PubChem; difference to the lowest in brackets",
+    "adv_conformer_none": "PubChem has no 3D conformers for this compound (typically salts, metal complexes, or very flexible molecules).",
+    "adv_conformer_load_anyway": "Load anyway (2D → 3D)",
+    "adv_formula_results_hint": "Compounds with this formula (by relevance) – pick the one you want:"
 }

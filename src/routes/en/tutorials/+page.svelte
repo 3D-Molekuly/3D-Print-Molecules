@@ -842,8 +842,8 @@
     <img src={step1Img} alt="UI screenshot showing search" class="tutorial-img">
     <p class="image-caption">Fig. 1: PubChem search interface</p>
     <ul class="legend-list">
-      <li><span class="legend-number">1</span><div><strong>Search:</strong> Enter the English name of the substance into the "Search on PubChem" field and press Enter. Data will automatically download from the public database.</div></li>
-      <li><span class="legend-number">2</span><div><strong>Custom Data:</strong> If you have your own <code>.sdf</code> file, use the <em>Upload File</em> button followed by <em>Fetch Data</em>.</div></li>
+      <li><span class="legend-number">1</span><div><strong>Search:</strong> Enter the English name of the substance into the "Search on PubChem" field and press Enter. Data will automatically download from the public database. Besides names, you can also enter a CAS number, a PubChem CID, a <strong>molecular formula</strong> (<code>H2O</code>, <code>CO2</code>, <code>H2SO4</code> – case does not matter, <code>h2so4</code> or <code>H₂O</code> work too) or <strong>SMILES</strong> (e.g. <code>CC(=O)OC1=CC=CC=C1C(=O)O</code>). A formula loads the most relevant compound; when several compounds share it (isomers), pick the one you want in Advanced Search.</div></li>
+      <li><span class="legend-number">2</span><div><strong>Custom Data:</strong> Upload a <code>.sdf</code>, <code>.mol</code>, <code>.pdb</code>, <code>.cif</code> or ChemDraw (<code>.cdx</code>, <code>.cdxml</code>) file with the <em>Upload File</em> button, drag it onto the window, or paste it with <kbd>Ctrl</kbd>+<kbd>V</kbd>. The model loads right away. 2D structures (typically exported from ChemDraw or Marvin, without hydrogens) are converted to 3D automatically and hydrogens are added.</div></li>
     </ul>
   </details>
 
@@ -904,13 +904,44 @@
         <span class="legend-number">B</span>
         <div>
           <strong>Direct Prefixes in Search Field:</strong>
-          You don't even have to open the popup – just type a prefix followed by a colon directly into the main search box. The application automatically detects the query type and routes it to the corresponding service.
+          You don't even have to open the popup – just type a prefix followed by a colon directly into the main search box. The application automatically detects the query type and routes it to the corresponding service. Molecular formulas and SMILES are recognized even without a prefix.
         </div>
       </li>
     </ul>
 
     <!-- Input source cards -->
     <div class="adv-sources-grid">
+      <div class="adv-source-card adv-source-card--wide">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">database</span>
+            PubChem: Formulas, Isomers and 3D Conformers
+          </div>
+          <span class="adv-prefix-badge">formula: / conformer:</span>
+        </div>
+        <p class="adv-card-desc">
+          Enter a molecular formula in the <em>PubChem</em> tab to list all compounds with that formula ordered by relevance – for <code>C2H6O</code>, for example, both ethanol and dimethyl ether – and pick the right one. With <em>Choose a 3D conformer</em> ticked, the app offers up to 10 spatial conformations PubChem has computed for the compound instead of the default structure. Each shows its MMFF94 energy and, in brackets, the difference to the most stable one. Useful for demonstrating molecular flexibility or printing several conformations side by side. The conformer is kept in the search history and in shared links.
+        </p>
+        <div class="adv-card-example">
+          Examples: <code>H2SO4</code>, <code>C2H6O</code> (isomers), Aspirin + <em>Choose a 3D conformer</em>. Salts and metal complexes often have no 3D conformers – the app then offers a 2D → 3D conversion.
+        </div>
+      </div>
+
+      <div class="adv-source-card adv-source-card--wide">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">upload_file</span>
+            ChemDraw and .mol Files
+          </div>
+          <span class="adv-prefix-badge">Upload / drag &amp; drop / Ctrl+V</span>
+        </div>
+        <p class="adv-card-desc">
+          There are three ways to bring a structure over from ChemDraw: save it as <code>.cdx</code> or <code>.cdxml</code> and upload the file; use <em>Edit → Copy As → MOL Text</em> or <em>CDXML Text</em> and paste with <kbd>Ctrl</kbd>+<kbd>V</kbd> anywhere in the app (outside other text fields); or use <em>Copy As → SMILES</em> and paste it into the search box. A <code>.mol</code> file from ChemDraw, Marvin, ChemSketch or another editor works the same way. Drawn (2D) structures have no spatial coordinates or hydrogens, so they are converted to 3D automatically – online via NIH CACTUS, offline locally (OpenBabel). Group abbreviations (Ph, OMe…) are expanded, and charges and stereochemistry from wedge bonds are preserved.
+        </p>
+        <div class="adv-card-example">
+          Files that already contain 3D coordinates (e.g. exported from Avogadro or a PubChem 3D SDF) are loaded unchanged.
+        </div>
+      </div>
       <div class="adv-source-card">
         <div class="adv-card-header">
           <div class="adv-card-title">
@@ -920,7 +951,7 @@
           <span class="adv-prefix-badge">smiles: / cactus:</span>
         </div>
         <p class="adv-card-desc">
-          Converts linear chemical notation directly into 3D coordinates using NIH CACTUS CIR (with PubChem 3D fallback). Ideal for custom, synthetic, or exotic compounds outside standard catalogs.
+          Converts linear chemical notation directly into 3D coordinates using NIH CACTUS CIR (with PubChem 3D fallback). Ideal for custom, synthetic, or exotic compounds outside standard catalogs. SMILES with branches, rings or multiple bonds (e.g. ChemDraw <em>Copy As → SMILES</em> output) are recognized even without the prefix.
         </p>
         <div class="adv-card-example">
           Examples: <code>smiles: CC(=O)Oc1ccccc1C(=O)O</code> (aspirin), <code>smiles: C1CCCCC1</code> (cyclohexane), <code>smiles: C12C3C4C1C5C2C3C45</code> (cubane)
@@ -989,7 +1020,7 @@
         <img src={drawImg} alt="Draw tab in Advanced Search with salicylic acid sketched on the canvas" loading="lazy" class="tutorial-img draw-img">
         <p class="image-caption">Example: salicylic acid sketched in the Draw tab</p>
         <div class="adv-card-example">
-          Online, the 3D structure comes from NIH CACTUS; without internet it is computed locally in your browser (OpenBabel, MMFF94 force field). Tip: open the tab once while online so the offline engine gets stored in your browser.
+          Online, the 3D structure comes from NIH CACTUS; without internet it is computed locally in your browser (OpenBabel, MMFF94 force field). Tip: open the tab once while online so the offline engine gets stored in your browser (the installed app does this automatically).
         </div>
       </div>
     </div>
@@ -1100,7 +1131,7 @@
     <p class="image-caption">Fig. 6: Square Share icon button and floating popup with the URL link</p>
 
     <ul class="legend-list">
-      <li><span class="legend-number">8</span><div><strong>Share Button:</strong> Click the square share icon button (next to the <em>Slice</em> button). The URL is copied to your clipboard, the button turns green, and a popup appears directly above it displaying the full link. The URL encodes the database source (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), the molecule name or code, the selected display type, and all configured parameters, so opening the link automatically applies all settings and renders the model. When working with an uploaded local file (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), the link shares purely the display type and configured values (<code>source=file</code>), pre-configuring everything for anyone uploading their own file.</div></li>
+      <li><span class="legend-number">8</span><div><strong>Share Button:</strong> Click the square share icon button (next to the <em>Slice</em> button). The URL is copied to your clipboard, the button turns green, and a popup appears directly above it displaying the full link. The URL encodes the database source (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), the molecule name or code, the selected display type, and all configured parameters, so opening the link automatically applies all settings and renders the model. A 3D conformer chosen from PubChem is kept in the link as well (<code>conformer:…</code>). When working with an uploaded local file (<code>.sdf</code>, <code>.mol</code>, <code>.pdb</code>, <code>.cif</code>, ChemDraw), the link shares purely the display type and configured values (<code>source=file</code>), pre-configuring everything for anyone uploading their own file.</div></li>
     </ul>
   </details>
 
@@ -1141,7 +1172,7 @@
           </div>
         </div>
         <p class="adv-card-desc">
-          Uploading your own files from disk (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), the 3D preview and all representation types, editing model parameters, moving joints, the watertightness (manifold) check, and exporting to <code>.3mf</code> / <code>.stl</code> with the <em>Download Model</em> button. <em>Draw a Molecule</em> in Advanced Search works too – the 3D model is computed locally.
+          Uploading your own files from disk (<code>.sdf</code>, <code>.mol</code>, <code>.pdb</code>, <code>.cif</code>, ChemDraw <code>.cdx</code>/<code>.cdxml</code>; 2D structures are converted to 3D by a local computation), the 3D preview and all representation types, editing model parameters, moving joints, the watertightness (manifold) check, and exporting to <code>.3mf</code> / <code>.stl</code> with the <em>Download Model</em> button. <em>Draw a Molecule</em> in Advanced Search works too – the 3D model is computed locally (OpenBabel). This requires the computation module (~8 MB) to be stored on your device already: in the browser, open the Draw tab at least once while online; the installed app (PWA) downloads it automatically when launched online.
         </p>
         <div class="adv-card-example">
           All computations (3D geometry, Manifold, ZIP packaging) run directly in your browser – nothing is sent to a server.

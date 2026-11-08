@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
 
     // --- MAIN STEP IMAGES ---
     import step1Img from '$lib/images/step1.png';
@@ -1173,6 +1174,7 @@
       then confirm by selecting <strong>‘YES.’</strong>
     </p>
     <img src="/assets/multipartobject.svg" alt="Slicer import dialog" loading="lazy" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
+    <PrusaSlicerPluginNote />
   </details>
 
   <!-- PRINTABLES AND MAKERWORLD SECTION -->

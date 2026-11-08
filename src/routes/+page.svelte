@@ -60,6 +60,7 @@
     type CcdLoadedLigand,
     type CactusLoadedMolecule
   } from '$lib/molecules/inputs';
+  import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
   import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte';
   import { isOnline, isOffline } from '$lib/functions/network';
 
@@ -3084,6 +3085,7 @@
                       <span>{$_(slicer.labelKey) || slicer.fallbackLabel}</span>
                     </button>
                   {/each}
+                  <PrusaSlicerPluginNote variant="compact" />
                 </div>
               </div>
             {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
 
     // --- HLAVNÍ OBRÁZKY KROKŮ ---
     import step1Img from '$lib/images/step1.png';
@@ -1173,6 +1174,7 @@
       a následně potvrď volbou <strong>„ANO“ (YES)</strong>.
     </p>
     <img src="/assets/multipartobject.svg" alt="Dialog importu do sliceru" loading="lazy" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
+    <PrusaSlicerPluginNote />
   </details>
 
   <!-- SEKCE PRINTABLES A MAKERWORLD -->

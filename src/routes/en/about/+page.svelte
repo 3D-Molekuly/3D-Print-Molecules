@@ -1,6 +1,7 @@
 <script lang="ts">
     import vscht from '$lib/images/logoVSCHT.svg';
     import lf1 from '$lib/images/logo1LF.svg';
+    import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
 </script>
 
 <style>
@@ -122,6 +123,8 @@
     molecular data to just <strong>a few minutes</strong> — much more efficiently than through
     <em>manual processing</em>.
   </p>
+
+  <PrusaSlicerPluginNote />
 
   <h2>Technical Foundations</h2>
   <ul class="tech-list">

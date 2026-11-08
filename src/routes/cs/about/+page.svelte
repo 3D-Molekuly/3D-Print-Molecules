@@ -1,6 +1,7 @@
 <script lang="ts">
     import vscht from '$lib/images/logoVSCHT.svg';
     import lf1 from '$lib/images/logo1LF.svg';
+    import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
 </script>
 
 <style>
@@ -123,6 +124,8 @@
     molekulárních dat na <strong>jednotky minut</strong> – výrazně efektivněji než
     při <em>manuálním zpracování</em>.
   </p>
+
+  <PrusaSlicerPluginNote />
 
   <h2>Technické základy</h2>
   <ul class="tech-list">

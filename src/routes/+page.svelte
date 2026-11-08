@@ -4081,6 +4081,10 @@ label[for="model-generator"] {
 .main-search-line.form-control {
   padding-right: 3.5rem; /* Uvolní místo pro tlačítko */
 }
+/* Bootstrap (.input-group > .dropdown-toggle:nth-last-child(n+3)) jinak při vykreslené historii (dropdown-menu) odstraní pravé zaoblení */
+.input-group > .main-search-line.form-control {
+  border-radius: var(--bs-border-radius-lg) !important;
+}
 
 /* Styly pro Printables-style dělené tlačítko "Slice" a rozbalovací nabídku slicerů */
 .slicer-dropdown-wrapper {

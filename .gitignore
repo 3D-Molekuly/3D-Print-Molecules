@@ -26,3 +26,4 @@ vite.config.ts.timestamp-*
 # Publishing & Marketing Hub (local AI agent publishing files, RAW photos, models)
 /publishing
 
+.claude

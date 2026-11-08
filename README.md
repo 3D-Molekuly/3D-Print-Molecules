@@ -65,7 +65,7 @@ It is built for **teachers, students, researchers, science communicators and mak
 - **ZIP of separate STLs** (one per element) as a universal fallback, or a single merged STL
 - **One-click "Open in slicer"** for PrusaSlicer, Bambu Studio, OrcaSlicer and Ultimaker Cura
 - Live **print dimensions** with a reference 250 × 210 mm build plate, adjustable scale (mm per Å), quality and hydrogen toggle
-- **PrusaSlicer 3.0 plugin**: a simplified offline version that builds the model right in the slicer, with filaments matched to CPK colors — see [3D-Molekuly/3d-molekuly-prusaslicer-plugin](https://github.com/3D-Molekuly/3d-molekuly-prusaslicer-plugin)
+- **PrusaSlicer 3.0 plugin**: a simplified offline version that builds the model right in the slicer, with filaments matched to CPK colors — see [molekuly3d/3d-molekuly-prusaslicer-plugin](https://github.com/molekuly3d/3d-molekuly-prusaslicer-plugin)
 
 ### ✨ And more
 

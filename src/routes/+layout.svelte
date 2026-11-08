@@ -44,9 +44,16 @@
 					}
 				});
 			}
-		} else if ('caches' in window) {
-			// Clear legacy service worker cache if still present in client
-			caches.delete('my-pwa-cache-v1').catch(() => {});
+		} else {
+			if ('serviceWorker' in navigator) {
+				navigator.serviceWorker.register('/service-worker.js').catch((err) => {
+					console.warn('SW registration failed:', err);
+				});
+			}
+			if ('caches' in window) {
+				// Clear legacy service worker cache if still present in client
+				caches.delete('my-pwa-cache-v1').catch(() => {});
+			}
 		}
 	});
 </script>

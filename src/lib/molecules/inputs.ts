@@ -44,6 +44,8 @@ export interface CactusLoadedMolecule {
   sdf: string;
   iupacName?: string;
   imageUrl: string;
+  /** Who produced the 3D coordinates: NIH CACTUS (default) or local OpenBabel (drawn molecules, offline). */
+  generator?: 'cactus' | 'openbabel';
 }
 
 export function parsePdbQuerySpec(rawQuery: string): { pdbId: string; chainId?: string; includeWaters?: boolean } {

@@ -1,10 +1,13 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
+
     // --- MAIN STEP IMAGES ---
     import step1Img from '$lib/images/step1.png';
     import step2Img from '$lib/images/step2.png';
     import step3Img from '$lib/images/step3.png';
     import step4Img from '$lib/images/step4.png';
     import step5Img from '$lib/images/step5.png'; 
+    import drawImg from '$lib/images/draw-2d-3d-en.png';
 
     // --- INTERACTIVE GALLERY IMAGES (from settings folder) ---
     import co2BasImg from '$lib/images/settings/co2-bas.png';
@@ -69,6 +72,47 @@
 
     // Default selected option in the gallery
     let activeOption = settingsOptions[0];
+
+    // --- TABLE OF CONTENTS (IDs match the sections below) ---
+    const tocItems = [
+        { id: 'step-1', label: 'Step 1: Select a Molecule' },
+        { id: 'advanced-search', label: 'Advanced Search' },
+        { id: 'step-2', label: 'Step 2: Display Interface' },
+        { id: 'step-3', label: 'Step 3: Representation Type' },
+        { id: 'step-4', label: 'Step 4: Parameters and Export' },
+        { id: 'step-5', label: 'Step 5: Apply Changes (Reload)' },
+        { id: 'sharing', label: 'Sharing via URL' },
+        { id: 'offline-pwa', label: 'Offline & Installation (PWA)' },
+        { id: 'slicer-import', label: 'Importing to a Slicer' },
+        { id: 'ready-models', label: 'Ready-to-Print Models' }
+    ];
+
+    // Expanded on desktop (landscape), collapsed on phones (portrait)
+    const TOC_EXPANDED_QUERY = '(min-width: 992px) and (orientation: landscape)';
+    let tocOpen = false;
+
+    // Which tutorial blocks are expanded (core steps open by default)
+    const OPEN_BY_DEFAULT = new Set(['step-1', 'step-2', 'step-3', 'step-4', 'step-5', 'slicer-import', 'ready-models']);
+    let sectionOpen: Record<string, boolean> = Object.fromEntries(
+        tocItems.map((item) => [item.id, OPEN_BY_DEFAULT.has(item.id)])
+    );
+    $: allSectionsOpen = tocItems.every((item) => sectionOpen[item.id]);
+
+    function toggleAllSections() {
+        const next = !allSectionsOpen;
+        sectionOpen = Object.fromEntries(tocItems.map((item) => [item.id, next]));
+    }
+
+    onMount(() => {
+        const mq = window.matchMedia(TOC_EXPANDED_QUERY);
+        tocOpen = mq.matches;
+        // A direct link to a collapsed block (#offline-pwa) opens it
+        const hashId = decodeURIComponent(window.location.hash.slice(1));
+        if (hashId in sectionOpen) sectionOpen[hashId] = true;
+        const onChange = (e: MediaQueryListEvent) => (tocOpen = e.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    });
 </script>
 
 <style>
@@ -111,7 +155,7 @@
   }
 
   .step-container {
-    margin-bottom: 3rem;
+    margin-bottom: 1.5rem;
     background: #f9f9f9;
     color: #333; /* Forcing dark text for light box background in dark mode */
     padding: 1.5rem;
@@ -134,6 +178,11 @@
     margin-bottom: 0.5rem;
     display: flex;
     align-items: flex-start;
+  }
+  .legend-icon {
+    margin-right: 0;
+    font-size: 16px;
+    line-height: 1;
   }
   .legend-number {
     background-color: #0070f3;
@@ -600,7 +649,175 @@
   .makerworld-btn:hover .external-arrow {
     transform: translate(2px, -2px);
   }
+  /* --- OBSAH (TOC) --- */
+  .tutorial-toc {
+    max-width: 800px;
+    margin: 1.5rem auto 0;
+    padding: 0 1rem;
+  }
+  .toc-box {
+    background: #f9f9f9;
+    color: #333;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  .toc-box summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-weight: bold;
+    color: #0070f3;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  .toc-box summary::-webkit-details-marker {
+    display: none;
+  }
+  .toc-box summary .material-symbols-outlined {
+    margin-right: 0;
+  }
+  .toc-chevron {
+    margin-left: auto;
+    transition: transform 0.2s ease;
+  }
+  .toc-box[open] .toc-chevron {
+    transform: rotate(180deg);
+  }
+  .toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0.5rem 0.75rem;
+    border-top: 2px solid #eee;
+  }
+  .toc-list a {
+    display: block;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+  .toc-list a:hover,
+  .toc-list a:focus-visible {
+    background: #e8f1ff;
+    color: #0070f3;
+  }
+  .step-container {
+    scroll-margin-top: 1rem;
+  }
+  .step-container:not([open]) {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .step-container > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .step-container > summary::-webkit-details-marker {
+    display: none;
+  }
+  .step-container > summary h2 {
+    flex: 1;
+  }
+  .step-container:not([open]) > summary h2 {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom-color: transparent;
+  }
+  .step-chevron {
+    margin-right: 0;
+    color: #0070f3;
+    transition: transform 0.2s ease;
+  }
+  .step-container[open] .step-chevron {
+    transform: rotate(180deg);
+  }
+  .printables-container .step-chevron {
+    color: #fa6831;
+  }
+  .toc-toggle-all {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: calc(100% - 1rem);
+    margin: 0.5rem 0.5rem 0;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #cce0ff;
+    border-radius: 6px;
+    background: #fff;
+    color: #0070f3;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .toc-toggle-all:hover,
+  .toc-toggle-all:focus-visible {
+    background: #e8f1ff;
+  }
+  .toc-toggle-all .material-symbols-outlined {
+    margin-right: 0;
+    font-size: 1.15rem;
+  }
+  .toc-list {
+    margin-top: 0.5rem;
+  }
+  .adv-source-card--wide {
+    grid-column: 1 / -1;
+  }
+  .draw-img {
+    display: block;
+    max-width: 480px;
+    margin: 0.75rem auto 0.25rem;
+  }
+  @media (min-width: 992px) and (orientation: landscape) {
+    .tutorial-layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 800px);
+      justify-content: center;
+      align-items: start;
+      gap: 1.5rem;
+      padding: 0 1rem;
+    }
+    .tutorial-toc {
+      position: sticky;
+      top: 1rem;
+      margin: 2rem 0 0;
+      padding: 0;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+    }
+    .tutorial-layout section {
+      margin: 0;
+    }
+  }
 </style>
+
+<div class="tutorial-layout">
+<aside class="tutorial-toc">
+  <details class="toc-box" bind:open={tocOpen}>
+    <summary>
+      <span class="material-symbols-outlined" aria-hidden="true">toc</span>
+      Contents
+      <span class="material-symbols-outlined toc-chevron" aria-hidden="true">expand_more</span>
+    </summary>
+    <button type="button" class="toc-toggle-all" on:click={toggleAllSections}>
+      <span class="material-symbols-outlined" aria-hidden="true">{allSectionsOpen ? 'unfold_less' : 'unfold_more'}</span>
+      {allSectionsOpen ? 'Collapse all' : 'Expand all'}
+    </button>
+    <nav aria-label="Tutorial contents">
+      <ol class="toc-list">
+        {#each tocItems as item (item.id)}
+          <li><a href="#{item.id}" on:click={() => (sectionOpen[item.id] = true)}>{item.label}</a></li>
+        {/each}
+      </ol>
+    </nav>
+  </details>
+</aside>
 
 <section class="tutorial">
   <h1>How to Use 3D Printing Molecules</h1>
@@ -618,8 +835,8 @@
   </div>
 
   <!-- Step 1 -->
-  <div class="step-container">
-    <h2>Step 1: Select a Molecule</h2>
+  <details id="step-1" class="step-container" bind:open={sectionOpen['step-1']}>
+    <summary><h2>Step 1: Select a Molecule</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>First, tell the program which substance you want to model. You can use automatic import or upload your own data.</p>
     <img src={step1Img} alt="UI screenshot showing search" class="tutorial-img">
     <p class="image-caption">Fig. 1: PubChem search interface</p>
@@ -627,11 +844,11 @@
       <li><span class="legend-number">1</span><div><strong>Search:</strong> Enter the English name of the substance into the "Search on PubChem" field and press Enter. Data will automatically download from the public database.</div></li>
       <li><span class="legend-number">2</span><div><strong>Custom Data:</strong> If you have your own <code>.sdf</code> file, use the <em>Upload File</em> button followed by <em>Fetch Data</em>.</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- ADVANCED SEARCH -->
-  <div class="step-container">
-    <h2>Advanced Search & Specific Inputs</h2>
+  <details id="advanced-search" class="step-container" bind:open={sectionOpen['advanced-search']}>
+    <summary><h2>Advanced Search & Specific Inputs</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>
       Need to model a compound from a SMILES string, a macromolecule from the Protein Data Bank, a crystal lattice, or a cofactor with a bound metal? The app supports advanced multi-database search.
     </p>
@@ -665,6 +882,10 @@
         <span class="adv-tab-pill">
           <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">grain</span>
           COD (Crystals)
+        </span>
+        <span class="adv-tab-pill">
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">draw</span>
+          Draw
         </span>
       </div>
     </div>
@@ -752,31 +973,49 @@
           Examples: <code>cod: 1506182</code>, <code>cod: CaCO3</code> (calcite), <code>cod: quartz</code>, <code>cod: NaCl</code>
         </div>
       </div>
+
+      <div class="adv-source-card adv-source-card--wide">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">draw</span>
+            Draw 2D → 3D
+          </div>
+          <span class="adv-prefix-badge">Draw tab</span>
+        </div>
+        <p class="adv-card-desc">
+          Sketch a structural formula right on the canvas: pick a bond (single, double, triple), an element (C, H, O, N, P, S, F, Cl, Br) or a ring (benzene, cyclohexane, cyclopentane) and click or drag. Clicking an existing atom with an element changes it; clicking empty space adds a new atom. The <em>Generate 3D Model</em> button then computes 3D coordinates, hydrogens included.
+        </p>
+        <img src={drawImg} alt="Draw tab in Advanced Search with salicylic acid sketched on the canvas" loading="lazy" class="tutorial-img draw-img">
+        <p class="image-caption">Example: salicylic acid sketched in the Draw tab</p>
+        <div class="adv-card-example">
+          Online, the 3D structure comes from NIH CACTUS; without internet it is computed locally in your browser (OpenBabel, MMFF94 force field). Tip: open the tab once while online so the offline engine gets stored in your browser.
+        </div>
+      </div>
     </div>
-  </div>
+  </details>
 
   <!-- Step 2 -->
-  <div class="step-container">
-    <h2>Step 2: Display Interface</h2>
+  <details id="step-2" class="step-container" bind:open={sectionOpen['step-2']}>
+    <summary><h2>Step 2: Display Interface</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>After loading the data, the model settings will become available. The first step is selecting the molecule representation.</p>
     <img src={step2Img} alt="UI screenshot with expanded menu" loading="lazy" class="tutorial-img">
     <p class="image-caption">Fig. 2: UI showing the representation dropdown menu</p>
-  </div>
+  </details>
 
   <!-- Step 3 -->
-  <div class="step-container">
-    <h2>Step 3: Choose Representation Type</h2>
+  <details id="step-3" class="step-container" bind:open={sectionOpen['step-3']}>
+    <summary><h2>Step 3: Choose Representation Type</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Choose the look that best suits your needs for education or 3D printing.</p>
     <img src={step3Img} alt="Molecule representation selection" loading="lazy" class="tutorial-img" style="max-width: 400px; display: block; margin: 1rem auto;">
     <p class="image-caption">Fig. 3: Dropdown menu options</p>
     <ul class="legend-list">
       <li><span class="legend-number">3</span><div><strong>Select Model Type:</strong> Select the desired look (Spheres, Ball-and-Stick, Sticks, or our secret <span class="easter-egg">Minecraft</span> mode).</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- Step 4 and Interactive Gallery -->
-  <div class="step-container">
-    <h2>Step 4: Parameter Settings and Export</h2>
+  <details id="step-4" class="step-container" bind:open={sectionOpen['step-4']}>
+    <summary><h2>Step 4: Parameter Settings and Export</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Adjust the details and proportions of the model for optimal printing. Hover over the individual options below to see how the parameters visually change the result.</p>
     
     <!-- INTERACTIVE GALLERY -->
@@ -811,22 +1050,22 @@
       <li><span class="legend-number">5</span><div><strong>Export Options:</strong> The <em>Download Template</em> button downloads the raw <code>.sdf</code> data of the molecule. The blue <em>One STL File</em> button exports a merged single-color model.</div></li>
       <li><span class="legend-number">6</span><div><strong>Final Multicolor Export:</strong> Using the green <em>Download Model</em> button, you will download a <code>.zip</code> archive with models separated by atoms for easier color assignment in the slicer.</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- Step 5 -->
-  <div class="step-container">
-    <h2>Step 5: Apply Changes (Reload)</h2>
+  <details id="step-5" class="step-container" bind:open={sectionOpen['step-5']}>
+    <summary><h2>Step 5: Apply Changes (Reload)</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>The image shows a more complex model (ATP). Remember that after any adjustment in the <em>Model Settings</em> section, the preview does not update automatically.</p>
     <img src={step5Img} alt="Updating the model using the Reload button" loading="lazy" class="tutorial-img">
     <p class="image-caption">Fig. 5: ATP model and the yellow Reload button</p>
     <ul class="legend-list">
       <li><span class="legend-number">7</span><div><strong>Reload Button:</strong> Whenever you adjust the settings, always click this yellow button first. This applies the changes to the 3D preview.</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- SHARING MODEL AND SETTINGS -->
-  <div class="step-container">
-    <h2>Sharing Models and Settings via URL</h2>
+  <details id="sharing" class="step-container" bind:open={sectionOpen['sharing']}>
+    <summary><h2>Sharing Models and Settings via URL</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>You can easily share your prepared molecule along with its exact parameter settings with colleagues or students, or bookmark it using a shareable URL link.</p>
 
     <div class="share-tutorial-mockup" aria-label="Illustration of the Share button and floating URL popup">
@@ -862,22 +1101,83 @@
     <ul class="legend-list">
       <li><span class="legend-number">8</span><div><strong>Share Button:</strong> Click the square share icon button (next to the <em>Slice</em> button). The URL is copied to your clipboard, the button turns green, and a popup appears directly above it displaying the full link. The URL encodes the database source (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), the molecule name or code, the selected display type, and all configured parameters, so opening the link automatically applies all settings and renders the model. When working with an uploaded local file (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), the link shares purely the display type and configured values (<code>source=file</code>), pre-configuring everything for anyone uploading their own file.</div></li>
     </ul>
-  </div>
+  </details>
+
+  <!-- OFFLINE USAGE AND PWA INSTALLATION -->
+  <details id="offline-pwa" class="step-container" bind:open={sectionOpen['offline-pwa']}>
+    <summary><h2>Offline Usage and PWA Installation</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
+    <p>
+      You can install 3D Printing Molecules as an app on your computer or phone. After the first visit with an internet connection, the app is stored in your browser and keeps working <strong>without an internet connection</strong> – in a classroom, in the lab, or on the go.
+    </p>
+
+    <ul class="legend-list">
+      <li>
+        <span class="legend-number">
+          <span class="material-symbols-outlined legend-icon" aria-hidden="true">computer</span>
+        </span>
+        <div>
+          <strong>Installing on a computer (Chrome, Edge):</strong>
+          Click the <em>Install app</em> icon <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.15rem; color: #0070f3;">install_desktop</span> in the address bar (right next to the URL) and confirm <em>Install</em>. The app then opens in its own window and appears in your Start menu / Launchpad.
+        </div>
+      </li>
+      <li>
+        <span class="legend-number">
+          <span class="material-symbols-outlined legend-icon" aria-hidden="true">phone_iphone</span>
+        </span>
+        <div>
+          <strong>Installing on a phone:</strong>
+          In <em>Safari</em> (iPhone, iPad), tap <em>Share</em> <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.15rem; color: #0070f3;">ios_share</span> → <em>Add to Home Screen</em>. In <em>Chrome</em> (Android), open the ⋮ menu → <em>Install app</em> (or <em>Add to Home screen</em>).
+        </div>
+      </li>
+    </ul>
+
+    <div class="adv-sources-grid">
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #2e7d32;" aria-hidden="true">offline_pin</span>
+            Works offline
+          </div>
+        </div>
+        <p class="adv-card-desc">
+          Uploading your own files from disk (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), the 3D preview and all representation types, editing model parameters, moving joints, the watertightness (manifold) check, and exporting to <code>.3mf</code> / <code>.stl</code> with the <em>Download Model</em> button. <em>Draw a Molecule</em> in Advanced Search works too – the 3D model is computed locally.
+        </p>
+        <div class="adv-card-example">
+          All computations (3D geometry, Manifold, ZIP packaging) run directly in your browser – nothing is sent to a server.
+        </div>
+      </div>
+
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #e53935;" aria-hidden="true">cloud_off</span>
+            Requires a connection
+          </div>
+        </div>
+        <p class="adv-card-desc">
+          Searching and downloading structures from online catalogs – <strong>PubChem</strong>, <strong>PDB</strong> (including CCD ligands), <strong>COD</strong>, and SMILES conversion via NIH CACTUS. The <em>Slice</em> button, which opens the model directly in a slicer, also needs the internet.
+        </p>
+        <div class="adv-card-example">
+          Tip: When offline, download the model as <code>.3mf</code> via <em>Download Model</em> and open it in your slicer manually.
+        </div>
+      </div>
+    </div>
+  </details>
 
   <!-- SLICER IMPORT INFO -->
-  <div class="step-container" style="background: #eef5ff; border: 1px solid #cce0ff; color: #333;">
-    <h2>How to import to slicer?</h2>
+  <details id="slicer-import" class="step-container" style="background: #eef5ff; border: 1px solid #cce0ff; color: #333;" bind:open={sectionOpen['slicer-import']}>
+    <summary><h2>How to import to slicer?</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p style="font-size: 1.1rem; text-align: center;">
       For <strong>multicolor</strong> molecule printing, ensure the slicer shows the message <br>
       <em>‘Multi-part object detected / An object with multiple parts was detected,’</em> <br>
       then confirm by selecting <strong>‘YES.’</strong>
     </p>
     <img src="/assets/multipartobject.svg" alt="Slicer import dialog" loading="lazy" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
-  </div>
+  </details>
 
   <!-- PRINTABLES AND MAKERWORLD SECTION -->
-  <div class="step-container printables-container">
-    <h2>Try Ready-to-Print Models on Printables and MakerWorld</h2>
+  <details id="ready-models" class="step-container printables-container" bind:open={sectionOpen['ready-models']}>
+    <summary><h2>Try Ready-to-Print Models on Printables and MakerWorld</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p class="printables-desc">
       Looking for inspiration or want to print popular molecules directly without tweaking settings? Explore our collection of verified, ready-to-print 3D molecule models directly on Printables and MakerWorld.
     </p>
@@ -909,5 +1209,6 @@
         <span class="external-arrow">↗</span>
       </a>
     </div>
-  </div>
+  </details>
 </section>
+</div>

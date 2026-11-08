@@ -15,11 +15,13 @@
     type PdbSearchHit,
     type CcdSearchHit
   } from '$lib/molecules/inputs';
+  import MoleculeDrawPanel from '$lib/components/MoleculeDrawPanel.svelte';
+  import { isOnline, isOffline } from '$lib/functions/network';
 
   export let show: boolean;
 
-  type TabId = 'pubchem' | 'pdb_ccd' | 'cactus' | 'cod';
-  const TAB_ORDER: readonly TabId[] = ['pubchem', 'pdb_ccd', 'cactus', 'cod'];
+  type TabId = 'pubchem' | 'pdb_ccd' | 'cactus' | 'cod' | 'draw';
+  const TAB_ORDER: readonly TabId[] = ['pubchem', 'pdb_ccd', 'cactus', 'cod', 'draw'];
 
   const dispatch = createEventDispatcher();
 
@@ -28,7 +30,8 @@
     pubchem: null,
     pdb_ccd: null,
     cactus: null,
-    cod: null
+    cod: null,
+    draw: null
   };
 
   let activeTab: TabId = 'pubchem';
@@ -103,6 +106,13 @@
     return event.isComposing || event.keyCode === 229;
   }
 
+  /** Online databases need network; the offline banner explains why nothing happens. */
+  function blockIfOffline(): boolean {
+    if (!isOffline()) return false;
+    errorMsg = '';
+    return true;
+  }
+
   function clearFeedback() {
     errorMsg = '';
     hasSearchedCurrentList = false;
@@ -146,6 +156,7 @@
       pubchemSuggestions = [];
       return;
     }
+    if (isOffline()) return;
     debounceTimer = setTimeout(async () => {
       try {
         const response = await fetch(
@@ -187,6 +198,7 @@
   function handlePubChemSearch() {
     const q = pubchemQuery.trim();
     if (!q) return;
+    if (blockIfOffline()) return;
     dispatch('search', {
       source: 'pubchem',
       query: q
@@ -203,6 +215,7 @@
       ccdResults = [];
       return;
     }
+    if (isOffline()) return;
     debounceTimer = setTimeout(async () => {
       isSearchingList = true;
       try {
@@ -218,6 +231,7 @@
 
   async function selectCcdLigand(compId: string) {
     if (isLoading) return;
+    if (blockIfOffline()) return;
     isLoading = true;
     loadingItemId = compId;
     errorMsg = '';
@@ -240,6 +254,7 @@
   async function handleCcdSubmit() {
     const q = ccdQuery.trim();
     if (!q || isLoading) return;
+    if (blockIfOffline()) return;
     if (debounceTimer) clearTimeout(debounceTimer);
 
     // Direct 1–5 char CCD code (e.g. HEM, ATP, CLA, B12)
@@ -287,6 +302,7 @@
       pdbResults = [];
       return;
     }
+    if (isOffline()) return;
     debounceTimer = setTimeout(async () => {
       isSearchingList = true;
       try {
@@ -301,6 +317,7 @@
   }
 
   function selectPdbEntry(pdbId: string, overrideChain?: string) {
+    if (blockIfOffline()) return;
     const spec = parsePdbQuerySpec(pdbId);
     const effectiveChain = overrideChain !== undefined ? overrideChain : (pdbChain.trim() || spec.chainId);
     const formatted = formatPdbQuerySpec(spec.pdbId, effectiveChain, pdbIncludeWaters);
@@ -314,6 +331,7 @@
   async function handlePdbSubmit() {
     const q = pdbQuery.trim();
     if (!q || isLoading) return;
+    if (blockIfOffline()) return;
     if (debounceTimer) clearTimeout(debounceTimer);
 
     const parsed = parsePdbQuerySpec(q);
@@ -350,6 +368,7 @@
   async function handleCactusSubmit() {
     const q = cactusQuery.trim();
     if (!q || isLoading) return;
+    if (blockIfOffline()) return;
     isLoading = true;
     errorMsg = '';
     try {
@@ -381,6 +400,7 @@
       codResults = [];
       return;
     }
+    if (isOffline()) return;
     debounceTimer = setTimeout(async () => {
       isSearchingList = true;
       try {
@@ -396,6 +416,7 @@
 
   async function loadCodById(codId: string) {
     if (isLoading) return;
+    if (blockIfOffline()) return;
     isLoading = true;
     loadingItemId = codId;
     errorMsg = '';
@@ -419,6 +440,7 @@
   async function handleCodSubmit() {
     const q = codQuery.trim();
     if (!q || isLoading) return;
+    if (blockIfOffline()) return;
     if (debounceTimer) clearTimeout(debounceTimer);
 
     if (/^\d{4,10}$/.test(q)) {
@@ -445,6 +467,33 @@
     codQuery = val;
     codResults = [];
     handleCodSubmit();
+  }
+
+  // --- 5. Draw (Kekule.js) -> 3D ---
+  function handleDrawGenerated(
+    event: CustomEvent<{
+      smiles: string;
+      sdf: string;
+      generator: 'cactus' | 'openbabel';
+      iupacName?: string;
+      imageUrl: string;
+    }>
+  ) {
+    const { smiles, sdf, generator, iupacName, imageUrl } = event.detail;
+    const label = smiles || $_('adv_draw_molecule_name');
+    dispatch('search', {
+      source: 'cactus',
+      query: label,
+      content: sdf,
+      preloadedCactus: {
+        query: label,
+        sdf,
+        iupacName: iupacName || $_('adv_draw_molecule_name'),
+        imageUrl,
+        generator
+      }
+    });
+    requestClose();
   }
 
   function resetDialogState() {
@@ -492,6 +541,7 @@
   {...dialogClosedByAttr}
   aria-labelledby="advanced-search-title"
   class="adv-dialog"
+  class:wide={activeTab === 'draw'}
   on:close={handleNativeDialogClose}
 >
   <div class="adv-dialog-header">
@@ -561,7 +611,28 @@
     >
       {$_('adv_tab_cod')}
     </button>
+    <button
+      type="button"
+      role="tab"
+      id="tab-draw"
+      aria-selected={activeTab === 'draw'}
+      aria-controls="panel-draw"
+      tabindex={activeTab === 'draw' ? 0 : -1}
+      class:active={activeTab === 'draw'}
+      bind:this={tabButtons.draw}
+      on:click={() => switchTab('draw')}
+      on:keydown={handleTabListKeydown}
+    >
+      {$_('adv_tab_draw')}
+    </button>
   </div>
+
+  {#if !$isOnline && activeTab !== 'draw'}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mt-3 mb-0 small" role="status">
+      <span class="material-symbols-outlined flex-shrink-0" aria-hidden="true">cloud_off</span>
+      <span>{$_('offline_search_notice')}</span>
+    </div>
+  {/if}
 
   <!-- 1. PUBCHEM -->
   {#if activeTab === 'pubchem'}
@@ -939,6 +1010,13 @@
     </div>
   {/if}
 
+  <!-- 5. DRAW 2D -> 3D (Kekule.js) -->
+  {#if activeTab === 'draw' && show}
+    <div class="tab-content" role="tabpanel" id="panel-draw" aria-labelledby="tab-draw">
+      <MoleculeDrawPanel on:generated={handleDrawGenerated} />
+    </div>
+  {/if}
+
   {#if errorMsg}
     <div class="alert alert-danger mt-3 mb-0" role="alert">{errorMsg}</div>
   {/if}
@@ -958,11 +1036,17 @@
     border-radius: 12px;
     padding: 1.5rem;
     width: min(94vw, 600px);
+    transition: width 0.15s ease;
     max-height: min(88vh, 720px);
     background-color: var(--adv-bg);
     color: var(--adv-text);
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
     margin: auto;
+  }
+
+  .adv-dialog.wide {
+    width: min(94vw, 760px);
+    max-height: min(92vh, 860px);
   }
 
   .adv-dialog[open] {

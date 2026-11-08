@@ -1,10 +1,13 @@
 <script lang="ts">
+    import { onMount } from 'svelte';
+
     // --- HLAVNÍ OBRÁZKY KROKŮ ---
     import step1Img from '$lib/images/step1.png';
     import step2Img from '$lib/images/step2.png';
     import step3Img from '$lib/images/step3.png';
     import step4Img from '$lib/images/step4.png';
     import step5Img from '$lib/images/step5.png'; 
+    import drawImg from '$lib/images/draw-2d-3d-cs.png';
 
     // --- OBRÁZKY PRO INTERAKTIVNÍ GALERII (ze složky settings) ---
     import co2BasImg from '$lib/images/settings/co2-bas.png';
@@ -69,6 +72,47 @@
 
     // Výchozí zobrazená volba v galerii
     let activeOption = settingsOptions[0];
+
+    // --- OBSAH NÁVODU (ID odpovídají sekcím níže) ---
+    const tocItems = [
+        { id: 'step-1', label: 'Krok 1: Výběr molekuly' },
+        { id: 'advanced-search', label: 'Pokročilé vyhledávání' },
+        { id: 'step-2', label: 'Krok 2: Rozhraní pro zobrazení' },
+        { id: 'step-3', label: 'Krok 3: Typ zobrazení' },
+        { id: 'step-4', label: 'Krok 4: Parametry a export' },
+        { id: 'step-5', label: 'Krok 5: Aplikace změn (Reload)' },
+        { id: 'sharing', label: 'Sdílení přes URL' },
+        { id: 'offline-pwa', label: 'Offline a instalace (PWA)' },
+        { id: 'slicer-import', label: 'Import do sliceru' },
+        { id: 'ready-models', label: 'Hotové modely ke stažení' }
+    ];
+
+    // Obsah je na počítači (na šířku) rozbalený, na telefonu (na výšku) sbalený
+    const TOC_EXPANDED_QUERY = '(min-width: 992px) and (orientation: landscape)';
+    let tocOpen = false;
+
+    // Které bloky návodu jsou rozbalené (základní kroky výchozí otevřené)
+    const OPEN_BY_DEFAULT = new Set(['step-1', 'step-2', 'step-3', 'step-4', 'step-5', 'slicer-import', 'ready-models']);
+    let sectionOpen: Record<string, boolean> = Object.fromEntries(
+        tocItems.map((item) => [item.id, OPEN_BY_DEFAULT.has(item.id)])
+    );
+    $: allSectionsOpen = tocItems.every((item) => sectionOpen[item.id]);
+
+    function toggleAllSections() {
+        const next = !allSectionsOpen;
+        sectionOpen = Object.fromEntries(tocItems.map((item) => [item.id, next]));
+    }
+
+    onMount(() => {
+        const mq = window.matchMedia(TOC_EXPANDED_QUERY);
+        tocOpen = mq.matches;
+        // Odkaz přímo na sbalený blok (#offline-pwa) ho rovnou otevře
+        const hashId = decodeURIComponent(window.location.hash.slice(1));
+        if (hashId in sectionOpen) sectionOpen[hashId] = true;
+        const onChange = (e: MediaQueryListEvent) => (tocOpen = e.matches);
+        mq.addEventListener('change', onChange);
+        return () => mq.removeEventListener('change', onChange);
+    });
 </script>
 
 <style>
@@ -111,7 +155,7 @@
   }
 
   .step-container {
-    margin-bottom: 3rem;
+    margin-bottom: 1.5rem;
     background: #f9f9f9;
     color: #333; /* Vynucení tmavého textu pro světlé pozadí boxu v tmavém režimu */
     padding: 1.5rem;
@@ -134,6 +178,11 @@
     margin-bottom: 0.5rem;
     display: flex;
     align-items: flex-start;
+  }
+  .legend-icon {
+    margin-right: 0;
+    font-size: 16px;
+    line-height: 1;
   }
   .legend-number {
     background-color: #0070f3;
@@ -600,7 +649,175 @@
   .makerworld-btn:hover .external-arrow {
     transform: translate(2px, -2px);
   }
+  /* --- OBSAH (TOC) --- */
+  .tutorial-toc {
+    max-width: 800px;
+    margin: 1.5rem auto 0;
+    padding: 0 1rem;
+  }
+  .toc-box {
+    background: #f9f9f9;
+    color: #333;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+  .toc-box summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-weight: bold;
+    color: #0070f3;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+  }
+  .toc-box summary::-webkit-details-marker {
+    display: none;
+  }
+  .toc-box summary .material-symbols-outlined {
+    margin-right: 0;
+  }
+  .toc-chevron {
+    margin-left: auto;
+    transition: transform 0.2s ease;
+  }
+  .toc-box[open] .toc-chevron {
+    transform: rotate(180deg);
+  }
+  .toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem 0.5rem 0.75rem;
+    border-top: 2px solid #eee;
+  }
+  .toc-list a {
+    display: block;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.95rem;
+    line-height: 1.35;
+  }
+  .toc-list a:hover,
+  .toc-list a:focus-visible {
+    background: #e8f1ff;
+    color: #0070f3;
+  }
+  .step-container {
+    scroll-margin-top: 1rem;
+  }
+  .step-container:not([open]) {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+  .step-container > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .step-container > summary::-webkit-details-marker {
+    display: none;
+  }
+  .step-container > summary h2 {
+    flex: 1;
+  }
+  .step-container:not([open]) > summary h2 {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom-color: transparent;
+  }
+  .step-chevron {
+    margin-right: 0;
+    color: #0070f3;
+    transition: transform 0.2s ease;
+  }
+  .step-container[open] .step-chevron {
+    transform: rotate(180deg);
+  }
+  .printables-container .step-chevron {
+    color: #fa6831;
+  }
+  .toc-toggle-all {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: calc(100% - 1rem);
+    margin: 0.5rem 0.5rem 0;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #cce0ff;
+    border-radius: 6px;
+    background: #fff;
+    color: #0070f3;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .toc-toggle-all:hover,
+  .toc-toggle-all:focus-visible {
+    background: #e8f1ff;
+  }
+  .toc-toggle-all .material-symbols-outlined {
+    margin-right: 0;
+    font-size: 1.15rem;
+  }
+  .toc-list {
+    margin-top: 0.5rem;
+  }
+  .adv-source-card--wide {
+    grid-column: 1 / -1;
+  }
+  .draw-img {
+    display: block;
+    max-width: 480px;
+    margin: 0.75rem auto 0.25rem;
+  }
+  @media (min-width: 992px) and (orientation: landscape) {
+    .tutorial-layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 800px);
+      justify-content: center;
+      align-items: start;
+      gap: 1.5rem;
+      padding: 0 1rem;
+    }
+    .tutorial-toc {
+      position: sticky;
+      top: 1rem;
+      margin: 2rem 0 0;
+      padding: 0;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+    }
+    .tutorial-layout section {
+      margin: 0;
+    }
+  }
 </style>
+
+<div class="tutorial-layout">
+<aside class="tutorial-toc">
+  <details class="toc-box" bind:open={tocOpen}>
+    <summary>
+      <span class="material-symbols-outlined" aria-hidden="true">toc</span>
+      Obsah
+      <span class="material-symbols-outlined toc-chevron" aria-hidden="true">expand_more</span>
+    </summary>
+    <button type="button" class="toc-toggle-all" on:click={toggleAllSections}>
+      <span class="material-symbols-outlined" aria-hidden="true">{allSectionsOpen ? 'unfold_less' : 'unfold_more'}</span>
+      {allSectionsOpen ? 'Sbalit vše' : 'Rozbalit vše'}
+    </button>
+    <nav aria-label="Obsah návodu">
+      <ol class="toc-list">
+        {#each tocItems as item (item.id)}
+          <li><a href="#{item.id}" on:click={() => (sectionOpen[item.id] = true)}>{item.label}</a></li>
+        {/each}
+      </ol>
+    </nav>
+  </details>
+</aside>
 
 <section class="tutorial">
   <h1>Jak používat 3D Printing Molecules</h1>
@@ -618,8 +835,8 @@
   </div>
 
   <!-- Krok 1 -->
-  <div class="step-container">
-    <h2>Krok 1: Výběr molekuly</h2>
+  <details id="step-1" class="step-container" bind:open={sectionOpen['step-1']}>
+    <summary><h2>Krok 1: Výběr molekuly</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Nejprve programu řekni, jakou látku chceš modelovat. Můžeš využít automatický import nebo nahrát vlastní data.</p>
     <img src={step1Img} alt="UI ukázka screenshot" class="tutorial-img">
     <p class="image-caption">Obr. 1: Zobrazení vyhledávání z PubChemu</p>
@@ -627,11 +844,11 @@
       <li><span class="legend-number">1</span><div><strong>Vyhledávání:</strong> Zadej anglický název látky do pole "Search on PubChem" a stiskni Enter. Data se automaticky stáhnou z veřejné databáze.</div></li>
       <li><span class="legend-number">2</span><div><strong>Vlastní data:</strong> Pokud máš vlastní <code>.sdf</code> soubor, použij tlačítko <em>Upload File</em> a následně <em>Fetch Data</em>.</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- POKROČILÉ VYHLEDÁVÁNÍ (ADVANCED SEARCH) -->
-  <div class="step-container">
-    <h2>Pokročilé vyhledávání (Advanced Search) & specifické vstupy</h2>
+  <details id="advanced-search" class="step-container" bind:open={sectionOpen['advanced-search']}>
+    <summary><h2>Pokročilé vyhledávání (Advanced Search) & specifické vstupy</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>
       Potřebuješ namodelovat sloučeninu podle vzorce SMILES, makromolekulu z Protein Data Bank, krystalovou mřížku nebo kofaktor s navázaným kovem? Aplikace nabízí pokročilé vyhledávání ve více chemických a krystalografických databázích.
     </p>
@@ -665,6 +882,10 @@
         <span class="adv-tab-pill">
           <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">grain</span>
           COD (Krystaly)
+        </span>
+        <span class="adv-tab-pill">
+          <span class="material-symbols-outlined" style="font-size: 1rem;" aria-hidden="true">draw</span>
+          Kreslení
         </span>
       </div>
     </div>
@@ -752,31 +973,49 @@
           Příklady: <code>cod: 1506182</code>, <code>cod: CaCO3</code> (kalcit), <code>cod: quartz</code>, <code>cod: NaCl</code>
         </div>
       </div>
+
+      <div class="adv-source-card adv-source-card--wide">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #0070f3;" aria-hidden="true">draw</span>
+            Kreslení 2D → 3D
+          </div>
+          <span class="adv-prefix-badge">záložka Kreslení</span>
+        </div>
+        <p class="adv-card-desc">
+          Strukturní vzorec nakreslíš přímo na plátně: zvol vazbu (jednoduchá, dvojná, trojná), prvek (C, H, O, N, P, S, F, Cl, Br) nebo kruh (benzen, cyklohexan, cyklopentan) a klikej či táhni myší. Klik prvkem na existující atom ho změní, klik do prázdna přidá nový atom. Tlačítko <em>Vytvořit 3D model</em> pak spočítá prostorové souřadnice včetně vodíků.
+        </p>
+        <img src={drawImg} alt="Záložka Kreslení v pokročilém vyhledávání s nakreslenou kyselinou salicylovou" loading="lazy" class="tutorial-img draw-img">
+        <p class="image-caption">Ukázka: kyselina salicylová nakreslená v záložce Kreslení</p>
+        <div class="adv-card-example">
+          Online se 3D struktura počítá přes NIH CACTUS, bez internetu automaticky lokálně v prohlížeči (OpenBabel, silové pole MMFF94). Tip: záložku otevři jednou s připojením, aby se offline výpočet uložil do prohlížeče.
+        </div>
+      </div>
     </div>
-  </div>
+  </details>
 
   <!-- Krok 2 -->
-  <div class="step-container">
-    <h2>Krok 2: Rozhraní pro zobrazení</h2>
+  <details id="step-2" class="step-container" bind:open={sectionOpen['step-2']}>
+    <summary><h2>Krok 2: Rozhraní pro zobrazení</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Po načtení dat se ti zpřístupní nastavení modelu. Prvním krokem je výběr reprezentace molekuly.</p>
     <img src={step2Img} alt="UI ukázka screenshot s rozbaleným menu" loading="lazy" class="tutorial-img">
     <p class="image-caption">Obr. 2: UI ukázka s rozbaleným menu pro reprezentaci</p>
-  </div>
+  </details>
 
   <!-- Krok 3 -->
-  <div class="step-container">
-    <h2>Krok 3: Volba typu zobrazení</h2>
+  <details id="step-3" class="step-container" bind:open={sectionOpen['step-3']}>
+    <summary><h2>Krok 3: Volba typu zobrazení</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Vyber si vzhled, který nejlépe vyhovuje tvým potřebám pro výuku nebo 3D tisk.</p>
     <img src={step3Img} alt="Výběr reprezentací molekuly" loading="lazy" class="tutorial-img" style="max-width: 400px; display: block; margin: 1rem auto;">
     <p class="image-caption">Obr. 3: Nabídka rozbalovacího menu</p>
     <ul class="legend-list">
       <li><span class="legend-number">3</span><div><strong>Select Model Type:</strong> Zvol požadovaný vzhled (Spheres, Ball-and-Stick, Sticks, nebo náš tajný <span class="easter-egg">Minecraft</span> režim).</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- Krok 4 a Interaktivní galerie -->
-  <div class="step-container">
-    <h2>Krok 4: Nastavení parametrů a export</h2>
+  <details id="step-4" class="step-container" bind:open={sectionOpen['step-4']}>
+    <summary><h2>Krok 4: Nastavení parametrů a export</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Přizpůsob si detail a proporce modelu tak, aby se co nejlépe tiskl. Najetím myší na jednotlivé možnosti níže uvidíš, jak parametry vizuálně mění výsledek.</p>
     
     <!-- INTERAKTIVNÍ GALERIE -->
@@ -811,22 +1050,22 @@
       <li><span class="legend-number">5</span><div><strong>Možnosti exportu:</strong> Tlačítko <em>Download Template</em> stáhne čistá <code>.sdf</code> data molekuly. Modré tlačítko <em>One STL File</em> exportuje sloučený jednobarevný model.</div></li>
       <li><span class="legend-number">6</span><div><strong>Finální vícebarevný export:</strong> Zeleným tlačítkem <em>Download Model</em> stáhneš <code>.zip</code> archiv s modely oddělenými po atomech pro snazší přiřazení barev ve sliceru.</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- Krok 5 -->
-  <div class="step-container">
-    <h2>Krok 5: Aplikace změn (Reload)</h2>
+  <details id="step-5" class="step-container" bind:open={sectionOpen['step-5']}>
+    <summary><h2>Krok 5: Aplikace změn (Reload)</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Na obrázku vidíš složitější model (ATP). Pamatuj, že po jakékoliv úpravě v sekci <em>Model Settings</em> se náhled neaktualizuje sám.</p>
     <img src={step5Img} alt="Ukázka aktualizace modelu pomocí tlačítka Reload" loading="lazy" class="tutorial-img">
     <p class="image-caption">Obr. 5: Ukázka modelu ATP a žlutého tlačítka Reload</p>
     <ul class="legend-list">
       <li><span class="legend-number">7</span><div><strong>Tlačítko Reload:</strong> Kdykoliv upravíš nastavení, vždy nejprve klikni na toto žluté tlačítko. Tím aplikuješ změny do 3D náhledu.</div></li>
     </ul>
-  </div>
+  </details>
 
   <!-- SDÍLENÍ MODELU A NASTAVENÍ -->
-  <div class="step-container">
-    <h2>Sdílení modelu a nastavení přes URL</h2>
+  <details id="sharing" class="step-container" bind:open={sectionOpen['sharing']}>
+    <summary><h2>Sdílení modelu a nastavení přes URL</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p>Svůj připravený model včetně přesného nastavení parametrů můžeš jednoduše poslat kolegům, studentům nebo si ho uložit do záložek pomocí URL odkazu.</p>
 
     <div class="share-tutorial-mockup" aria-label="Ukázka tlačítka sdílení a vyskakovacího okna s URL odkazem">
@@ -862,22 +1101,83 @@
     <ul class="legend-list">
       <li><span class="legend-number">8</span><div><strong>Tlačítko Sdílet:</strong> Klikni na čtvercové tlačítko s ikonou sdílení (vedle tlačítka <em>Slice</em>). Odkaz se zkopíruje do schránky, tlačítko zezelená a přímo nad ním se otevře okno s textovým polem a celým URL odkazem. Odkaz v sobě nese zdroj databáze (<code>pubchem</code>, <code>pdb</code>, <code>cod</code>), název či kód molekuly, zvolený typ zobrazení i všechny upravené parametry, takže po jeho otevření se vše automaticky nastaví a vykreslí. Pokud pracuješ s vlastním nahraným souborem (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), odkaz slouží ke sdílení samotného typu zobrazení a nastavených hodnot (<code>source=file</code>), které se po otevření přednastaví pro nahrání vlastního modelu.</div></li>
     </ul>
-  </div>
+  </details>
+
+  <!-- OFFLINE POUŽITÍ A INSTALACE (PWA) -->
+  <details id="offline-pwa" class="step-container" bind:open={sectionOpen['offline-pwa']}>
+    <summary><h2>Offline použití a instalace jako aplikace (PWA)</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
+    <p>
+      3D Printing Molecules si můžeš nainstalovat jako aplikaci na plochu počítače nebo telefonu. Po prvním otevření s internetem se aplikace uloží do prohlížeče a dál ji můžeš používat i <strong>bez připojení k internetu</strong> – třeba ve třídě, v laboratoři nebo na cestách.
+    </p>
+
+    <ul class="legend-list">
+      <li>
+        <span class="legend-number">
+          <span class="material-symbols-outlined legend-icon" aria-hidden="true">computer</span>
+        </span>
+        <div>
+          <strong>Instalace na počítači (Chrome, Edge):</strong>
+          V adresním řádku klikni na ikonu <em>Instalovat aplikaci</em> <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.15rem; color: #0070f3;">install_desktop</span> (vpravo vedle adresy) a potvrď <em>Instalovat</em>. Aplikace se pak otevírá ve vlastním okně a najdeš ji v nabídce Start / Launchpadu.
+        </div>
+      </li>
+      <li>
+        <span class="legend-number">
+          <span class="material-symbols-outlined legend-icon" aria-hidden="true">phone_iphone</span>
+        </span>
+        <div>
+          <strong>Instalace na mobilu:</strong>
+          V <em>Safari</em> (iPhone, iPad) klepni na <em>Sdílet</em> <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.15rem; color: #0070f3;">ios_share</span> → <em>Přidat na plochu</em>. V <em>Chrome</em> (Android) otevři menu ⋮ → <em>Instalovat aplikaci</em> (případně <em>Přidat na plochu</em>).
+        </div>
+      </li>
+    </ul>
+
+    <div class="adv-sources-grid">
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #2e7d32;" aria-hidden="true">offline_pin</span>
+            Funguje bez internetu
+          </div>
+        </div>
+        <p class="adv-card-desc">
+          Nahrání vlastních souborů z disku (<code>.sdf</code>, <code>.pdb</code>, <code>.cif</code>), 3D náhled a všechny typy zobrazení, úprava parametrů modelu, pohyblivé klouby, kontrola vodotěsnosti (manifold) i export do <code>.3mf</code> / <code>.stl</code> tlačítkem <em>Download Model</em>. Funguje i <em>Kreslení molekuly</em> v pokročilém vyhledávání – 3D model se spočítá lokálně.
+        </p>
+        <div class="adv-card-example">
+          Veškeré výpočty (3D geometrie, Manifold, balení do ZIPu) běží přímo v tvém prohlížeči – na server se nic neodesílá.
+        </div>
+      </div>
+
+      <div class="adv-source-card">
+        <div class="adv-card-header">
+          <div class="adv-card-title">
+            <span class="material-symbols-outlined" style="color: #e53935;" aria-hidden="true">cloud_off</span>
+            Vyžaduje připojení
+          </div>
+        </div>
+        <p class="adv-card-desc">
+          Vyhledávání a stahování struktur z online katalogů – <strong>PubChem</strong>, <strong>PDB</strong> (včetně CCD ligandů), <strong>COD</strong> a převod SMILES přes NIH CACTUS. Bez internetu nefunguje ani tlačítko <em>Slice</em>, které otevírá model rovnou ve sliceru.
+        </p>
+        <div class="adv-card-example">
+          Tip: Offline si model stáhni jako <code>.3mf</code> přes <em>Download Model</em> a do sliceru ho otevři ručně.
+        </div>
+      </div>
+    </div>
+  </details>
 
   <!-- INFORMACE K IMPORTU DO SLICERU -->
-  <div class="step-container" style="background: #eef5ff; border: 1px solid #cce0ff; color: #333;">
-    <h2>Jak importovat do sliceru?</h2>
+  <details id="slicer-import" class="step-container" style="background: #eef5ff; border: 1px solid #cce0ff; color: #333;" bind:open={sectionOpen['slicer-import']}>
+    <summary><h2>Jak importovat do sliceru?</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p style="font-size: 1.1rem; text-align: center;">
       Pro <strong>vícebarevný</strong> tisk molekuly se ujisti, že tě slicer upozorní hláškou <br>
       <em>„Byl detekován objekt o více částech“ (Multi-part object detected)</em>, <br>
       a následně potvrď volbou <strong>„ANO“ (YES)</strong>.
     </p>
     <img src="/assets/multipartobject.svg" alt="Dialog importu do sliceru" loading="lazy" class="tutorial-img" style="max-width: 500px; display: block; margin: 1.5rem auto 0 auto; border: none;">
-  </div>
+  </details>
 
   <!-- SEKCE PRINTABLES A MAKERWORLD -->
-  <div class="step-container printables-container">
-    <h2>Vyzkoušej již hotové modely na Printables a MakerWorld</h2>
+  <details id="ready-models" class="step-container printables-container" bind:open={sectionOpen['ready-models']}>
+    <summary><h2>Vyzkoušej již hotové modely na Printables a MakerWorld</h2><span class="material-symbols-outlined step-chevron" aria-hidden="true">expand_more</span></summary>
     <p class="printables-desc">
       Hledáš inspiraci nebo si chceš rovnou vytisknout oblíbené molekuly bez nutnosti nastavování? Prozkoumej naši sbírku hotových, ověřených 3D modelů molekul přímo na Printables a MakerWorld.
     </p>
@@ -909,5 +1209,6 @@
         <span class="external-arrow">↗</span>
       </a>
     </div>
-  </div>
+  </details>
 </section>
+</div>

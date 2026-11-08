@@ -61,6 +61,7 @@
     type CactusLoadedMolecule
   } from '$lib/molecules/inputs';
   import AdvancedSearchPopup from '$lib/components/AdvancedSearchPopup.svelte';
+  import { isOnline, isOffline } from '$lib/functions/network';
 
   // Types
   let inputStr = '';
@@ -154,6 +155,9 @@
   let originalFileExtension: string = "sdf";
 
   let showMoleculePopup = false;
+  // Popup reason: a failed lookup vs. an online database queried while offline
+  let moleculePopupOffline = false;
+  $: if (!showMoleculePopup) moleculePopupOffline = false;
   let settingsLoaded = false;
   let isReloadMode = false;
   let lastSuccessfulInput = '';
@@ -780,6 +784,17 @@
     const trimmedQuery = rawQuery.trim();
     if (!trimmedQuery) return;
 
+    // Preloaded data (e.g. a molecule drawn and converted to 3D locally) needs no network
+    const hasPreloadedData = Boolean(
+      options.preloadedCactus || options.preloadedCcd || options.preloadedCodEntry || options.preloadedCodSdf
+    );
+    if (isOffline() && !hasPreloadedData) {
+      moleculePopupOffline = true;
+      showMoleculePopup = true;
+      return;
+    }
+    moleculePopupOffline = false;
+
     const {
       saveToHistory = true,
       preloadedCodSdf,
@@ -835,8 +850,9 @@
         originalFileExtension = "sdf";
         newAtomCoordinates = await parseSDF(loaded.sdf);
         const formula = computeMolecularFormula(newAtomCoordinates);
-        const desc = formula ? `${formula} · NIH CACTUS 3D` : "NIH CACTUS 3D";
-        setTableInfo(loaded.iupacName || loaded.query, "SMILES / CACTUS", desc);
+        const generatorLabel = loaded.generator === 'openbabel' ? "OpenBabel 3D (offline)" : "NIH CACTUS 3D";
+        const desc = formula ? `${formula} · ${generatorLabel}` : generatorLabel;
+        setTableInfo(loaded.iupacName || loaded.query, loaded.generator === 'openbabel' ? "SMILES / OpenBabel" : "SMILES / CACTUS", desc);
         setImage(loaded.imageUrl);
         resolvedShareQuery = loaded.query;
         displayInput = `SMILES: ${loaded.query}`;
@@ -1064,10 +1080,13 @@
     openInSlicer(slicerId);
   }
 
-  function buildSlicerProtocolUri(slicerId: string, fileUrl: string): string {
+  function buildSlicerProtocolUri(slicerId: string, fileUrl: string, fileName: string): string {
     const isMac = typeof navigator !== 'undefined' && /Macintosh|Mac OS X/i.test(navigator.userAgent);
     if (slicerId === 'bambustudio') {
-      const bambuFileUrl = `${fileUrl}?source=amazonaws.com`;
+      // Bambu Studio takes the file name from the last URL segment (query included) unless
+      // "&name=" is present, so without it the extension resolves to ".com" and the import
+      // fails with "unknown file format".
+      const bambuFileUrl = `${fileUrl}?source=amazonaws.com&name=${fileName}`;
       if (isMac) {
         return `bambustudioopen://${encodeURIComponent(bambuFileUrl)}`;
       }
@@ -1096,7 +1115,7 @@
       moleculeName: tableInfo.firstItem || null,
       moleculeId: tableInfo.secondItem || null,
       moleculeDescription: tableInfo.thirdItem || null,
-      moleculeImage: imageUrl || null,
+      moleculeImage: imageUrl && !imageUrl.startsWith('data:') ? imageUrl : null,
       isFileUploaded: isFileUploaded,
       uploadedFileName: isFileUploaded ? uploadedFileName : null,
       quality: quality,
@@ -1159,6 +1178,21 @@
     exportModelAs3MF(fileName, getModelMetadata(), $currentLocale);
   }
 
+  async function uploadModelToBlob(id: string, safeFileName: string, blob: Blob): Promise<string | null> {
+    try {
+      const { upload } = await import('@vercel/blob/client');
+      const result = await upload(`slicer/${id}/${safeFileName}`, blob, {
+        access: 'public',
+        handleUploadUrl: '/api/slicer/upload',
+        contentType: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml'
+      });
+      return result.url;
+    } catch (err) {
+      console.warn('Blob upload failed, falling back to server storage:', err);
+      return null;
+    }
+  }
+
   async function openInSlicer(slicerId = selectedSlicerId) {
     showSlicerMenu = false;
     if (atomCoordinates.length === 0) {
@@ -1176,6 +1210,17 @@
 
       const id = `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
       const safeFileName = `${fileName.replace(/[^a-zA-Z0-9_-]/g, '_')}.3mf`;
+
+      // Deployed: store the model in Vercel Blob so any serverless instance (and the slicer) can fetch it.
+      // Local dev, or Blob not configured: fall back to the in-process /api/slicer endpoint below.
+      if (!['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)) {
+        const blobUrl = await uploadModelToBlob(id, safeFileName, blob);
+        if (blobUrl) {
+          triggerCustomProtocolUri(buildSlicerProtocolUri(slicerId, blobUrl, safeFileName));
+          return;
+        }
+      }
+
       const apiPath = `/api/slicer/${id}/${encodeURIComponent(safeFileName)}`;
 
       const res = await fetch(`${apiPath}?slicer=${encodeURIComponent(slicerId)}`, {
@@ -1194,7 +1239,7 @@
       }
 
       const fileUrl = `${window.location.origin}${apiPath}`;
-      const slicerUri = buildSlicerProtocolUri(slicerId, fileUrl);
+      const slicerUri = buildSlicerProtocolUri(slicerId, fileUrl, safeFileName);
       triggerCustomProtocolUri(slicerUri);
     } catch (err) {
       console.error('Error opening model in slicer:', err);
@@ -1869,6 +1914,13 @@
             {isReloadMode ? $_('reload_data_button') : $_('fetch_data_button')}
           </button>
         </search>
+
+        {#if !$isOnline}
+          <div class="alert alert-warning d-flex align-items-center gap-2 py-2 px-3 mb-3 small" role="status">
+            <span class="material-symbols-outlined flex-shrink-0" style="font-size: 20px; margin-right: 0;" aria-hidden="true">cloud_off</span>
+            <span class="flex-grow-1">{$_('offline_search_notice')}</span>
+          </div>
+        {/if}
 
         {#if sharedSettingsNotice}
           <div class="alert alert-info alert-dismissible d-flex align-items-center gap-2 py-2 px-3 mb-3 small" role="status">
@@ -3316,10 +3368,17 @@
       on:click={() => showMoleculePopup = false}
     >
       <div class="popup-content" on:click|stopPropagation>
-        <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">warning</span>
-        <div style="margin-top: 10px; font-weight: bold;">
-          {$_('no_molecule_found') || 'No molecule found for the provided input.'}
-        </div>
+        {#if moleculePopupOffline}
+          <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">cloud_off</span>
+          <div style="margin-top: 10px; font-weight: bold;">
+            {$_('offline_search_notice')}
+          </div>
+        {:else}
+          <span class="material-symbols-outlined" style="color: #e53935; font-size: 48px;">warning</span>
+          <div style="margin-top: 10px; font-weight: bold;">
+            {$_('no_molecule_found') || 'No molecule found for the provided input.'}
+          </div>
+        {/if}
         <button class="btn btn-warning mt-3" on:click={() => showMoleculePopup = false}>
           {$_('close_popup') || 'Close'}
         </button>

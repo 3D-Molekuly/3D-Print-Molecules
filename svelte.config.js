@@ -13,6 +13,10 @@ const config = {
 		}),
 		paths: {
 			relative: false
+		},
+		// Registered manually in src/routes/+layout.svelte (production only)
+		serviceWorker: {
+			register: false
 		}
 	}
 };

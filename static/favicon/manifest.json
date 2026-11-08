@@ -1,6 +1,8 @@
 {
   "name": "3D Printing Molecules",
   "short_name": "3DP MLC",
+  "id": "/",
+  "scope": "/",
   "start_url": "/",
   "description": "3D Print Molecular structures in color - easily.",
   "theme_color": "#ffffff",
@@ -31,13 +33,13 @@
   ],
   "screenshots": [
     {
-      "src": "screenshots/screenshot-wide.png",
+      "src": "/favicon/screenshots/screenshot-wide.png",
       "sizes": "1200x800",
       "type": "image/png",
       "form_factor": "wide"
     },
     {
-      "src": "screenshots/screenshot-mobile.png",
+      "src": "/favicon/screenshots/screenshot-mobile.png",
       "sizes": "600x800",
       "type": "image/png"
     }

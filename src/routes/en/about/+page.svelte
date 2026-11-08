@@ -1,6 +1,7 @@
 <script lang="ts">
     import vscht from '$lib/images/logoVSCHT.svg';
     import lf1 from '$lib/images/logo1LF.svg';
+    import lf1Dark from '$lib/images/logo1LF_dark.svg';
     import PrusaSlicerPluginNote from '$lib/components/PrusaSlicerPluginNote.svelte';
 </script>
 
@@ -62,6 +63,24 @@
     opacity: 1;
   }
   /* -------------------------- */
+
+  /* Dark mode: VŠCHT logo is a plain monochrome mark → invert it.
+     1. LF logo must NOT be inverted (pelican stays light per the LF1 logo manual) → swap to dedicated dark variant. */
+  .logo-dark {
+    display: none;
+  }
+  :global(html.dark) .logo-light {
+    display: none;
+  }
+  :global(html.dark) .logo-dark {
+    display: inline;
+  }
+  :global(html.dark) .logo-vscht {
+    filter: grayscale(60%) invert(1);
+  }
+  :global(html.dark) .logo-vscht:hover {
+    filter: invert(1);
+  }
 </style>
 
 <section class="about">
@@ -83,10 +102,11 @@
 
   <div class="logos-container">
     <a href="https://kuhv.vscht.cz" target="_blank" rel="noopener noreferrer" title="Department of Chemistry Education and Humanities, UCT Prague">
-      <img src={vscht} alt="Logo of the Department of Chemistry Education and Humanities, UCT Prague" height="75" class="logo" style="color:red;">
+      <img src={vscht} alt="Logo of the Department of Chemistry Education and Humanities, UCT Prague" height="75" class="logo logo-vscht">
     </a>
     <a href="https://www.lf1.cuni.cz" target="_blank" rel="noopener noreferrer" title="First Faculty of Medicine, Charles University">
-      <img src={lf1} alt="Logo of the First Faculty of Medicine, Charles University" height="75" class="logo" style="color:blue;">
+      <img src={lf1} alt="Logo of the First Faculty of Medicine, Charles University" height="75" class="logo logo-light">
+      <img src={lf1Dark} alt="Logo of the First Faculty of Medicine, Charles University" height="75" class="logo logo-dark">
     </a>
   </div>
 

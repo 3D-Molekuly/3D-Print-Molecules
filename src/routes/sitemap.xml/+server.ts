@@ -27,6 +27,12 @@ export const GET: RequestHandler = async () => {
 		{ hreflang: 'x-default', href: `${SITE_ORIGIN}/en/about` }
 	];
 
+	const examplesAlternates: AlternateLink[] = [
+		{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs/examples` },
+		{ hreflang: 'en', href: `${SITE_ORIGIN}/en/examples` },
+		{ hreflang: 'x-default', href: `${SITE_ORIGIN}/en/examples` }
+	];
+
 	const pages: SitemapEntry[] = [
 		{ loc: `${SITE_ORIGIN}/`, priority: '1.0', changefreq: 'weekly', alternates: homeAlternates },
 		{ loc: `${SITE_ORIGIN}/cs`, priority: '1.0', changefreq: 'weekly', alternates: homeAlternates },
@@ -42,6 +48,18 @@ export const GET: RequestHandler = async () => {
 			priority: '0.9',
 			changefreq: 'monthly',
 			alternates: tutorialsAlternates
+		},
+		{
+			loc: `${SITE_ORIGIN}/cs/examples`,
+			priority: '0.9',
+			changefreq: 'weekly',
+			alternates: examplesAlternates
+		},
+		{
+			loc: `${SITE_ORIGIN}/en/examples`,
+			priority: '0.9',
+			changefreq: 'weekly',
+			alternates: examplesAlternates
 		},
 		{
 			loc: `${SITE_ORIGIN}/cs/about`,

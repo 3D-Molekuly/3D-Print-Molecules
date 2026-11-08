@@ -90,18 +90,29 @@ describe('getRouteSeo', () => {
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/tutorials</loc>');
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs/about</loc>');
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/about</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs/examples</loc>');
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/examples</loc>');
 		expect(xml).toContain('xhtml:link rel="alternate" hreflang="cs"');
 		expect(xml).not.toContain('demonstrations');
 		expect(xml).not.toContain('vercel.app');
 	});
 
-	it('redirects demonstrations routes permanently (301) to the localized homepages', () => {
+	it('indexes the examples gallery with hreflang and a CollectionPage JSON-LD', () => {
+		const ex = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/cs/examples'), 'cs');
+		expect(ex.robots).toBe('index, follow');
+		expect(ex.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/cs/examples');
+		expect(ex.alternates.map((a) => a.href)).toContain('https://3dmolekuly.vscht.cz/en/examples');
+		expect(ex.jsonLdHtml).toContain('"@type":"CollectionPage"');
+		expect(ex.jsonLdHtml).toContain('makerworld.com');
+	});
+
+	it('redirects demonstrations routes permanently (301) to the localized examples gallery', () => {
 		try {
 			loadEnDemo({} as any);
 			expect.fail('Expected 301 redirect');
 		} catch (err: any) {
 			expect(err.status).toBe(301);
-			expect(err.location).toBe('/en');
+			expect(err.location).toBe('/en/examples');
 		}
 
 		try {
@@ -109,7 +120,7 @@ describe('getRouteSeo', () => {
 			expect.fail('Expected 301 redirect');
 		} catch (err: any) {
 			expect(err.status).toBe(301);
-			expect(err.location).toBe('/cs');
+			expect(err.location).toBe('/cs/examples');
 		}
 	});
 

@@ -1,4 +1,5 @@
 import { getLocaleFromPath, type SupportedLocale } from '$lib/functions/language';
+import { PRINTED_MODELS } from '$lib/data/printedModels';
 
 export const SITE_ORIGIN = 'https://3dmolekuly.vscht.cz';
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/favicon/screenshots/screenshot-wide.png`;
@@ -86,7 +87,7 @@ export function normalizePathname(pathname: string): string {
 	return stripped || '/';
 }
 
-type RouteKind = 'home' | 'tutorials' | 'about' | 'demonstrations' | 'other';
+type RouteKind = 'home' | 'tutorials' | 'about' | 'examples' | 'demonstrations' | 'other';
 
 function classifyRoute(pathname: string): { kind: RouteKind; baseSubpath: string } {
 	const clean = normalizePathname(pathname);
@@ -99,6 +100,9 @@ function classifyRoute(pathname: string): { kind: RouteKind; baseSubpath: string
 	}
 	if (withoutLocale === '/about') {
 		return { kind: 'about', baseSubpath: '/about' };
+	}
+	if (withoutLocale === '/examples') {
+		return { kind: 'examples', baseSubpath: '/examples' };
 	}
 	if (withoutLocale === '/demonstrations') {
 		return { kind: 'demonstrations', baseSubpath: '/demonstrations' };
@@ -137,7 +141,7 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 			{ hreflang: 'en', href: `${SITE_ORIGIN}/en` },
 			{ hreflang: 'x-default', href: `${SITE_ORIGIN}/` }
 		];
-	} else if (kind === 'tutorials' || kind === 'about') {
+	} else if (kind === 'tutorials' || kind === 'about' || kind === 'examples') {
 		canonicalUrl = `${SITE_ORIGIN}/${lang}${baseSubpath}`;
 		alternates = [
 			{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs${baseSubpath}` },
@@ -291,6 +295,44 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 					]
 				}
 			]
+		};
+	} else if (kind === 'examples') {
+		title = isCs
+			? `Vytištěné 3D modely molekul ke stažení (STL, 3MF) | ${siteName}`
+			: `3D Printed Molecule Models – Free STL & 3MF Downloads | ${siteName}`;
+		description = isCs
+			? 'Galerie vytištěných 3D modelů molekul – adrenalin, ATP, glukóza, indigo, kalixaren, kryptand a protein TRK. Stáhněte si soubory zdarma z Printables a MakerWorld.'
+			: 'Gallery of 3D printed molecular models – adrenaline, ATP, glucose, indigo, calixarene, cryptand and TRK kinase. Download free files from Printables and MakerWorld.';
+		keywords = isCs
+			? '3D modely molekul ke stažení, STL molekula, 3MF molekula, vytištěné molekuly, Printables molekuly, MakerWorld molekuly'
+			: '3D printed molecules, molecule STL download, molecular model 3MF, printable molecule models, Printables molecules, MakerWorld molecules';
+		ogTitle = title;
+		ogDescription = description;
+		jsonLdData = {
+			'@context': 'https://schema.org',
+			'@type': 'CollectionPage',
+			name: title,
+			description,
+			url: canonicalUrl,
+			inLanguage: lang,
+			isPartOf: { '@type': 'WebSite', name: siteName, url: `${SITE_ORIGIN}/` },
+			mainEntity: {
+				'@type': 'ItemList',
+				itemListElement: PRINTED_MODELS.map((model, index) => ({
+					'@type': 'ListItem',
+					position: index + 1,
+					item: {
+						'@type': '3DModel',
+						name: model.name[lang],
+						description: model.description[lang],
+						image: model.image,
+						url: model.printablesUrl,
+						sameAs: [model.printablesUrl, model.makerworldUrl],
+						isAccessibleForFree: true,
+						encodingFormat: ['model/3mf', 'model/stl']
+					}
+				}))
+			}
 		};
 	} else if (kind === 'demonstrations') {
 		robots = 'noindex, nofollow';

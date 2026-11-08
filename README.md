@@ -156,6 +156,8 @@ Printed something nice? Share a photo in [Issues](https://github.com/3D-Molekuly
 
 The project started in 2023 as a PyMOL script, evolved through several Python iterations and grew into this web application. It received an award at the **25th Student Scientific Conference (SVK)** of the First Faculty of Medicine, Charles University.
 
+📜 See the full development timeline and when each feature was added in [CHANGELOG.md](CHANGELOG.md) (in Czech).
+
 ## Team & acknowledgments
 
 Developed as a collaboration of:

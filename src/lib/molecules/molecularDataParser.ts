@@ -746,3 +746,47 @@ export async function extractElementData(symbol: string): Promise<{ AtomicRadius
 
   return FALLBACK_ELEMENTS[normalized] ?? null;
 }
+
+export type StructureFileFormat = 'pdb' | 'sdf' | 'cif';
+
+const EXTENSION_FORMATS: Record<string, StructureFileFormat> = {
+  pdb: 'pdb',
+  ent: 'pdb',
+  sdf: 'sdf',
+  sd: 'sdf',
+  mol: 'sdf',
+  mdl: 'sdf',
+  cif: 'cif',
+  mmcif: 'cif'
+};
+
+/**
+ * Splits a file name into its base name and structure format. Wrapper extensions such as
+ * `.txt` (added e.g. by iOS / iCloud downloads: `molecule.sdf.txt`) are skipped.
+ */
+export function structureFormatFromFileName(fileName: string): { baseName: string; format: StructureFileFormat | null } {
+  const parts = fileName.split('.');
+  while (parts.length > 1 && ['txt', 'text'].includes(parts[parts.length - 1].toLowerCase())) {
+    parts.pop();
+  }
+  const ext = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+  const format = EXTENSION_FORMATS[ext] ?? null;
+  return { baseName: format ? parts.slice(0, -1).join('.') : parts.join('.'), format };
+}
+
+/** Guesses the structure format from the file content; null when it is not recognised. */
+export function detectStructureFormat(content: string): StructureFileFormat | null {
+  const lines = content.replace(/^﻿/, '').split(/\r?\n/);
+  // MDL molfile / SDF: counts line (4th line) ends with V2000/V3000, or "M  END" is present
+  if (lines.slice(0, 10).some((l) => /\bV[23]000\s*$/.test(l)) || lines.some((l) => l.startsWith('M  END'))) {
+    return 'sdf';
+  }
+  const head = lines.slice(0, 400);
+  if (head.some((l) => /^data_\S*/.test(l.trim())) && head.some((l) => l.trim().startsWith('_'))) {
+    return 'cif';
+  }
+  if (head.some((l) => /^(ATOM  |HETATM|ATOM\s+\d|HETATM\d)/.test(l))) {
+    return 'pdb';
+  }
+  return null;
+}

@@ -73,3 +73,23 @@ describe('molecularDataParser (PDB, SDF V2000/V3000, formulas)', () => {
 		expect(formatPdbQuerySpec('4hhb', 'B', true)).toBe('4HHB:B+w');
 	});
 });
+
+describe('structure file format detection', () => {
+	it('reads the format from the extension, skipping a trailing .txt', async () => {
+		const { structureFormatFromFileName } = await import('$lib/molecules/molecularDataParser');
+		expect(structureFormatFromFileName('Source_molecule.sdf.txt')).toEqual({ baseName: 'Source_molecule', format: 'sdf' });
+		expect(structureFormatFromFileName('1abc.PDB')).toEqual({ baseName: '1abc', format: 'pdb' });
+		expect(structureFormatFromFileName('ethanol.mol')).toEqual({ baseName: 'ethanol', format: 'sdf' });
+		expect(structureFormatFromFileName('notes.txt')).toEqual({ baseName: 'notes', format: null });
+		expect(structureFormatFromFileName('structure')).toEqual({ baseName: 'structure', format: null });
+	});
+
+	it('detects SDF, CIF and PDB from content', async () => {
+		const { detectStructureFormat } = await import('$lib/molecules/molecularDataParser');
+		const sdf = ['OIN', '  CCTOOLS-0919241027', '', '  2  1  0  0  1  0  0  0  0  0999 V2000', '    0.0000    0.0000    0.0000 C   0  0', 'M  END', '$$$$'].join('\n');
+		expect(detectStructureFormat(sdf)).toBe('sdf');
+		expect(detectStructureFormat('data_1234\n_cell_length_a 5.0\n')).toBe('cif');
+		expect(detectStructureFormat('HEADER    TEST\nATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00 10.00           N  \n')).toBe('pdb');
+		expect(detectStructureFormat('hello world')).toBeNull();
+	});
+});

@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { locale } from 'svelte-i18n';
 	import 'bootstrap/dist/css/bootstrap.min.css';
+	import '../fonts.css';
 	import '../app.css';
 
 	import Header from '$lib/components/header.svelte';
@@ -49,6 +50,16 @@
 				navigator.serviceWorker.register('/service-worker.js').catch((err) => {
 					console.warn('SW registration failed:', err);
 				});
+				// Installed app (home screen / standalone window): users expect it to work offline,
+				// so also store the ~8 MB OpenBabel runtime used by the drawing tool for 3D generation.
+				const isStandalone =
+					window.matchMedia('(display-mode: standalone)').matches ||
+					(navigator as Navigator & { standalone?: boolean }).standalone === true;
+				if (isStandalone && navigator.onLine) {
+					navigator.serviceWorker.ready
+						.then((registration) => registration.active?.postMessage({ type: 'precache-kekule' }))
+						.catch(() => {});
+				}
 			}
 			if ('caches' in window) {
 				// Clear legacy service worker cache if still present in client

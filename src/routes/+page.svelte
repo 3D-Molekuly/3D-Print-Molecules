@@ -37,7 +37,7 @@
     type HoveredAtomInfo
   } from '$lib/threejsFc/threejsMolecules3';
   import { setupCanvasResizing } from '$lib/threejsFc/canvasUtils';
-  import { parsePDB, parseSDF, computeMolecularFormula } from '$lib/molecules/molecularDataParser';
+  import { parsePDB, parseSDF, computeMolecularFormula, structureFormatFromFileName, detectStructureFormat } from '$lib/molecules/molecularDataParser';
   import type { AtomCoordinate } from '$lib/molecules/molecularDataParser';
   import type { CreateAtomsParams, JointPresetId, ModelStyleId, MoleculeSource, MovingJointsStats, GluedSpheresMode, GluedSpheresExportMode, GluedSpheresStats } from '$lib/types';
   import { JOINT_PRESETS, checkJointParams, jointLevels, paramsForRod, type JointParams } from '$lib/geometry/jointGeometry';
@@ -1484,25 +1484,21 @@
   function handleFiles(files: FileList) {
     if (files && files.length > 0) {
       const file = files[0];
-      const fileExtension = file.name.split('.').pop()?.toLowerCase();
-      
-      if (!['pdb', 'sdf', 'cif'].includes(fileExtension || '')) {
-        showMoleculePopup = true;
-        return;
-      }
-      
+      // Format from the extension (ignoring a wrapper ".txt", e.g. "molecule.sdf.txt" from iOS),
+      // otherwise detected from the content once the file is read.
+      const { baseName, format: formatFromName } = structureFormatFromFileName(file.name);
+
       isReloadMode = false;
       isFetchingMolecule = true;
       hoveredAtom = null;
-      uploadedFileName = file.name.split('.').slice(0, -1).join('.');
+      uploadedFileName = baseName || file.name;
       isFileUploaded = true;
       moleculeSource = 'file';
       moleculeQuery = '';
       sharedSettingsNotice = false;
-      setTableInfo(file.name, `Uploaded .${fileExtension} file`, "");
       setImage('https://openmoji.org/data/black/svg/1F4C4.svg');
       inputStr = `File: ${file.name}`;
-      
+
       const reader = new FileReader();
       reader.onerror = () => {
         isFetchingMolecule = false;
@@ -1510,19 +1506,25 @@
       };
       reader.onload = async (e) => {
         const content = e.target?.result as string;
-        
+
         try {
+          const fileFormat = formatFromName ?? detectStructureFormat(content);
+          if (!fileFormat) {
+            throw new Error(`Unsupported file format: ${file.name}`);
+          }
+          setTableInfo(file.name, `Uploaded .${fileFormat} file`, "");
+
           let newAtomCoordinates: AtomCoordinate[] = [];
 
-          if (fileExtension === 'pdb') {
+          if (fileFormat === 'pdb') {
             originalContent = content;
             originalFileExtension = 'pdb';
             newAtomCoordinates = await parsePDB(content);
-          } else if (fileExtension === 'sdf') {
+          } else if (fileFormat === 'sdf') {
             originalContent = content;
             originalFileExtension = 'sdf';
             newAtomCoordinates = await parseSDF(content);
-          } else if (fileExtension === 'cif') {
+          } else if (fileFormat === 'cif') {
             const sdfContent = await cifToSdf(content);
             originalContent = sdfContent;
             originalFileExtension = 'sdf';

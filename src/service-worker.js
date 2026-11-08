@@ -4,14 +4,11 @@ import { build, files, version } from '$service-worker';
 const CACHE = `cache-${version}`;
 
 // Kekule/OpenBabel WASM assets (~8 MB) are not precached for every visitor;
-// they are cached on first use by the drawing tool (see fetch handler below).
+// they are cached on first use by the drawing tool (see fetch handler below),
+// or up front when the app runs installed as a PWA (see 'precache-kekule' message).
 const KEKULE_PREFIX = '/kekule/';
 const KEKULE_CACHE = 'kekule-openbabel-v1';
-
-// Google Fonts (Exo 2, Handjet, Material Symbols icons) — without them the UI shows raw
-// ligature text ("settings", "download") instead of icons when offline.
-const FONT_CACHE = 'google-fonts-v1';
-const FONT_ORIGINS = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
+const KEKULE_FILES = files.filter((f) => f.startsWith(KEKULE_PREFIX));
 
 const ASSETS = [
 	...build,
@@ -54,13 +51,32 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
 	async function deleteOldCaches() {
 		for (const key of await caches.keys()) {
-			if (key !== CACHE && key !== KEKULE_CACHE && key !== FONT_CACHE) {
+			if (key !== CACHE && key !== KEKULE_CACHE) {
 				await caches.delete(key);
 			}
 		}
 	}
 
 	event.waitUntil(deleteOldCaches().then(() => self.clients.claim()));
+});
+
+// The installed app (PWA) asks for the OpenBabel files up front, so drawing a molecule and
+// generating its 3D structure works offline even if the drawing tool was never opened online.
+self.addEventListener('message', (event) => {
+	if (event.data?.type !== 'precache-kekule') return;
+	event.waitUntil(
+		caches.open(KEKULE_CACHE).then(async (cache) => {
+			for (const file of KEKULE_FILES) {
+				if (await cache.match(file)) continue;
+				try {
+					const response = await fetch(file);
+					if (isStorable(response)) await cache.put(file, response);
+				} catch {
+					// offline right now – retried on the next launch
+				}
+			}
+		})
+	);
 });
 
 self.addEventListener('fetch', (event) => {
@@ -92,25 +108,6 @@ self.addEventListener('fetch', (event) => {
 					});
 				}
 			})()
-		);
-		return;
-	}
-
-	// Google Fonts: stylesheet network first (it is tailored to the browser), font files cache first
-	if (FONT_ORIGINS.includes(url.origin)) {
-		event.respondWith(
-			caches.open(FONT_CACHE).then(async (cache) => {
-				const cached = await cache.match(event.request);
-				if (cached && url.origin === 'https://fonts.gstatic.com') return cached;
-				try {
-					const response = await fetch(event.request);
-					if (response.ok || response.type === 'opaque') cache.put(event.request, response.clone());
-					return response;
-				} catch (err) {
-					if (cached) return cached;
-					throw err;
-				}
-			})
 		);
 		return;
 	}

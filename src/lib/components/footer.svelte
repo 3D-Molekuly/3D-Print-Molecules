@@ -20,7 +20,7 @@
             <a class="text-muted" href="mailto:3dmolekuly@vscht.cz?subject=3D%20Printing%20Molecules%20-%20Bug%20Report">{$_('bug_report')}</a>
         </li>
         <li class="ms-2">
-          <a class="text-muted" href="https://github.com/KubiV/3D-Print-Molecules-WEB">
+          <a class="text-muted" href="https://github.com/molekuly3d/3D-Print-Molecules">
               <img src={github} alt="GitHub Logo" class="text-muted" width="20" height="20">
           </a>
       </li>

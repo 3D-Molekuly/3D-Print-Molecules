@@ -1864,8 +1864,14 @@
               </button>
             </div>
 
-            {#if searchHistory.length > 0}
-              <ul class="dropdown-menu" id="searchDropdown" aria-labelledby="dropdownMenuButton">
+            <!-- Menu musí být v DOM vždy: Bootstrap si při prvním kliknutí uloží referenci na něj a později přidané menu by bez reloadu nenašel -->
+            <ul
+              class="dropdown-menu"
+              class:d-none={searchHistory.length === 0}
+              id="searchDropdown"
+              aria-labelledby="dropdownMenuButton"
+            >
+              {#if searchHistory.length > 0}
                 {#each searchHistory as item, index}
                   <li>
                     <a class="dropdown-item" href="#" on:click|preventDefault={() => handleHistoryClick(item)}>
@@ -1884,8 +1890,8 @@
                     ⨉ {$_('delete_history')}
                   </button>
                 </li>
-              </ul>
-            {/if}
+              {/if}
+            </ul>
           </div>
 
           <div>

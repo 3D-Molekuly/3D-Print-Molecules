@@ -14,6 +14,8 @@ const config = {
 		paths: {
 			relative: false
 		},
+		// Inline small CSS chunks into the HTML to cut render-blocking requests (PageSpeed).
+		inlineStyleThreshold: 8192,
 		// Registered manually in src/routes/+layout.svelte (production only)
 		serviceWorker: {
 			register: false

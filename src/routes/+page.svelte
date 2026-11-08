@@ -1835,7 +1835,8 @@
   function enableEditing() { isEditing = true; }
   function disableEditing() { isEditing = false; }
 
-  let isCollapsed = typeof window !== 'undefined' && localStorage.getItem('menuCollapsed') !== 'false';
+  // Server renders the settings collapsed too (the client default), so hydration does not shift the layout (CLS).
+  let isCollapsed = typeof window === 'undefined' || localStorage.getItem('menuCollapsed') !== 'false';
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
     localStorage.setItem('menuCollapsed', isCollapsed.toString());

@@ -1015,7 +1015,7 @@
           <span class="adv-prefix-badge">záložka Kreslení</span>
         </div>
         <p class="adv-card-desc">
-          Strukturní vzorec nakreslíš přímo na plátně: zvol vazbu (jednoduchá, dvojná, trojná), prvek (C, H, O, N, P, S, F, Cl, Br) nebo kruh (benzen, cyklohexan, cyklopentan) a klikej či táhni myší. Klik prvkem na existující atom ho změní, klik do prázdna přidá nový atom. Tlačítko <em>Vytvořit 3D model</em> pak spočítá prostorové souřadnice včetně vodíků.
+          Strukturní vzorec nakreslíš přímo na plátně: zvol vazbu (jednoduchá, dvojná, trojná nebo klínová/šrafovaná pro stereochemii), prvek (C, H, O, N, P, S, F, Cl, Br, I, B, Si, Se nebo jakýkoli další z nabídky <em>Další</em>) nebo kruh (benzen, cyklohexan, cyklopentan; další cykloalkany a heterocykly jako pyridin či furan najdeš pod <em>Další cykly</em>) a klikej či táhni myší. Nástroje <em>+</em>/<em>−</em> nastavují náboj atomů a pod plátnem se průběžně zobrazuje vzorec a SMILES nakreslené molekuly. Klik prvkem na existující atom ho změní, klik do prázdna přidá nový atom. Tlačítko <em>Vytvořit 3D model</em> pak spočítá prostorové souřadnice včetně vodíků.
         </p>
         <img src={drawImg} alt="Záložka Kreslení v pokročilém vyhledávání s nakreslenou kyselinou salicylovou" loading="lazy" class="tutorial-img draw-img">
         <p class="image-caption">Ukázka: kyselina salicylová nakreslená v záložce Kreslení</p>

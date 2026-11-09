@@ -1015,7 +1015,7 @@
           <span class="adv-prefix-badge">Draw tab</span>
         </div>
         <p class="adv-card-desc">
-          Sketch a structural formula right on the canvas: pick a bond (single, double, triple), an element (C, H, O, N, P, S, F, Cl, Br) or a ring (benzene, cyclohexane, cyclopentane) and click or drag. Clicking an existing atom with an element changes it; clicking empty space adds a new atom. The <em>Generate 3D Model</em> button then computes 3D coordinates, hydrogens included.
+          Sketch a structural formula right on the canvas: pick a bond (single, double, triple, or a wedge/hashed bond for stereochemistry), an element (C, H, O, N, P, S, F, Cl, Br, I, B, Si, Se, or any other from the <em>Other</em> menu) or a ring (benzene, cyclohexane, cyclopentane; more cycloalkanes and heterocycles such as pyridine or furan under <em>More rings</em>) and click or drag. The <em>+</em>/<em>−</em> tools set atom charges, and the formula and SMILES of the drawing are shown live below the canvas. Clicking an existing atom with an element changes it; clicking empty space adds a new atom. The <em>Generate 3D Model</em> button then computes 3D coordinates, hydrogens included.
         </p>
         <img src={drawImg} alt="Draw tab in Advanced Search with salicylic acid sketched on the canvas" loading="lazy" class="tutorial-img draw-img">
         <p class="image-caption">Example: salicylic acid sketched in the Draw tab</p>

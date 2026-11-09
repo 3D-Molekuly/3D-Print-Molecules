@@ -23,6 +23,7 @@
   } from '$lib/molecules/inputs';
   import { detectFormulaQuery, formatConformerQuery } from '$lib/molecules/queryDetection';
   import MoleculeDrawPanel from '$lib/components/MoleculeDrawPanel.svelte';
+  import SmilesStructurePreview from '$lib/components/SmilesStructurePreview.svelte';
   import { isOnline, isOffline } from '$lib/functions/network';
 
   export let show: boolean;
@@ -51,6 +52,10 @@
   let pdbChain = '';
   let pdbIncludeWaters = false;
   let cactusQuery = '';
+  /** SMILES handed from the SMILES tab's preview to the Draw tab ("Edit in Draw"). */
+  let drawInitialSmiles = '';
+  /** Bumped on every hand-off so the Draw panel remounts and loads the new structure. */
+  let drawSessionKey = 0;
   let codQuery = '';
 
   // Shared UI states
@@ -510,6 +515,12 @@
     }
   }
 
+  function editSmilesInDraw(event: CustomEvent<{ smiles: string }>) {
+    drawInitialSmiles = event.detail.smiles;
+    drawSessionKey++;
+    switchTab('draw');
+  }
+
   function applyCactusExample(val: string) {
     cactusQuery = val;
     handleCactusSubmit();
@@ -627,6 +638,7 @@
     pdbQuery = '';
     pdbChain = '';
     cactusQuery = '';
+    drawInitialSmiles = '';
     codQuery = '';
     errorMsg = '';
     isLoading = false;
@@ -1129,6 +1141,8 @@
         </div>
       </form>
 
+      <SmilesStructurePreview smiles={cactusQuery} on:edit={editSmilesInDraw} />
+
       <div class="example-row">
         <span class="example-label">{$_('adv_examples_label')}</span>
         <button type="button" class="example-chip" disabled={isLoading} on:click={() => applyCactusExample('C12C3C4C1C5C2C3C45')}>
@@ -1230,7 +1244,9 @@
   <!-- 5. DRAW 2D -> 3D (Kekule.js) -->
   {#if activeTab === 'draw' && show}
     <div class="tab-content" role="tabpanel" id="panel-draw" aria-labelledby="tab-draw">
-      <MoleculeDrawPanel on:generated={handleDrawGenerated} />
+      {#key drawSessionKey}
+        <MoleculeDrawPanel initialSmiles={drawInitialSmiles} on:generated={handleDrawGenerated} />
+      {/key}
     </div>
   {/if}
 

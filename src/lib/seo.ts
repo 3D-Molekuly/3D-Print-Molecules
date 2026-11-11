@@ -1,5 +1,5 @@
 import { getLocaleFromPath, type SupportedLocale } from '$lib/functions/language';
-import { PRINTED_MODELS } from '$lib/data/printedModels';
+import { PRINTED_MODELS, AMINO_ACIDS } from '$lib/data/printedModels';
 
 export const SITE_ORIGIN = 'https://3dmolekuly.vscht.cz';
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/favicon/screenshots/screenshot-wide.png`;
@@ -318,7 +318,7 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 			isPartOf: { '@type': 'WebSite', name: siteName, url: `${SITE_ORIGIN}/` },
 			mainEntity: {
 				'@type': 'ItemList',
-				itemListElement: PRINTED_MODELS.map((model, index) => ({
+				itemListElement: [...PRINTED_MODELS, ...AMINO_ACIDS].map((model, index) => ({
 					'@type': 'ListItem',
 					position: index + 1,
 					item: {
@@ -327,7 +327,9 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 						description: model.description[lang],
 						image: model.image,
 						url: model.printablesUrl,
-						sameAs: [model.printablesUrl, model.makerworldUrl],
+						sameAs: model.makerworldUrl
+							? [model.printablesUrl, model.makerworldUrl]
+							: [model.printablesUrl],
 						isAccessibleForFree: true,
 						encodingFormat: ['model/3mf', 'model/stl']
 					}

@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { SupportedLocale } from '$lib/functions/language';
+  import { onMount } from 'svelte';
+  import ModelCard from '$lib/components/ModelCard.svelte';
   import {
     PRINTED_MODELS,
+    AMINO_ACIDS,
+    type PrintedModel,
     PRINTABLES_PROFILE_URL,
     MAKERWORLD_PROFILE_URL
   } from '$lib/data/printedModels';
@@ -14,8 +18,16 @@
       intro:
         'Ukázky molekul, které jsme připravili v aplikaci a vytiskli. Hotové soubory 3MF a STL si můžete zdarma stáhnout z Printables nebo MakerWorld, nebo si model upravit a vygenerovat přímo v naší aplikaci.',
       channels: 'Celá sbírka na našich profilech',
-      openEditor: 'Upravit v aplikaci',
-      photoAlt: 'Vytištěný 3D model molekuly',
+      aminoHeading: 'Aminokyseliny',
+      aminoMeta: (n: number) => `${n} proteinogenních aminokyselin · vícebarevný tisk`,
+      aminoIntro:
+        'Kompletní sada proteinogenních aminokyselin včetně selenocysteinu, připravená pro vícebarevný tisk (barvy podle prvků).',
+      searchLabel: 'Hledat model',
+      searchPlaceholder: 'Hledat molekulu… (např. glycin, ATP, Trp)',
+      searchClear: 'Vymazat hledání',
+      searchResults: (n: number) => `Nalezeno modelů: ${n}`,
+      searchEmpty: 'Žádný vytištěný model neodpovídá hledání.',
+      searchEmptyCta: 'Vygenerovat v aplikaci',
       ctaHeading: 'Chybí vám tu molekula?',
       ctaText: 'Vygenerujte si vlastní model z PubChem, PDB nebo COD během pár vteřin.',
       ctaButton: 'Otevřít generátor'
@@ -25,8 +37,16 @@
       intro:
         'Molecules we prepared in the app and printed. Download the ready-to-print 3MF and STL files for free from Printables or MakerWorld, or tweak and generate the model yourself in our web app.',
       channels: 'Full collection on our profiles',
-      openEditor: 'Edit in the app',
-      photoAlt: '3D printed molecular model',
+      aminoHeading: 'Amino Acids',
+      aminoMeta: (n: number) => `${n} proteinogenic amino acids · multi-color print`,
+      aminoIntro:
+        'The complete set of proteinogenic amino acids including selenocysteine, prepared for multi-color printing (colored by element).',
+      searchLabel: 'Search models',
+      searchPlaceholder: 'Search molecules… (e.g. glycine, ATP, Trp)',
+      searchClear: 'Clear search',
+      searchResults: (n: number) => `${n} ${n === 1 ? 'model' : 'models'} found`,
+      searchEmpty: 'No printed model matches your search.',
+      searchEmptyCta: 'Generate it in the app',
       ctaHeading: 'Missing a molecule?',
       ctaText: 'Generate your own model from PubChem, PDB or COD in seconds.',
       ctaButton: 'Open the generator'
@@ -34,7 +54,61 @@
   } as const;
 
   $: t = TEXT[lang];
-  $: editorHref = (query: string) => `/${lang}?mol=${encodeURIComponent(query)}`;
+  $: aminoSorted = [...AMINO_ACIDS].sort((a, b) => a.name[lang].localeCompare(b.name[lang], lang));
+
+  // Four visually distinct prints for the category's collage icon.
+  const COLLAGE_IDS = ['tryptophan', 'histidine', 'cysteine', 'phenylalanine'];
+  const collage = COLLAGE_IDS.map((id) => AMINO_ACIDS.find((m) => m.id === id)).filter(
+    (m): m is (typeof AMINO_ACIDS)[number] => !!m
+  );
+
+  let aminoOpen = false;
+
+  // --- Search -------------------------------------------------------------
+  const SUBSCRIPTS = '₀₁₂₃₄₅₆₇₈₉';
+  /** Lower-case, strip diacritics and turn formula subscripts into plain digits. */
+  const normalize = (text: string) =>
+    text
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[₀-₉]/g, (c) => String(SUBSCRIPTS.indexOf(c)))
+      .toLowerCase();
+
+  // Words separated by single spaces, with a leading space, so terms can match from a word start.
+  const haystack = (model: PrintedModel) =>
+    ' ' +
+    normalize(
+      [model.id, model.name.cs, model.name.en, model.description.cs, model.description.en, model.editorQuery ?? ''].join(' ')
+    )
+      .replace(/[^a-z0-9]+/g, ' ');
+  const INDEX = new Map([...PRINTED_MODELS, ...AMINO_ACIDS].map((m) => [m.id, haystack(m)]));
+
+  let query = '';
+  $: terms = normalize(query).split(/[^a-z0-9]+/).filter(Boolean);
+  $: searching = terms.length > 0;
+  $: matches = (model: PrintedModel) => {
+    const text = INDEX.get(model.id) ?? '';
+    return terms.every((term) => text.includes(' ' + term));
+  };
+  $: visibleModels = searching ? PRINTED_MODELS.filter(matches) : PRINTED_MODELS;
+  $: visibleAmino = searching ? aminoSorted.filter(matches) : aminoSorted;
+  $: resultCount = visibleModels.length + visibleAmino.length;
+  // Reveal matching amino acids without the extra click.
+  $: if (searching && visibleAmino.length > 0) aminoOpen = true;
+
+  // Open the category when a link points directly at one of its models (e.g. /en/examples#glycine).
+  onMount(() => {
+    const openForHash = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      if (id && AMINO_ACIDS.some((m) => m.id === id)) {
+        aminoOpen = true;
+        requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'center' }));
+      }
+    };
+    openForHash();
+    window.addEventListener('hashchange', openForHash);
+    return () => window.removeEventListener('hashchange', openForHash);
+  });
 </script>
 
 <div class="gallery-page container">
@@ -61,38 +135,61 @@
     </div>
   </header>
 
+  <div class="gallery-search" role="search">
+    <label class="search-field">
+      <span class="material-symbols-outlined" aria-hidden="true">search</span>
+      <span class="visually-hidden">{t.searchLabel}</span>
+      <input
+        type="search"
+        bind:value={query}
+        placeholder={t.searchPlaceholder}
+        autocomplete="off"
+        spellcheck="false"
+      />
+      {#if query}
+        <button type="button" class="search-clear" on:click={() => (query = '')} aria-label={t.searchClear}>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      {/if}
+    </label>
+    {#if searching}
+      <p class="search-status" aria-live="polite">{t.searchResults(resultCount)}</p>
+    {/if}
+  </div>
+
+  {#if searching && resultCount === 0}
+    <div class="search-empty">
+      <p>{t.searchEmpty}</p>
+      <a href={`/${lang}?mol=${encodeURIComponent(query.trim())}`} class="btn btn-primary">{t.searchEmptyCta}</a>
+    </div>
+  {/if}
+
+  {#if visibleAmino.length > 0}
+  <details class="model-category" bind:open={aminoOpen}>
+    <summary>
+      <span class="category-collage" aria-hidden="true">
+        {#each collage as model (model.id)}
+          <img src={model.image} alt="" width="640" height="480" loading="lazy" decoding="async" />
+        {/each}
+      </span>
+      <span class="category-title">
+        <h2>{t.aminoHeading}</h2>
+        <span class="category-meta">{t.aminoMeta(AMINO_ACIDS.length)}</span>
+      </span>
+      <span class="category-icon material-symbols-outlined" aria-hidden="true">expand_more</span>
+    </summary>
+    <p class="category-intro">{t.aminoIntro}</p>
+    <ul class="model-grid">
+      {#each visibleAmino as model (model.id)}
+        <ModelCard {model} {lang} headingLevel="h3" />
+      {/each}
+    </ul>
+  </details>
+  {/if}
+
   <ul class="model-grid">
-    {#each PRINTED_MODELS as model (model.id)}
-      <li class="model-card" id={model.id}>
-        <a href={model.printablesUrl} target="_blank" rel="noopener" class="model-photo" tabindex="-1">
-          <img
-            src={model.image}
-            alt={`${t.photoAlt}: ${model.name[lang]}`}
-            width="640"
-            height="480"
-            loading="lazy"
-            decoding="async"
-          />
-        </a>
-        <div class="model-body">
-          <h2>{model.name[lang]}</h2>
-          <p>{model.description[lang]}</p>
-          <div class="model-links">
-            <a href={model.printablesUrl} target="_blank" rel="noopener" class="model-link printables">
-              Printables <span aria-hidden="true">↗</span>
-            </a>
-            <a href={model.makerworldUrl} target="_blank" rel="noopener" class="model-link makerworld">
-              MakerWorld <span aria-hidden="true">↗</span>
-            </a>
-          </div>
-          {#if model.editorQuery}
-            <a href={editorHref(model.editorQuery)} class="editor-link">
-              <span class="material-symbols-outlined" aria-hidden="true">deployed_code</span>
-              {t.openEditor}
-            </a>
-          {/if}
-        </div>
-      </li>
+    {#each visibleModels as model (model.id)}
+      <ModelCard {model} {lang} />
     {/each}
   </ul>
 
@@ -183,98 +280,145 @@
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 1.5rem;
   }
-  .model-card {
+  .gallery-search {
+    max-width: 560px;
+    margin: 0 auto 2rem;
+  }
+  .search-field {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.5rem 0 0.9rem;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 12px;
-    overflow: hidden;
+    border-radius: 999px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin: 0;
   }
-  .model-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  .search-field:focus-within {
+    border-color: #fa6831;
+    box-shadow: 0 0 0 3px rgba(250, 104, 49, 0.2);
   }
-  .model-photo {
-    display: block;
-    aspect-ratio: 4 / 3;
-    background: #ddd;
+  .search-field > .material-symbols-outlined {
+    color: var(--muted);
   }
-  .model-photo img {
+  .search-field input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1.05rem;
+    padding: 0.7rem 0;
+  }
+  .search-field input::-webkit-search-cancel-button {
+    display: none;
+  }
+  .search-clear {
+    display: flex;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 0.3rem;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .search-clear:hover {
+    background: rgba(127, 127, 127, 0.15);
+  }
+  .search-status {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0.5rem 0 0;
+  }
+  .search-empty {
+    text-align: center;
+    margin: 1rem 0 2rem;
+    color: var(--muted);
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .model-category {
+    margin-bottom: 2rem;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    background: var(--card-bg);
+  }
+  .model-category summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    list-style: none;
+    border-radius: 12px;
+  }
+  .model-category summary::-webkit-details-marker {
+    display: none;
+  }
+  .model-category summary:hover {
+    background: rgba(127, 127, 127, 0.08);
+  }
+  .model-category summary:focus-visible {
+    outline: 2px solid #fa6831;
+    outline-offset: 2px;
+  }
+  .category-collage {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    width: 96px;
+    height: 96px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--card-border);
+  }
+  .category-collage img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+    /* Zoom past the promo banner at the top of the photos onto the molecule itself. */
+    transform: scale(1.6);
+    transform-origin: 50% 62%;
   }
-  .model-body {
+  .category-icon {
+    margin-left: auto;
+    font-size: 2rem;
+    transition: transform 0.2s ease;
+  }
+  .model-category[open] .category-icon {
+    transform: rotate(180deg);
+  }
+  .category-title {
     display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    padding: 1rem 1.1rem 1.2rem;
-    flex: 1;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 0.75rem;
   }
-  .model-body h2 {
-    font-size: 1.2rem;
+  .category-title h2 {
+    font-size: 1.5rem;
     margin: 0;
   }
-  .model-body p {
-    margin: 0;
+  .category-meta {
     color: var(--muted);
     font-size: 0.95rem;
-    flex: 1;
   }
-  .model-links {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-    margin-top: 0.25rem;
+  .category-intro {
+    color: var(--muted);
+    margin: 0 1.25rem 1.25rem;
   }
-  .model-link {
-    text-align: center;
-    font-weight: 600;
-    padding: 0.45rem 0.5rem;
-    border-radius: 6px;
-    text-decoration: none;
-    font-size: 0.95rem;
-  }
-  .model-link.printables {
-    background: #fa6831;
-    color: #fff;
-  }
-  .model-link.printables:hover {
-    background: #e0531c;
-  }
-  .model-link.makerworld {
-    background: #111;
-    color: #fff;
-  }
-  .model-link.makerworld:hover {
-    background: #333;
-  }
-  :global(html.dark) .model-link.makerworld {
-    background: #f2f2f2;
-    color: #111;
-  }
-  .editor-link {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    text-decoration: none;
-    padding: 0.4rem;
-    border-radius: 6px;
-    border: 1px solid var(--card-border);
-    color: inherit;
-  }
-  .editor-link:hover {
-    background: rgba(127, 127, 127, 0.1);
-  }
-  .editor-link .material-symbols-outlined {
-    font-size: 1.2rem;
+  .model-category .model-grid {
+    padding: 0 1.25rem 1.25rem;
   }
 
   .gallery-cta {

@@ -40,6 +40,7 @@ const ELEMENT_DATA_FALLBACK: Record<string, { pm: number; color: string }> = {
 	Fe: { pm: 194, color: '#E06633' },
 	Cu: { pm: 140, color: '#C88033' },
 	Zn: { pm: 139, color: '#7D80B0' },
+	Se: { pm: 190, color: '#FFA100' },
 	Br: { pm: 185, color: '#A62929' },
 	I: { pm: 198, color: '#940094' }
 };

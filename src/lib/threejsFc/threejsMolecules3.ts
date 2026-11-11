@@ -2471,6 +2471,9 @@ export async function generateModel3MFBlob(
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
   <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
   <Default Extension="config" ContentType="text/xml" />
+  <Default Extension="xml" ContentType="text/xml" />
+  <Default Extension="json" ContentType="application/json" />
+  <Default Extension="png" ContentType="image/png" />
   <Default Extension="txt" ContentType="text/plain" />
 </Types>`;
 
@@ -2692,16 +2695,80 @@ ${volumeConfigs.join('\n')}
 ; nozzle_diameter = ${nozzleDiameters}
 ; filament_diameter = ${filamentDiameters}
 ; single_extruder_multi_material = 1
+; enable_support = 1
+; support_type = tree(auto)
+; support_style = tree_hybrid
+; support_on_build_plate_only = 0
+; support_threshold_angle = 30
 `;
+
+    const modelSettingsConfig = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="${objectId}">
+    <metadata key="name" value="${escapeXml(fileName)}"/>
+    <metadata key="extruder" value="1"/>
+    <part id="1" subtype="normal_part">
+      <metadata key="name" value="${escapeXml(fileName)}"/>
+      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
+      <metadata key="source_file" value="${escapeXml(fileName)}.3mf"/>
+    </part>
+  </object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <metadata key="plater_name" value=""/>
+    <model_instance>
+      <metadata key="object_id" value="${objectId}"/>
+      <metadata key="instance_id" value="0"/>
+    </model_instance>
+  </plate>
+</config>`;
+
+    const sliceInfoConfig = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <header>
+    <header_item key="X-BBL-Client-Type" value="slicer"/>
+    <header_item key="X-BBL-Client-Version" value="02.09.01.70"/>
+  </header>
+</config>`;
+
+    const cutInformationXml = `<?xml version="1.0" encoding="utf-8"?>
+<objects>
+ <object id="1">
+  <cut_id id="0" check_sum="1" connectors_cnt="0"/>
+ </object>
+</objects>`;
+
+    const filamentSequenceJson = JSON.stringify({
+        plate_1: {
+            nozzle_sequence: [],
+            optimal_assignment: [],
+            sequence: []
+        }
+    });
 
     const projectSettingsJson = JSON.stringify(
         {
+            enable_support: '1',
+            support_type: 'tree(auto)',
+            support_style: 'default',
+            support_on_build_plate_only: '0',
+            tree_support_branch_angle: '45',
+            tree_support_branch_diameter: '2',
+            support_threshold_angle: '30',
+            different_settings_to_system: [
+                'enable_support;support_type',
+                '',
+                '',
+                '',
+                '',
+                ''
+            ],
             filament_colour: paletteColors,
             filament_type: paletteColors.map(() => 'PLA'),
             filament_settings_id: paletteColors.map(() => 'Bambu PLA Basic @BBL X1C'),
             printer_settings_id: 'Bambu Lab X1 Carbon 0.4 nozzle',
             print_settings_id: '0.20mm Standard @BBL X1C',
-            version: '01.10.00.89'
+            version: '02.09.01.70'
         },
         null,
         2
@@ -2713,6 +2780,10 @@ ${volumeConfigs.join('\n')}
     zip.folder('3D')!.file('3dmodel.model', modelXml);
 
     const metadataFolder = zip.folder('Metadata')!;
+    metadataFolder.file('model_settings.config', modelSettingsConfig);
+    metadataFolder.file('slice_info.config', sliceInfoConfig);
+    metadataFolder.file('cut_information.xml', cutInformationXml);
+    metadataFolder.file('filament_sequence.json', filamentSequenceJson);
     metadataFolder.file('Slic3r_PE_model.config', slic3rPeModelConfig);
     metadataFolder.file('Slic3r_PE.config', slic3rPeConfig);
     metadataFolder.file('project_settings.config', projectSettingsJson);

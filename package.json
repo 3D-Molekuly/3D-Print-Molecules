@@ -9,6 +9,7 @@
 		"dev": "vite dev",
 		"start": "vite dev",
 		"publisher": "node publishing/server.js",
+		"generate-3mf": "node publishing/scripts/run_generate_3mf.mjs",
 		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

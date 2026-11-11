@@ -1,7 +1,7 @@
 {
     "error_string": "Success.",
     "layer_height": 0.0,
-    "peak_rss_mb": 46.09375,
+    "peak_rss_mb": 46.015625,
     "plate_index": 0,
     "return_code": 0,
     "sparse_infill_density": 0.0,
@@ -11,7 +11,7 @@
         "export_time": 0,
         "import_time": 0,
         "load_slicedata_time": 0,
-        "prepare_time": 2
+        "prepare_time": 4
     },
     "wall_loops": 0
 }

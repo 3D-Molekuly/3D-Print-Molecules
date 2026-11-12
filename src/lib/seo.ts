@@ -3,6 +3,7 @@ import {
 	stripLocaleFromPath,
 	supportedLocales,
 	OG_LOCALES,
+	HREFLANG,
 	type SupportedLocale
 } from '$lib/functions/language';
 import { PRINTED_MODELS, AMINO_ACIDS, modelText } from '$lib/data/printedModels';
@@ -14,7 +15,7 @@ export const SITE_ORIGIN = 'https://3dmolekuly.vscht.cz';
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/favicon/screenshots/screenshot-wide.png`;
 
 export interface AlternateLink {
-	hreflang: SupportedLocale | 'x-default';
+	hreflang: string;
 	href: string;
 }
 
@@ -45,7 +46,7 @@ export const HOME_FAQ = Object.fromEntries(
 /** hreflang alternates for a localized page; `x-default` points at `xDefault`. */
 export function localizedAlternates(subpath: string, xDefault: string): AlternateLink[] {
 	return [
-		...supportedLocales.map((l) => ({ hreflang: l, href: `${SITE_ORIGIN}/${l}${subpath}` })),
+		...supportedLocales.map((l) => ({ hreflang: HREFLANG[l], href: `${SITE_ORIGIN}/${l}${subpath}` })),
 		{ hreflang: 'x-default' as const, href: xDefault }
 	];
 }
@@ -140,7 +141,7 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 					'@type': 'HowTo',
 					name: text.tutorials.howToName,
 					description,
-					inLanguage: lang,
+					inLanguage: HREFLANG[lang],
 					image: DEFAULT_OG_IMAGE,
 					totalTime: 'PT3M',
 					tool: [
@@ -165,7 +166,7 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 					name: title,
 					description,
 					url: canonicalUrl,
-					inLanguage: lang,
+					inLanguage: HREFLANG[lang],
 					about: {
 						'@type': 'WebApplication',
 						name: siteName,
@@ -183,7 +184,7 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 			name: title,
 			description,
 			url: canonicalUrl,
-			inLanguage: lang,
+			inLanguage: HREFLANG[lang],
 			isPartOf: { '@type': 'WebSite', name: siteName, url: `${SITE_ORIGIN}/` },
 			mainEntity: {
 				'@type': 'ItemList',
@@ -243,7 +244,7 @@ export function getRouteSeo(url: URL, fallbackLocale: SupportedLocale = 'en'): S
 					alternateName: text.alternateName,
 					url: canonicalUrl,
 					description,
-					inLanguage: [...supportedLocales],
+					inLanguage: supportedLocales.map((l) => HREFLANG[l]),
 					applicationCategory: 'EducationalApplication',
 					operatingSystem: 'Any',
 					browserRequirements: 'Requires JavaScript and WebGL',

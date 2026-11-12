@@ -19,6 +19,8 @@ describe('getRouteSeo', () => {
 			{ hreflang: 'fr', href: `${SITE_ORIGIN}/fr` },
 			{ hreflang: 'es', href: `${SITE_ORIGIN}/es` },
 			{ hreflang: 'pt', href: `${SITE_ORIGIN}/pt` },
+			{ hreflang: 'zh-Hans', href: `${SITE_ORIGIN}/zh` },
+			{ hreflang: 'ja', href: `${SITE_ORIGIN}/ja` },
 			{ hreflang: 'x-default', href: `${SITE_ORIGIN}/` }
 		]);
 
@@ -67,6 +69,8 @@ describe('getRouteSeo', () => {
 			{ hreflang: 'fr', href: 'https://3dmolekuly.vscht.cz/fr/tutorials' },
 			{ hreflang: 'es', href: 'https://3dmolekuly.vscht.cz/es/tutorials' },
 			{ hreflang: 'pt', href: 'https://3dmolekuly.vscht.cz/pt/tutorials' },
+			{ hreflang: 'zh-Hans', href: 'https://3dmolekuly.vscht.cz/zh/tutorials' },
+			{ hreflang: 'ja', href: 'https://3dmolekuly.vscht.cz/ja/tutorials' },
 			{ hreflang: 'x-default', href: 'https://3dmolekuly.vscht.cz/en/tutorials' }
 		]);
 
@@ -81,6 +85,11 @@ describe('getRouteSeo', () => {
 		expect(de.ogLocaleAlternate).toContain('cs_CZ');
 		expect(de.ogLocaleAlternate).not.toContain('de_DE');
 		expect(de.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/de/about');
+
+		const zh = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/zh/tutorials'), 'en');
+		expect(zh.lang).toBe('zh');
+		expect(zh.ogLocale).toBe('zh_CN');
+		expect(zh.jsonLdHtml).toContain('"inLanguage":"zh-Hans"');
 	});
 
 	it('marks unfinished demonstrations pages as noindex, nofollow', () => {
@@ -111,10 +120,12 @@ describe('getRouteSeo', () => {
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/about</loc>');
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs/examples</loc>');
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/examples</loc>');
-		for (const l of ['de', 'fr', 'es', 'pt']) {
+		for (const l of ['de', 'fr', 'es', 'pt', 'ja']) {
 			expect(xml).toContain(`<loc>https://3dmolekuly.vscht.cz/${l}/tutorials</loc>`);
 			expect(xml).toContain(`hreflang="${l}"`);
 		}
+		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/zh/tutorials</loc>');
+		expect(xml).toContain('hreflang="zh-Hans"');
 		expect(xml).toContain('xhtml:link rel="alternate" hreflang="cs"');
 		expect(xml).not.toContain('demonstrations');
 		expect(xml).not.toContain('vercel.app');

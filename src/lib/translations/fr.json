@@ -329,5 +329,6 @@
     "theme_label": "Mode de couleur",
     "theme_auto": "Automatique (système)",
     "theme_light": "Clair",
-    "theme_dark": "Sombre"
+    "theme_dark": "Sombre",
+    "machine_translation_note": "Traduit par IA – peut contenir des erreurs"
 }

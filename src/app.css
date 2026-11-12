@@ -1,9 +1,35 @@
 :root {
     color-scheme: light;
+    /* Fallback for glyphs the web fonts (Exo 2, Handjet) do not cover; CJK web fonts are
+       several MB, so Chinese/Japanese text uses the system fonts below. */
+    --font-cjk: sans-serif;
+}
+
+html:lang(zh) {
+    --font-cjk: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+}
+
+html:lang(ja) {
+    --font-cjk: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", sans-serif;
+}
+
+/* CJK text may wrap between any two characters; keep short UI labels on one line. */
+html:lang(zh) .btn,
+html:lang(ja) .btn,
+html:lang(zh) .nav-link,
+html:lang(ja) .nav-link {
+    word-break: keep-all;
+}
+
+/* CJK scripts have no true italics; emphasise with weight instead of a faux slant. */
+html:lang(zh) em,
+html:lang(ja) em {
+    font-style: normal;
+    font-weight: 500;
 }
 
 main {
-    font-family: "Exo 2", sans-serif;
+    font-family: "Exo 2", var(--font-cjk), sans-serif;
     font-optical-sizing: auto;
     font-weight: 300;
     font-style: normal;

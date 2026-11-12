@@ -2,7 +2,7 @@ import { locale } from 'svelte-i18n';
 import { writable, get } from 'svelte/store';
 import { goto } from '$app/navigation';
 
-export const supportedLocales = ['cs', 'en', 'de', 'fr', 'es', 'pt'] as const;
+export const supportedLocales = ['cs', 'en', 'de', 'fr', 'es', 'pt', 'zh', 'ja'] as const;
 export type SupportedLocale = (typeof supportedLocales)[number];
 export const defaultLocale: SupportedLocale = 'en';
 
@@ -13,7 +13,35 @@ export const LOCALE_NAMES: Record<SupportedLocale, string> = {
   de: 'Deutsch',
   fr: 'Français',
   es: 'Español',
-  pt: 'Português'
+  pt: 'Português',
+  zh: '简体中文',
+  ja: '日本語'
+};
+
+/**
+ * Locales translated by AI (not reviewed by the authors). The switcher marks them with an
+ * icon, and the pages show nothing else – remove a locale from here once a native speaker
+ * has reviewed it.
+ */
+export const MACHINE_TRANSLATED_LOCALES: ReadonlySet<SupportedLocale> = new Set([
+  'de',
+  'fr',
+  'es',
+  'pt',
+  'zh',
+  'ja'
+]);
+
+/** BCP 47 tags for hreflang / html lang where they differ from the URL code. */
+export const HREFLANG: Record<SupportedLocale, string> = {
+  cs: 'cs',
+  en: 'en',
+  de: 'de',
+  fr: 'fr',
+  es: 'es',
+  pt: 'pt',
+  zh: 'zh-Hans',
+  ja: 'ja'
 };
 
 /** Open Graph locale codes. */
@@ -23,7 +51,9 @@ export const OG_LOCALES: Record<SupportedLocale, string> = {
   de: 'de_DE',
   fr: 'fr_FR',
   es: 'es_ES',
-  pt: 'pt_PT'
+  pt: 'pt_PT',
+  zh: 'zh_CN',
+  ja: 'ja_JP'
 };
 
 const LOCALE_GROUP = supportedLocales.join('|');
@@ -114,7 +144,7 @@ export const currentLocale = writable<SupportedLocale>(detectClientLocale());
 
 export function persistLocale(value: SupportedLocale) {
   if (typeof window === 'undefined') return;
-  document.documentElement.lang = value;
+  document.documentElement.lang = HREFLANG[value];
   try {
     localStorage.setItem('language', value);
     sessionStorage.setItem('language', value);

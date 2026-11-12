@@ -9,7 +9,9 @@
     getLocaleFromPath,
     getTargetSwitchPath,
     supportedLocales,
-    LOCALE_NAMES
+    LOCALE_NAMES,
+    MACHINE_TRANSLATED_LOCALES,
+    HREFLANG
   } from '$lib/functions/language';
   import { page } from '$app/stores';
 
@@ -51,15 +53,29 @@
                   class:active={activeLocale === code}
                   aria-current={activeLocale === code ? 'true' : undefined}
                   href={getTargetSwitchPath(code, currentPath)}
-                  hreflang={code}
-                  lang={code}
+                  hreflang={HREFLANG[code]}
+                  lang={HREFLANG[code]}
                   on:click={(event) => switchLocale(code, event)}
                 >
                   <span>{LOCALE_NAMES[code]}</span>
-                  <span class="lang-code">{code.toUpperCase()}</span>
+                  <span class="d-flex align-items-center gap-1">
+                    {#if MACHINE_TRANSLATED_LOCALES.has(code)}
+                      <span
+                        class="material-symbols-outlined ai-icon"
+                        title={$_('machine_translation_note')}
+                        aria-label={$_('machine_translation_note')}
+                        role="img">auto_awesome</span>
+                    {/if}
+                    <span class="lang-code">{code.toUpperCase()}</span>
+                  </span>
                 </a>
               </li>
             {/each}
+            <li><hr class="dropdown-divider" /></li>
+            <li class="ai-legend dropdown-item-text">
+              <span class="material-symbols-outlined ai-icon" aria-hidden="true">auto_awesome</span>
+              {$_('machine_translation_note')}
+            </li>
           </ul>
         </div>
 
@@ -71,17 +87,32 @@
 
 <style>
   .font-tittle {
-    font-family: "Handjet";
+    font-family: "Handjet", var(--font-cjk), sans-serif;
     font-weight: 700;
   }
 
   ul, .dropdown {
-    font-family: "Handjet";
+    font-family: "Handjet", var(--font-cjk), sans-serif;
     font-weight: 400;
   }
 
   .lang-code {
     opacity: 0.6;
+  }
+
+  .ai-icon {
+    font-size: 16px;
+    color: #f5b942;
+  }
+
+  .ai-legend {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 14rem;
+    font-size: 0.95rem;
+    line-height: 1.15;
+    color: rgba(255, 255, 255, 0.65);
   }
 
   /* Telefon: logo + jazyk + motiv v prvním řádku, menu přes celou šířku pod nimi */

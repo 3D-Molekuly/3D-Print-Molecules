@@ -93,7 +93,7 @@
 }
 
 .dropdown-item {
-    font-family: "Handjet";
+    font-family: "Handjet", var(--font-cjk), sans-serif;
     font-size: 1.1rem;
 }
 

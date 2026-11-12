@@ -3,7 +3,7 @@ import { browser } from '$app/environment'
 import '$lib/i18n' // Import to initialize. Important :)
 import { locale, waitLocale } from 'svelte-i18n'
 import type { LayoutLoad } from './$types'
-import { getLocaleFromPath, getStoredLocale, localeFromNavigator, currentLocale, type SupportedLocale } from '$lib/functions/language'
+import { getLocaleFromPath, getStoredLocale, localeFromNavigator, currentLocale, HREFLANG, type SupportedLocale } from '$lib/functions/language'
 
 export const load: LayoutLoad = async ({ url, data }) => {
 	const pathLocale = getLocaleFromPath(url.pathname);
@@ -21,7 +21,7 @@ export const load: LayoutLoad = async ({ url, data }) => {
 	if (browser) {
 		// Only an explicit choice in the switcher is persisted (see switchLocale), so the
 		// browser language keeps working as the default until the user picks one.
-		document.documentElement.lang = targetLocale;
+		document.documentElement.lang = HREFLANG[targetLocale];
 	}
 
 	await waitLocale();

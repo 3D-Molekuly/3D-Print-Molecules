@@ -6,6 +6,8 @@ import de from '../translations/de.json'
 import fr from '../translations/fr.json'
 import es from '../translations/es.json'
 import pt from '../translations/pt.json'
+import zh from '../translations/zh.json'
+import ja from '../translations/ja.json'
 
 addMessages('en', en)
 addMessages('cs', cs)
@@ -13,6 +15,8 @@ addMessages('de', de)
 addMessages('fr', fr)
 addMessages('es', es)
 addMessages('pt', pt)
+addMessages('zh', zh)
+addMessages('ja', ja)
 
 init({
 	fallbackLocale: defaultLocale,

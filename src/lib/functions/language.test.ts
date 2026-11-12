@@ -18,19 +18,23 @@ describe('language detection', () => {
 		expect(normalizeLocale('fr')).toBe('fr');
 		expect(normalizeLocale('es-419')).toBe('es');
 		expect(normalizeLocale('sk')).toBe('cs');
-		expect(normalizeLocale('ja')).toBe('en');
+		expect(normalizeLocale('ja-JP')).toBe('ja');
+		expect(normalizeLocale('zh-CN')).toBe('zh');
+		expect(normalizeLocale('zh-TW')).toBe('zh');
+		expect(normalizeLocale('ko')).toBe('en');
 		expect(normalizeLocale(undefined)).toBe('en');
 	});
 
 	it('picks the best Accept-Language match by q-weight', () => {
-		expect(localeFromAcceptLanguage('ja,de;q=0.8,en;q=0.5')).toBe('de');
+		expect(localeFromAcceptLanguage('ko,de;q=0.8,en;q=0.5')).toBe('de');
 		expect(localeFromAcceptLanguage('en;q=0.3,fr-CA;q=0.9')).toBe('fr');
-		expect(localeFromAcceptLanguage('ja,zh')).toBe('en');
+		expect(localeFromAcceptLanguage('ko,ja;q=0.8')).toBe('ja');
+		expect(localeFromAcceptLanguage('ko,ru')).toBe('en');
 		expect(localeFromAcceptLanguage(null)).toBe('en');
 	});
 
 	it('falls through the browser language list', () => {
-		expect(localeFromNavigator({ language: 'ja', languages: ['ja', 'pt-BR', 'en'] })).toBe('pt');
+		expect(localeFromNavigator({ language: 'ko', languages: ['ko', 'pt-BR', 'en'] })).toBe('pt');
 		expect(localeFromNavigator({ language: 'es-MX', languages: [] })).toBe('es');
 	});
 

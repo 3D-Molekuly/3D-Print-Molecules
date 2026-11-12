@@ -1,7 +1,7 @@
 // hooks.server.ts
 import type { Handle } from '@sveltejs/kit'
 import { locale } from 'svelte-i18n'
-import { getLocaleFromPath, isSupportedLocale, localeFromAcceptLanguage, type SupportedLocale } from '$lib/functions/language'
+import { getLocaleFromPath, isSupportedLocale, localeFromAcceptLanguage, HREFLANG, type SupportedLocale } from '$lib/functions/language'
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathLocale = getLocaleFromPath(event.url.pathname);
@@ -21,6 +21,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.locale = serverLocale;
 	locale.set(serverLocale);
 	return resolve(event, {
-		transformPageChunk: ({ html }) => html.replace('%lang%', serverLocale)
+		transformPageChunk: ({ html }) => html.replace('%lang%', HREFLANG[serverLocale])
 	});
 }

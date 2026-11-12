@@ -4,6 +4,7 @@
   import ModelCard from '$lib/components/ModelCard.svelte';
   import { getContent } from '$lib/i18n/content';
   import { supportedLocales } from '$lib/functions/language';
+  import { buildSearchIndex, matchesAllTerms, tokenizeQuery } from '$lib/functions/gallerySearch';
   import {
     PRINTED_MODELS,
     AMINO_ACIDS,
@@ -27,35 +28,22 @@
   let aminoOpen = false;
 
   // --- Search -------------------------------------------------------------
-  const SUBSCRIPTS = '₀₁₂₃₄₅₆₇₈₉';
-  /** Lower-case, strip diacritics and turn formula subscripts into plain digits. */
-  const normalize = (text: string) =>
-    text
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[₀-₉]/g, (c) => String(SUBSCRIPTS.indexOf(c)))
-      .toLowerCase();
-
-  // Words separated by single spaces, with a leading space, so terms can match from a word start.
-  const haystack = (model: PrintedModel) =>
-    ' ' +
-    normalize(
-      [
-        model.id,
-        ...supportedLocales.flatMap((l) => Object.values(modelText(model, l))),
-        model.editorQuery ?? ''
-      ].join(' ')
-    )
-      .replace(/[^a-z0-9]+/g, ' ');
-  const INDEX = new Map([...PRINTED_MODELS, ...AMINO_ACIDS].map((m) => [m.id, haystack(m)]));
+  // Index every locale's name/description, so a model can be found in any language.
+  const INDEX = new Map(
+    [...PRINTED_MODELS, ...AMINO_ACIDS].map((m) => [
+      m.id,
+      buildSearchIndex([
+        m.id,
+        ...supportedLocales.flatMap((l) => Object.values(modelText(m, l))),
+        m.editorQuery ?? ''
+      ])
+    ])
+  );
 
   let query = '';
-  $: terms = normalize(query).split(/[^a-z0-9]+/).filter(Boolean);
+  $: terms = tokenizeQuery(query);
   $: searching = terms.length > 0;
-  $: matches = (model: PrintedModel) => {
-    const text = INDEX.get(model.id) ?? '';
-    return terms.every((term) => text.includes(' ' + term));
-  };
+  $: matches = (model: PrintedModel) => matchesAllTerms(INDEX.get(model.id) ?? '', terms);
   $: visibleModels = searching ? PRINTED_MODELS.filter(matches) : PRINTED_MODELS;
   $: visibleAmino = searching ? aminoSorted.filter(matches) : aminoSorted;
   // While searching, the generator opens with the typed molecule pre-filled.

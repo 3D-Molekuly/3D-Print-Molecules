@@ -261,6 +261,7 @@ export const AMINO_ACIDS: PrintedModel[] = [
 		},
 		image: `${PRINTABLES_MEDIA}/b8b74eae-ed19-47ee-be08-03d9962bb938/images/14438015_6902d3cc-4107-4113-9305-e33f54bb3159_b512aebc-1834-43d5-bd35-a3eace3efd96/thumbs/inside/640x480/jpg/methionine-3_mw-4x3_promo.webp`,
 		printablesUrl: 'https://www.printables.com/model/1910307-methionine-c5h11no2s-multi-color-3d-molecule-model',
+		makerworldUrl: 'https://makerworld.com/en/models/3594081-methionine-c5h11no2s-multi-color-3d-molecule',
 		editorQuery: 'L-methionine'
 	},
 	{
@@ -296,6 +297,7 @@ export const AMINO_ACIDS: PrintedModel[] = [
 		},
 		image: `${PRINTABLES_MEDIA}/be86bb78-cc2b-4b43-a828-594741c78754/images/14437982_4fdbaa42-c44c-4640-a246-588ede242ecf_2f620067-f7ff-4474-92bf-af96cd126880/thumbs/inside/640x480/jpg/selenocysteine-12_mw-4x3_promo.webp`,
 		printablesUrl: 'https://www.printables.com/model/1910305-selenocysteine-c3h7no2se-multi-color-3d-molecule-m',
+		makerworldUrl: 'https://makerworld.com/en/models/3594087-selenocysteine-c3h7no2se-multi-color-3d-molecule',
 		editorQuery: 'L-selenocysteine'
 	},
 	{

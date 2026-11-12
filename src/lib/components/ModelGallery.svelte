@@ -27,7 +27,6 @@
       searchClear: 'Vymazat hledání',
       searchResults: (n: number) => `Nalezeno modelů: ${n}`,
       searchEmpty: 'Žádný vytištěný model neodpovídá hledání.',
-      searchEmptyCta: 'Vygenerovat v aplikaci',
       ctaHeading: 'Chybí vám tu molekula?',
       ctaText: 'Vygenerujte si vlastní model z PubChem, PDB nebo COD během pár vteřin.',
       ctaButton: 'Otevřít generátor'
@@ -46,7 +45,6 @@
       searchClear: 'Clear search',
       searchResults: (n: number) => `${n} ${n === 1 ? 'model' : 'models'} found`,
       searchEmpty: 'No printed model matches your search.',
-      searchEmptyCta: 'Generate it in the app',
       ctaHeading: 'Missing a molecule?',
       ctaText: 'Generate your own model from PubChem, PDB or COD in seconds.',
       ctaButton: 'Open the generator'
@@ -92,6 +90,8 @@
   };
   $: visibleModels = searching ? PRINTED_MODELS.filter(matches) : PRINTED_MODELS;
   $: visibleAmino = searching ? aminoSorted.filter(matches) : aminoSorted;
+  // While searching, the generator opens with the typed molecule pre-filled.
+  $: generatorHref = searching ? `/${lang}?mol=${encodeURIComponent(query.trim())}` : `/${lang}`;
   $: resultCount = visibleModels.length + visibleAmino.length;
   // Reveal matching amino acids without the extra click.
   $: if (searching && visibleAmino.length > 0) aminoOpen = true;
@@ -157,10 +157,17 @@
     {/if}
   </div>
 
+  <aside class="gallery-cta">
+    <p>
+      <strong>{t.ctaHeading}</strong>
+      <span>{t.ctaText}</span>
+    </p>
+    <a href={generatorHref} class="btn btn-primary">{t.ctaButton}</a>
+  </aside>
+
   {#if searching && resultCount === 0}
     <div class="search-empty">
       <p>{t.searchEmpty}</p>
-      <a href={`/${lang}?mol=${encodeURIComponent(query.trim())}`} class="btn btn-primary">{t.searchEmptyCta}</a>
     </div>
   {/if}
 
@@ -193,11 +200,6 @@
     {/each}
   </ul>
 
-  <section class="gallery-cta">
-    <h2>{t.ctaHeading}</h2>
-    <p>{t.ctaText}</p>
-    <a href={`/${lang}`} class="btn btn-primary btn-lg">{t.ctaButton}</a>
-  </section>
 </div>
 
 <style>
@@ -335,7 +337,7 @@
   }
   .search-empty {
     text-align: center;
-    margin: 1rem 0 2rem;
+    margin: 0 0 2rem;
     color: var(--muted);
   }
   .visually-hidden {
@@ -422,13 +424,21 @@
   }
 
   .gallery-cta {
+    max-width: 760px;
+    margin: -1rem auto 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
     text-align: center;
-    margin-top: 3rem;
-  }
-  .gallery-cta h2 {
-    font-size: 1.5rem;
   }
   .gallery-cta p {
+    margin: 0;
     color: var(--muted);
+  }
+  .gallery-cta strong {
+    color: var(--bs-body-color, inherit);
+    margin-right: 0.25rem;
   }
 </style>

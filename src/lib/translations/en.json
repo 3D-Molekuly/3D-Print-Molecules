@@ -325,5 +325,9 @@
     "adv_conformer_energy_title": "MMFF94 energy from PubChem; difference to the lowest in brackets",
     "adv_conformer_none": "PubChem has no 3D conformers for this compound (typically salts, metal complexes, or very flexible molecules).",
     "adv_conformer_load_anyway": "Load anyway (2D → 3D)",
-    "adv_formula_results_hint": "Compounds with this formula (by relevance) – pick the one you want:"
+    "adv_formula_results_hint": "Compounds with this formula (by relevance) – pick the one you want:",
+    "theme_label": "Color mode",
+    "theme_auto": "Automatic (system)",
+    "theme_light": "Light",
+    "theme_dark": "Dark"
 }

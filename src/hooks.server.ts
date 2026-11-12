@@ -1,7 +1,7 @@
 // hooks.server.ts
 import type { Handle } from '@sveltejs/kit'
 import { locale } from 'svelte-i18n'
-import { getLocaleFromPath, normalizeLocale, type SupportedLocale } from '$lib/functions/language'
+import { getLocaleFromPath, isSupportedLocale, localeFromAcceptLanguage, type SupportedLocale } from '$lib/functions/language'
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const pathLocale = getLocaleFromPath(event.url.pathname);
@@ -11,11 +11,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 		serverLocale = pathLocale;
 	} else {
 		const cookieLocale = event.cookies.get('locale');
-		if (cookieLocale === 'cs' || cookieLocale === 'en') {
+		if (isSupportedLocale(cookieLocale)) {
 			serverLocale = cookieLocale;
 		} else {
-			const acceptLang = event.request.headers.get('accept-language')?.split(',')[0];
-			serverLocale = normalizeLocale(acceptLang);
+			serverLocale = localeFromAcceptLanguage(event.request.headers.get('accept-language'));
 		}
 	}
 

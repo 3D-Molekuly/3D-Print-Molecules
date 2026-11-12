@@ -3,7 +3,7 @@ import { browser } from '$app/environment'
 import '$lib/i18n' // Import to initialize. Important :)
 import { locale, waitLocale } from 'svelte-i18n'
 import type { LayoutLoad } from './$types'
-import { getLocaleFromPath, normalizeLocale, currentLocale, type SupportedLocale } from '$lib/functions/language'
+import { getLocaleFromPath, getStoredLocale, localeFromNavigator, currentLocale, type SupportedLocale } from '$lib/functions/language'
 
 export const load: LayoutLoad = async ({ url, data }) => {
 	const pathLocale = getLocaleFromPath(url.pathname);
@@ -12,22 +12,16 @@ export const load: LayoutLoad = async ({ url, data }) => {
 	if (pathLocale) {
 		targetLocale = pathLocale;
 	} else if (browser) {
-		const stored = localStorage.getItem('language') || sessionStorage.getItem('language');
-		if (stored === 'cs' || stored === 'en') {
-			targetLocale = stored;
-		} else {
-			targetLocale = normalizeLocale(window.navigator.language);
-		}
+		targetLocale = getStoredLocale() ?? localeFromNavigator(window.navigator);
 	}
 
 	locale.set(targetLocale);
 	currentLocale.set(targetLocale);
 
 	if (browser) {
+		// Only an explicit choice in the switcher is persisted (see switchLocale), so the
+		// browser language keeps working as the default until the user picks one.
 		document.documentElement.lang = targetLocale;
-		localStorage.setItem('language', targetLocale);
-		sessionStorage.setItem('language', targetLocale);
-		document.cookie = `locale=${targetLocale};path=/;max-age=31536000;SameSite=Lax`;
 	}
 
 	await waitLocale();

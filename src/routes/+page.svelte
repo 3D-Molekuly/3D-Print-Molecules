@@ -45,6 +45,7 @@
   import { getDefaultPriorityOrder, LARGE_MOLECULE_ATOM_THRESHOLD } from '$lib/geometry/gluedSpheres';
   import { cifToSdf } from '$lib/utils/cifToSdf';
   import { buildLocalizedPath, currentLocale, normalizeLocale } from '$lib/functions/language';
+  import type { GuideLocale } from '$lib/types';
   import { HOME_FAQ } from '$lib/seo';
   import { buildShareUrl, hasShareSearchParams, inferMoleculeSourceFromQuery, parseShareSearchParams, type ShareState } from '$lib/functions/shareUrl';
   import InfoButton from '$lib/buttons/infoButton.svelte';
@@ -241,9 +242,11 @@
       }
     }, 350);
   }
+  // Assembly guides / ZIP names exist in Czech and English; other UI languages get English.
+  $: guideLocale = ($currentLocale === 'cs' ? 'cs' : 'en') as GuideLocale;
   $: rawJointWarnings = checkJointParams(jointParams);
   $: jointWarnings = rawJointWarnings.map((w) => {
-    if ($currentLocale !== 'en') return w;
+    if ($currentLocale === 'cs') return w;
     if (w.startsWith('Stěna statoru u rovníku')) {
       return `Stator wall at equator ${(jointParams.R - jointParams.rh - jointParams.c).toFixed(2)} mm < wall ${jointParams.wall} mm`;
     }
@@ -275,7 +278,7 @@
   }
 
   function handleDownloadTestJoint() {
-    const prefix = $currentLocale === 'en' ? 'Test_joint' : 'Testovaci_kloub';
+    const prefix = $currentLocale === 'cs' ? 'Testovaci_kloub' : 'Test_joint';
     downloadTestJointSTL(
       effectiveJointParams,
       `${prefix}_${jointPreset.toUpperCase()}_c${jointParams.c.toFixed(2)}.stl`
@@ -1204,7 +1207,7 @@
 
   function verifyGluedSpheresBeforeExport(): boolean {
     if (!isGluedSpheresStyle) return true;
-    const validation = validateGluedSpheresManifold(undefined, $currentLocale);
+    const validation = validateGluedSpheresManifold(undefined, guideLocale);
     if (!validation.valid) {
       gluedExportError = `${$_('glued_spheres_export_error_prefix')} ${validation.errors.join(', ')}`;
       return false;
@@ -1220,7 +1223,7 @@
     }
     if (!verifyGluedSpheresBeforeExport()) return;
     updateFileName();
-    exportModelAs3MF(fileName, getModelMetadata(), $currentLocale);
+    exportModelAs3MF(fileName, getModelMetadata(), guideLocale);
   }
 
   async function uploadModelToBlob(id: string, safeFileName: string, blob: Blob): Promise<string | null> {
@@ -1250,7 +1253,7 @@
     updateFileName();
     isOpeningSlicer = true;
     try {
-      const blob = await generateModel3MFBlob(fileName, getModelMetadata(), $currentLocale);
+      const blob = await generateModel3MFBlob(fileName, getModelMetadata(), guideLocale);
       if (!blob) return;
 
       const id = `${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}`;
@@ -1318,7 +1321,7 @@
     updateFileName();
     const metadata = getModelMetadata("ZIP of STL models with metadata");
 
-    exportBinaryAsZip(fileName, metadata, $currentLocale);
+    exportBinaryAsZip(fileName, metadata, guideLocale);
   }
 
   async function downloadWholeModel() {
@@ -1430,7 +1433,7 @@
                 explodedFactor: gluedExplodedPercent / 100,
                 showPartLabels: gluedShowPartLabels,
                 mmPerUnit: jointMmPerUnit,
-                locale: $currentLocale
+                locale: guideLocale
               }
             }
           : {}),

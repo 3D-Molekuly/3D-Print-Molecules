@@ -15,6 +15,10 @@ describe('getRouteSeo', () => {
 		expect(rootEn.alternates).toEqual([
 			{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs` },
 			{ hreflang: 'en', href: `${SITE_ORIGIN}/en` },
+			{ hreflang: 'de', href: `${SITE_ORIGIN}/de` },
+			{ hreflang: 'fr', href: `${SITE_ORIGIN}/fr` },
+			{ hreflang: 'es', href: `${SITE_ORIGIN}/es` },
+			{ hreflang: 'pt', href: `${SITE_ORIGIN}/pt` },
 			{ hreflang: 'x-default', href: `${SITE_ORIGIN}/` }
 		]);
 
@@ -59,11 +63,24 @@ describe('getRouteSeo', () => {
 		expect(csTut.alternates).toEqual([
 			{ hreflang: 'cs', href: 'https://3dmolekuly.vscht.cz/cs/tutorials' },
 			{ hreflang: 'en', href: 'https://3dmolekuly.vscht.cz/en/tutorials' },
+			{ hreflang: 'de', href: 'https://3dmolekuly.vscht.cz/de/tutorials' },
+			{ hreflang: 'fr', href: 'https://3dmolekuly.vscht.cz/fr/tutorials' },
+			{ hreflang: 'es', href: 'https://3dmolekuly.vscht.cz/es/tutorials' },
+			{ hreflang: 'pt', href: 'https://3dmolekuly.vscht.cz/pt/tutorials' },
 			{ hreflang: 'x-default', href: 'https://3dmolekuly.vscht.cz/en/tutorials' }
 		]);
 
 		expect(enAbout.lang).toBe('en');
 		expect(enAbout.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/en/about');
+	});
+
+	it('localizes og:locale and canonical for the new languages', () => {
+		const de = getRouteSeo(new URL('https://3dmolekuly.vscht.cz/de/about'), 'en');
+		expect(de.lang).toBe('de');
+		expect(de.ogLocale).toBe('de_DE');
+		expect(de.ogLocaleAlternate).toContain('cs_CZ');
+		expect(de.ogLocaleAlternate).not.toContain('de_DE');
+		expect(de.canonicalUrl).toBe('https://3dmolekuly.vscht.cz/de/about');
 	});
 
 	it('marks unfinished demonstrations pages as noindex, nofollow', () => {
@@ -74,6 +91,8 @@ describe('getRouteSeo', () => {
 	it('reroutes /cs and /en homepages to / while keeping subpages untouched', () => {
 		expect(reroute({ url: new URL('https://3dmolekuly.vscht.cz/cs'), fetch } as any)).toBe('/');
 		expect(reroute({ url: new URL('https://3dmolekuly.vscht.cz/en/'), fetch } as any)).toBe('/');
+		expect(reroute({ url: new URL('https://3dmolekuly.vscht.cz/de'), fetch } as any)).toBe('/');
+		expect(reroute({ url: new URL('https://3dmolekuly.vscht.cz/pt/'), fetch } as any)).toBe('/');
 		expect(
 			reroute({ url: new URL('https://3dmolekuly.vscht.cz/cs/tutorials'), fetch } as any)
 		).toBeUndefined();
@@ -92,6 +111,10 @@ describe('getRouteSeo', () => {
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/about</loc>');
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/cs/examples</loc>');
 		expect(xml).toContain('<loc>https://3dmolekuly.vscht.cz/en/examples</loc>');
+		for (const l of ['de', 'fr', 'es', 'pt']) {
+			expect(xml).toContain(`<loc>https://3dmolekuly.vscht.cz/${l}/tutorials</loc>`);
+			expect(xml).toContain(`hreflang="${l}"`);
+		}
 		expect(xml).toContain('xhtml:link rel="alternate" hreflang="cs"');
 		expect(xml).not.toContain('demonstrations');
 		expect(xml).not.toContain('vercel.app');

@@ -2,57 +2,21 @@
   import type { SupportedLocale } from '$lib/functions/language';
   import { onMount } from 'svelte';
   import ModelCard from '$lib/components/ModelCard.svelte';
+  import { getContent } from '$lib/i18n/content';
+  import { supportedLocales } from '$lib/functions/language';
   import {
     PRINTED_MODELS,
     AMINO_ACIDS,
     type PrintedModel,
+    modelText,
     PRINTABLES_PROFILE_URL,
     MAKERWORLD_PROFILE_URL
   } from '$lib/data/printedModels';
 
   export let lang: SupportedLocale;
 
-  const TEXT = {
-    cs: {
-      heading: 'Vytištěné 3D modely molekul',
-      intro:
-        'Ukázky molekul, které jsme připravili v aplikaci a vytiskli. Hotové soubory 3MF a STL si můžete zdarma stáhnout z Printables nebo MakerWorld, nebo si model upravit a vygenerovat přímo v naší aplikaci.',
-      channels: 'Celá sbírka na našich profilech',
-      aminoHeading: 'Aminokyseliny',
-      aminoMeta: (n: number) => `${n} proteinogenních aminokyselin · vícebarevný tisk`,
-      aminoIntro:
-        'Kompletní sada proteinogenních aminokyselin včetně selenocysteinu, připravená pro vícebarevný tisk (barvy podle prvků).',
-      searchLabel: 'Hledat model',
-      searchPlaceholder: 'Hledat molekulu… (např. glycin, ATP, Trp)',
-      searchClear: 'Vymazat hledání',
-      searchResults: (n: number) => `Nalezeno modelů: ${n}`,
-      searchEmpty: 'Žádný vytištěný model neodpovídá hledání.',
-      ctaHeading: 'Chybí vám tu molekula?',
-      ctaText: 'Vygenerujte si vlastní model z PubChem, PDB nebo COD během pár vteřin.',
-      ctaButton: 'Otevřít generátor'
-    },
-    en: {
-      heading: '3D Printed Molecular Models',
-      intro:
-        'Molecules we prepared in the app and printed. Download the ready-to-print 3MF and STL files for free from Printables or MakerWorld, or tweak and generate the model yourself in our web app.',
-      channels: 'Full collection on our profiles',
-      aminoHeading: 'Amino Acids',
-      aminoMeta: (n: number) => `${n} proteinogenic amino acids · multi-color print`,
-      aminoIntro:
-        'The complete set of proteinogenic amino acids including selenocysteine, prepared for multi-color printing (colored by element).',
-      searchLabel: 'Search models',
-      searchPlaceholder: 'Search molecules… (e.g. glycine, ATP, Trp)',
-      searchClear: 'Clear search',
-      searchResults: (n: number) => `${n} ${n === 1 ? 'model' : 'models'} found`,
-      searchEmpty: 'No printed model matches your search.',
-      ctaHeading: 'Missing a molecule?',
-      ctaText: 'Generate your own model from PubChem, PDB or COD in seconds.',
-      ctaButton: 'Open the generator'
-    }
-  } as const;
-
-  $: t = TEXT[lang];
-  $: aminoSorted = [...AMINO_ACIDS].sort((a, b) => a.name[lang].localeCompare(b.name[lang], lang));
+  $: t = getContent(lang).gallery;
+  $: aminoSorted = [...AMINO_ACIDS].sort((a, b) => modelText(a, lang).name.localeCompare(modelText(b, lang).name, lang));
 
   // Four visually distinct prints for the category's collage icon.
   const COLLAGE_IDS = ['tryptophan', 'histidine', 'cysteine', 'phenylalanine'];
@@ -76,7 +40,11 @@
   const haystack = (model: PrintedModel) =>
     ' ' +
     normalize(
-      [model.id, model.name.cs, model.name.en, model.description.cs, model.description.en, model.editorQuery ?? ''].join(' ')
+      [
+        model.id,
+        ...supportedLocales.flatMap((l) => Object.values(modelText(model, l))),
+        model.editorQuery ?? ''
+      ].join(' ')
     )
       .replace(/[^a-z0-9]+/g, ' ');
   const INDEX = new Map([...PRINTED_MODELS, ...AMINO_ACIDS].map((m) => [m.id, haystack(m)]));

@@ -4,7 +4,7 @@ declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
-			locale: 'cs' | 'en';
+			locale: import('$lib/functions/language').SupportedLocale;
 		}
 		// interface PageData {}
 		// interface PageState {}

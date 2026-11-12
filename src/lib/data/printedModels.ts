@@ -1,12 +1,14 @@
 import type { SupportedLocale } from '$lib/functions/language';
+import { CONTENT } from '$lib/i18n/content';
 
 export const PRINTABLES_PROFILE_URL = 'https://www.printables.com/@3DPMol_5381976/models';
 export const MAKERWORLD_PROFILE_URL = 'https://makerworld.com/en/@3DPMol';
 
 export interface PrintedModel {
 	id: string;
-	name: Record<SupportedLocale, string>;
-	description: Record<SupportedLocale, string>;
+	/** Czech and English inline; other locales come from `$lib/i18n/content/<locale>.ts` (`models`). */
+	name: { cs: string; en: string };
+	description: { cs: string; en: string };
 	/** Photo of the printed model (Printables CDN, 640×480 webp). */
 	image: string;
 	printablesUrl: string;
@@ -361,3 +363,18 @@ export const AMINO_ACIDS: PrintedModel[] = [
 		editorQuery: 'L-valine'
 	}
 ];
+
+/** Localized name and description of a printed model (falls back to English). */
+export function modelText(
+	model: PrintedModel,
+	lang: SupportedLocale
+): { name: string; description: string } {
+	if (lang === 'cs' || lang === 'en') {
+		return { name: model.name[lang], description: model.description[lang] };
+	}
+	const translated = CONTENT[lang]?.models?.[model.id];
+	return {
+		name: translated?.name ?? model.name.en,
+		description: translated?.description ?? model.description.en
+	};
+}

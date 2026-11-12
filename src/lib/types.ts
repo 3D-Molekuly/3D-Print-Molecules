@@ -39,8 +39,8 @@ export interface GluedSpheresConfig {
     showPartLabels: boolean;
     /** Scale in mm / Å. */
     mmPerUnit: number;
-    /** UI language locale ('cs' | 'en') for localized guide text and ZIP filenames. */
-    locale?: 'cs' | 'en';
+    /** Language of the generated guide text and ZIP filenames (other UI languages use 'en'). */
+    locale?: GuideLocale;
 }
 
 export interface GluedSpheresStats {
@@ -131,3 +131,5 @@ export interface AtomWithBonds extends AtomCoordinate {
         bondType: number;
     }[];
 }
+/** Languages available for generated assembly guides and export filenames. */
+export type GuideLocale = 'cs' | 'en';

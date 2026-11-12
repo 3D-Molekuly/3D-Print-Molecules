@@ -86,7 +86,9 @@
 	<meta property="og:type" content="website" />
 	<meta property="og:site_name" content={seo.siteName} />
 	<meta property="og:locale" content={seo.ogLocale} />
-	<meta property="og:locale:alternate" content={seo.ogLocaleAlternate} />
+	{#each seo.ogLocaleAlternate as alt (alt)}
+		<meta property="og:locale:alternate" content={alt} />
+	{/each}
 	<meta property="og:title" content={seo.ogTitle} />
 	<meta property="og:description" content={seo.ogDescription} />
 	<meta property="og:url" content={seo.ogUrl} />

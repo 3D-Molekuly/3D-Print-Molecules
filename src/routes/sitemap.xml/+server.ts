@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
-import { SITE_ORIGIN, type AlternateLink } from '$lib/seo';
+import { SITE_ORIGIN, localizedAlternates, type AlternateLink } from '$lib/seo';
+import { supportedLocales } from '$lib/functions/language';
 
 interface SitemapEntry {
 	loc: string;
@@ -9,70 +10,31 @@ interface SitemapEntry {
 }
 
 export const GET: RequestHandler = async () => {
-	const homeAlternates: AlternateLink[] = [
-		{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs` },
-		{ hreflang: 'en', href: `${SITE_ORIGIN}/en` },
-		{ hreflang: 'x-default', href: `${SITE_ORIGIN}/` }
-	];
+	const homeAlternates = localizedAlternates('', `${SITE_ORIGIN}/`);
 
-	const tutorialsAlternates: AlternateLink[] = [
-		{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs/tutorials` },
-		{ hreflang: 'en', href: `${SITE_ORIGIN}/en/tutorials` },
-		{ hreflang: 'x-default', href: `${SITE_ORIGIN}/en/tutorials` }
-	];
-
-	const aboutAlternates: AlternateLink[] = [
-		{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs/about` },
-		{ hreflang: 'en', href: `${SITE_ORIGIN}/en/about` },
-		{ hreflang: 'x-default', href: `${SITE_ORIGIN}/en/about` }
-	];
-
-	const examplesAlternates: AlternateLink[] = [
-		{ hreflang: 'cs', href: `${SITE_ORIGIN}/cs/examples` },
-		{ hreflang: 'en', href: `${SITE_ORIGIN}/en/examples` },
-		{ hreflang: 'x-default', href: `${SITE_ORIGIN}/en/examples` }
+	const subpages: { path: string; priority: string; changefreq: SitemapEntry['changefreq'] }[] = [
+		{ path: '/tutorials', priority: '0.9', changefreq: 'monthly' },
+		{ path: '/examples', priority: '0.9', changefreq: 'weekly' },
+		{ path: '/about', priority: '0.8', changefreq: 'monthly' }
 	];
 
 	const pages: SitemapEntry[] = [
 		{ loc: `${SITE_ORIGIN}/`, priority: '1.0', changefreq: 'weekly', alternates: homeAlternates },
-		{ loc: `${SITE_ORIGIN}/cs`, priority: '1.0', changefreq: 'weekly', alternates: homeAlternates },
-		{ loc: `${SITE_ORIGIN}/en`, priority: '1.0', changefreq: 'weekly', alternates: homeAlternates },
-		{
-			loc: `${SITE_ORIGIN}/cs/tutorials`,
-			priority: '0.9',
-			changefreq: 'monthly',
-			alternates: tutorialsAlternates
-		},
-		{
-			loc: `${SITE_ORIGIN}/en/tutorials`,
-			priority: '0.9',
-			changefreq: 'monthly',
-			alternates: tutorialsAlternates
-		},
-		{
-			loc: `${SITE_ORIGIN}/cs/examples`,
-			priority: '0.9',
-			changefreq: 'weekly',
-			alternates: examplesAlternates
-		},
-		{
-			loc: `${SITE_ORIGIN}/en/examples`,
-			priority: '0.9',
-			changefreq: 'weekly',
-			alternates: examplesAlternates
-		},
-		{
-			loc: `${SITE_ORIGIN}/cs/about`,
-			priority: '0.8',
-			changefreq: 'monthly',
-			alternates: aboutAlternates
-		},
-		{
-			loc: `${SITE_ORIGIN}/en/about`,
-			priority: '0.8',
-			changefreq: 'monthly',
-			alternates: aboutAlternates
-		}
+		...supportedLocales.map((l) => ({
+			loc: `${SITE_ORIGIN}/${l}`,
+			priority: '1.0',
+			changefreq: 'weekly' as const,
+			alternates: homeAlternates
+		})),
+		...subpages.flatMap(({ path, priority, changefreq }) => {
+			const alternates = localizedAlternates(path, `${SITE_ORIGIN}/en${path}`);
+			return supportedLocales.map((l) => ({
+				loc: `${SITE_ORIGIN}/${l}${path}`,
+				priority,
+				changefreq,
+				alternates
+			}));
+		})
 	];
 
 	const urlsXml = pages

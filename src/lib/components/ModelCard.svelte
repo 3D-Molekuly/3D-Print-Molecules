@@ -1,26 +1,15 @@
 <script lang="ts">
   import type { SupportedLocale } from '$lib/functions/language';
-  import type { PrintedModel } from '$lib/data/printedModels';
+  import { modelText, type PrintedModel } from '$lib/data/printedModels';
+  import { getContent } from '$lib/i18n/content';
 
   export let model: PrintedModel;
   export let lang: SupportedLocale;
   /** Heading level of the card title (h2 in the main grid, h3 inside a category). */
   export let headingLevel: 'h2' | 'h3' = 'h2';
 
-  const TEXT = {
-    cs: {
-      openEditor: 'Upravit v aplikaci',
-      photoAlt: 'Vytištěný 3D model molekuly',
-      makerworldPending: 'Brzy na MakerWorld'
-    },
-    en: {
-      openEditor: 'Edit in the app',
-      photoAlt: '3D printed molecular model',
-      makerworldPending: 'MakerWorld soon'
-    }
-  } as const;
-
-  $: t = TEXT[lang];
+  $: t = getContent(lang).modelCard;
+  $: text = modelText(model, lang);
   $: editorHref = model.editorQuery
     ? `/${lang}?mol=${encodeURIComponent(model.editorQuery)}`
     : null;
@@ -30,7 +19,7 @@
   <a href={model.printablesUrl} target="_blank" rel="noopener" class="model-photo" tabindex="-1">
     <img
       src={model.image}
-      alt={`${t.photoAlt}: ${model.name[lang]}`}
+      alt={`${t.photoAlt}: ${text.name}`}
       width="640"
       height="480"
       loading="lazy"
@@ -38,8 +27,8 @@
     />
   </a>
   <div class="model-body">
-    <svelte:element this={headingLevel} class="model-title">{model.name[lang]}</svelte:element>
-    <p>{model.description[lang]}</p>
+    <svelte:element this={headingLevel} class="model-title">{text.name}</svelte:element>
+    <p>{text.description}</p>
     <div class="model-links">
       <a href={model.printablesUrl} target="_blank" rel="noopener" class="model-link printables">
         Printables <span aria-hidden="true">↗</span>

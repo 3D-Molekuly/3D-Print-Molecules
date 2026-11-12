@@ -325,5 +325,9 @@
     "adv_conformer_energy_title": "Energie MMFF94 podle PubChem; v závorce rozdíl oproti nejnižší",
     "adv_conformer_none": "PubChem pro tuto sloučeninu nemá 3D konformery (typicky soli, kovové komplexy nebo velmi flexibilní molekuly).",
     "adv_conformer_load_anyway": "Načíst i tak (2D → 3D)",
-    "adv_formula_results_hint": "Sloučeniny s tímto vzorcem (seřazené podle relevance) – vyberte tu správnou:"
+    "adv_formula_results_hint": "Sloučeniny s tímto vzorcem (seřazené podle relevance) – vyberte tu správnou:",
+    "theme_label": "Barevný režim",
+    "theme_auto": "Automaticky (podle systému)",
+    "theme_light": "Světlý",
+    "theme_dark": "Tmavý"
 }

@@ -2,16 +2,23 @@
   import logo from '$lib/images/logo_v2.svg';
   import { _, locale } from 'svelte-i18n';
   import DarkmodeButton from '$lib/buttons/darkmodeButton.svelte';
-  import { switchLocale, currentLocale, buildLocalizedPath, getLocaleFromPath, getTargetSwitchPath } from '$lib/functions/language';
+  import {
+    switchLocale,
+    currentLocale,
+    buildLocalizedPath,
+    getLocaleFromPath,
+    getTargetSwitchPath,
+    supportedLocales,
+    LOCALE_NAMES
+  } from '$lib/functions/language';
   import { page } from '$app/stores';
 
-  $: activeLang = ($currentLocale || $locale || 'en').toUpperCase();
+  $: activeLocale = $currentLocale || $locale || 'en';
+  $: activeLang = activeLocale.toUpperCase();
   $: localizedPath = (path: string) => buildLocalizedPath(path, $currentLocale || $locale || 'en');
   $: currentPath = $page.url.pathname;
   $: pathLocale = getLocaleFromPath(currentPath);
   $: homePath = pathLocale ? `/${pathLocale}` : '/';
-  $: csSwitchPath = getTargetSwitchPath('cs', currentPath);
-  $: enSwitchPath = getTargetSwitchPath('en', currentPath);
 </script>
 
 <header class="p-3 mb-1 border-bottom">
@@ -37,26 +44,22 @@
             {$_('app_language') || activeLang}
           </button>
           <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="dropdownMenuButton">
-            <li>
-              <a
-                class="dropdown-item"
-                class:active={activeLang === 'CS'}
-                href={csSwitchPath}
-                on:click={(event) => switchLocale('cs', event)}
-              >
-                CS
-              </a>
-            </li>
-            <li>
-              <a
-                class="dropdown-item"
-                class:active={activeLang === 'EN'}
-                href={enSwitchPath}
-                on:click={(event) => switchLocale('en', event)}
-              >
-                EN
-              </a>
-            </li>
+            {#each supportedLocales as code (code)}
+              <li>
+                <a
+                  class="dropdown-item d-flex justify-content-between gap-3"
+                  class:active={activeLocale === code}
+                  aria-current={activeLocale === code ? 'true' : undefined}
+                  href={getTargetSwitchPath(code, currentPath)}
+                  hreflang={code}
+                  lang={code}
+                  on:click={(event) => switchLocale(code, event)}
+                >
+                  <span>{LOCALE_NAMES[code]}</span>
+                  <span class="lang-code">{code.toUpperCase()}</span>
+                </a>
+              </li>
+            {/each}
           </ul>
         </div>
 
@@ -75,6 +78,10 @@
   ul, .dropdown {
     font-family: "Handjet";
     font-weight: 400;
+  }
+
+  .lang-code {
+    opacity: 0.6;
   }
 
   /* Telefon: logo + jazyk + motiv v prvním řádku, menu přes celou šířku pod nimi */
